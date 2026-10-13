@@ -1,0 +1,25 @@
+You direct a short vertical cooking reel for "{{title}}" in the style of the most-watched recipe reels: hands only, one kitchen, the whole recipe from raw ingredients to the finished dish, in many quick shots and no words.
+
+How it is made:
+{{recipe}}
+
+The photographs of this dish, by name, with what each shows:
+{{photos}}
+You may only use these names: {{sources}}
+
+Write two things.
+
+1. "style": ONE fixed description of the set, repeated word for word in every shot so all eight clips look like one video, 45 to 70 words: the countertop (material and colour), the background (plain, softly out of focus), the cookware (materials and colours of the bowls, pan, pot, board, utensils), the cook's hands (skin tone, short plain nails, sleeves rolled or apron colour; never a face), the light (source and direction, e.g. "soft daylight from a window on the left"), and the camera feel (phone camera, sharp, natural colours). Keep it plain and clean: white or light marble or light wood, simple white and glass bowls, a black non-stick pan or a steel pot.
+
+2. "shots": exactly {{count}} shots.
+- Shot 1 is the hook: the finished dish at its most tempting moment, e.g. a knife cutting through it and a slice being lifted, a spoon breaking in, sauce poured over. It uses the photograph "hero".
+- Shots 2 to {{count}} are the method in the recipe's order, from the raw ingredients to the finished dish; the last one plates or serves it.
+- Each shot is ONE continuous physical action by the hands that is clearly happening within the first second and keeps going: pouring, cracking an egg, whisking, stirring, folding, pressing into a pan, rolling, slicing, sprinkling, sliding into the oven, lifting out. Name the real ingredient and the real amount of it on screen, the container, and what changes (e.g. "the butter melts and foams").
+- Only what the recipe has. No alcohol, no pork. Nothing steams unless it is hot.
+- "camera" is one of: "overhead", "close-up at 45 degrees", "side close-up at table level". Vary them so two shots in a row do not use the same one.
+- "sources": one or two photograph names that show this stage best (the finished dish is "hero"; the method photos show the middle of the recipe).
+
+Answer with one valid JSON object and nothing else:
+{"style":"","shots":[{"camera":"","action":"","sources":["hero"]}]}
+
+{{note}}

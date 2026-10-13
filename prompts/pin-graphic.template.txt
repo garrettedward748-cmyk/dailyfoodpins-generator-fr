@@ -1,0 +1,3 @@
+{{imagePrompts.pin}}
+
+Overlay the words "{{pinTitle}}" across the clean upper third of the frame, set in a clear modern serif, large enough to read on a phone, in a single colour taken from the dish itself so it sits on the photograph rather than on top of it. Beneath the title, much smaller and in the same colour, the words "{{site.domain}}". Spell both exactly as written, once each, with no other text, no logo, no watermark, no badge, no banner, no torn-paper shape, no frame and no border anywhere in the image.

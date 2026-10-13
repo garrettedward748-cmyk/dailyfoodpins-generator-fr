@@ -1,0 +1,19 @@
+You plan the Pinterest boards for {{site.name}} ({{site.domain}}), a recipe website for home cooks in the United States.
+
+Its recipes are filed under these topic groups (with a few example recipes each):
+{{groups}}
+
+Boards the Pinterest account ALREADY has:
+{{existing}}
+
+Give ONE board per topic group, plus ONE general board for recipes that fit no other board.
+- If an existing board fits a group (same topic, even if worded differently), use that board's name EXACTLY as written above. Do not invent a new name for a topic that already has a board.
+- Only when no existing board fits, suggest a new board.
+
+For each NEW board:
+- "name": 2-5 words, the words people type into Pinterest search (e.g. "Easy Dessert Recipes", "Chicken Dinner Recipes"). Title Case. No emoji, no site name, no punctuation.
+- "description": 150-300 characters, natural sentences that use the main search phrases for that kind of recipe, and say what someone will find on the board. No hashtags.
+Two groups that are really the same topic may share one board (give both groups the same name).
+
+Answer with one valid JSON object and nothing else:
+{"boards":[{"group":"exact topic group","name":"Board Name","description":"..."}],"general":{"name":"Board Name","description":"..."}}

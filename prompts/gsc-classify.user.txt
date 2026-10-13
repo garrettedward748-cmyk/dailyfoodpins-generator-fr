@@ -1,0 +1,13 @@
+These are Google searches that a recipe website already appears for in Google, but with no page written for them yet. For each, decide whether it deserves a new article on the site.
+
+Searches (numbered; how often the site appeared for it, and the site's page that appeared):
+{{items}}
+
+For each search worth an article, answer:
+- "recipe": the search names ONE dish someone would cook from a recipe (e.g. "banana bread with oil", "air fryer salmon bites"). Give "group": the short topic it belongs to, 1 to 3 words, lower case (e.g. "banana bread", "salmon").
+- "question": a real cooking question a blog article can answer (how long, can you freeze, how to store, why did it, what to serve with, substitute for…). It must already be phrased as a question or clearly ask one.
+
+Leave out everything else: the site's own name, a person, a brand or restaurant, shopping or price searches, searches that only repeat the page's own recipe in other words (the page already answers them), lists ("10 easy dinners"), single vague words, and anything about alcohol or pork.
+
+Answer with one valid JSON object and nothing else, using the numbers from the list:
+{"keep":[{"n":1,"type":"recipe","group":"banana bread"},{"n":4,"type":"question"}]}

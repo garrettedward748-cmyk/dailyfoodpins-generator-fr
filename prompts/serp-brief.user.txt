@@ -1,0 +1,16 @@
+You prepare a research brief for a recipe writer. The dish: "{{keyword}}".
+
+These are the top Google results for it right now (their recipe data or text):
+{{pages}}
+
+Questions people ask Google about it:
+{{questions}}
+
+Write a short brief (180-300 words, plain text, these four headings in capitals):
+
+CONSENSUS — the ingredients most of the pages use (say how many, e.g. "4 of 5 use vanilla wafers"), the usual amounts and ratios where they agree, and the usual oven temperature, times and yield.
+DIFFERENCES — the main ways the pages disagree or vary, and which choice is more common.
+WHAT THE TOP PAGES COVER — the tips, sections and details they all include, which the writer must include too.
+GAPS — useful things they miss or explain badly, which the writer can add to be better than them.
+
+Facts only, from the pages above. Never copy their sentences. Do not invent numbers that are not in the pages; say "not stated" instead.

@@ -1,0 +1,15 @@
+List the kitchen tools and equipment this recipe really uses, for a "Tools I used" box with shopping links.
+
+Recipe: {{title}}
+
+{{recipe}}
+
+Rules:
+- 3 to 6 items, the ones a home cook might need to buy: pans, dishes, appliances, utensils that matter for this recipe (a loaf pan, a stand mixer, a cast-iron skillet, a digital thermometer). Skip what every kitchen has (a spoon, a fork, a regular bowl) unless the recipe needs a special one.
+- Only equipment named or clearly needed in the steps. Never food, ingredients or drinks.
+- No brand names. No alcohol-related items (wine glasses, cocktail shakers).
+- "name": what the reader sees, short and specific ("9x5-inch loaf pan").
+- "search": the words to search on Amazon to find it ("9x5 metal loaf pan nonstick").
+
+Answer with one valid JSON object and nothing else:
+{"tools":[{"name":"","search":""}]}

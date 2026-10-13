@@ -1,0 +1,11 @@
+Pick the one word a reader will type in a comment to get this recipe sent to them.
+
+Recipe title: {{title}}
+
+Rules:
+- One single word that names the dish itself, the word a person would say when asking for it: "lasagna", "cheesecake", "brownies", "pizza". If the title has two dishes, pick the main one.
+- Easy to type on a phone and easy to spell. For a dish with a foreign name, use the plain English word if there is one ("custard" for "Crème Brûlée"), otherwise the simplest spelling.
+- Lowercase letters a to z only: no spaces, no digits, no accents, no punctuation, no hashtag.
+- Between 4 and 14 letters.
+- Never a filler word such as "recipe", "easy", "best", "homemade" or "creamy".
+- Give only the word: nothing before it, nothing after it, no quotation marks, no explanation.

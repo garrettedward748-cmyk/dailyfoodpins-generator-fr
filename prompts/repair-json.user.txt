@@ -1,0 +1,7 @@
+The API rejected the document with this error:
+
+{{postError}}
+
+Here is the document. Return it corrected.
+
+{{articleJson}}

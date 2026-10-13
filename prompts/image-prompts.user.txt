@@ -1,0 +1,84 @@
+Write the five image prompts for this recipe.
+
+RECIPE TITLE: {{seo.title}}
+SEO KEYWORD: {{seo.keyword}}
+DESCRIPTION: {{seo.description}}
+CATEGORY: {{seo.category}}
+CUISINE: {{seo.cuisine}}
+SOURCE DISH: {{spy.title}}
+
+FULL RECIPE (read every step before choosing anything):
+{{recipeJson}}
+
+The source dish names what makes this one specific — the sauce, the cut, the
+method, the vessel. Those must be visible. A photograph of a generic member
+of the category would be the wrong picture for this recipe.
+
+{{photoShoot}}
+
+═══════════════════════════════════════════════════════════════
+CHOOSING THE THREE METHOD SHOTS
+═══════════════════════════════════════════════════════════════
+
+Number the recipe's steps from 1. Choose the THREE where a cook stops and
+wonders whether they have got it right — where the answer is something you
+can see:
+
+  - a texture or consistency that has to be reached (a slack dough, a sauce
+    that coats the spoon, a batter with bubbles across its face)
+  - a shape or seal that decides the result (folded, rolled, sealed, layered)
+  - a colour or state to stop at (the browning, the reduction, the set)
+
+Do NOT choose a step whose picture would be a bowl of ingredients, a pan of
+water, or the finished dish on a plate — the hero already shows that. Never
+choose the serving step.
+
+Return each one's step number. They must be three DIFFERENT numbers, in
+ascending order, and each must be a step that exists in the recipe above.
+
+═══════════════════════════════════════════════════════════════
+OUTPUT — EXACTLY THESE KEYS, NO OTHERS
+═══════════════════════════════════════════════════════════════
+
+{
+  "hero": "",
+  "step_a_number": 0,
+  "step_a": "",
+  "step_b_number": 0,
+  "step_b": "",
+  "step_c_number": 0,
+  "step_c": "",
+  "pin_title": "",
+  "pin": ""
+}
+
+hero
+- The finished dish as it is eaten, with one portion torn, cut or lifted to
+  show the inside. This is the picture that appears at the top of the
+  article, in every listing and in search results.
+- End it with: Editorial food blog photography, 4:3.
+
+step_a, step_b, step_c
+- One photograph of each chosen moment, in step order. Show the state the
+  step is about — the thinness, the seal, the colour — close enough to judge
+  it by eye. No hands.
+- Each must be visibly a different composition from the other two and from
+  the hero: change the angle, the distance, or what is in the frame.
+- End each with: Editorial food blog photography, 3:2.
+
+pin_title
+- The words printed on the Pinterest graphic. 2 to 6 words, title case, the
+  dish's name or the promise of it: "Msemen, Layer by Layer", "The Flatbread
+  That Tears Into Sheets".
+- No exclamation marks, no "must-try", no "game-changer", no emoji, no
+  hashtags, no site name.
+
+pin
+- A vertical photograph of the finished dish, composed taller than the hero
+  and from a different angle, with the same surface, props and palette.
+- State that the top third of the frame is clean, uncluttered background with
+  room for a text overlay, and that the dish sits in the lower two thirds.
+- Do NOT write the title into this prompt; it is added separately.
+- End it with: Editorial food blog photography, 2:3.
+
+Output ONLY the JSON object. Start with { and end with }.

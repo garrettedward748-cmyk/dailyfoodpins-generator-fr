@@ -1,0 +1,87 @@
+Create a complete, real, and detailed recipe based on the source below.
+
+THE SOURCE RECIPE — this is the dish, follow it:
+Source title: {{spy.title}}
+Source description: {{spy.description}}
+Research notes: {{spy.annotation}}
+
+TOPIC GROUP (context only, NOT the dish): {{spy.group}}
+
+SEO metadata derived from that source:
+SEO Keyword: {{seo.keyword}}
+SEO Title: {{seo.title}}
+SEO Description: {{seo.description}}
+
+The source title names the exact dish. Whatever makes it specific — the sauce,
+the cooking method, the vessel, the cuisine, the timing — must appear in your
+recipe title, ingredients and method. Do not drift to a generic version of the
+topic group. Another recipe from the same group must not be substitutable for
+this one.
+
+Generate a full recipe that naturally incorporates the keyword into the recipe title and content. The recipe must include:
+
+1. **Recipe Title** - A catchy, descriptive title that includes or closely relates to the SEO keyword
+2. **Description** - A 2-3 sentence appetizing description matching the SEO description tone
+3. **Prep Time** - One time, written "N minutes" or "N hours M minutes". Never a range.
+4. **Cook Time** - One time, written the same way. "0 minutes" for a dish that is not cooked.
+5. **Total Time** - The whole time from starting to eating: Prep Time + Cook Time + any resting, chilling, marinating or standing time the method needs, written the same way. It can never be less than Prep Time + Cook Time. A wait the method names (an hour to chill, 20 minutes to come to room temperature) is part of it.
+6. **Servings** - Number of servings
+7. **Difficulty Level** - Easy, Medium, or Hard
+8. **Ingredients List** - Complete with exact measurements in the units rule below, organized by component if needed
+9. **Equipment Needed** - List of kitchen tools required
+10. **Step-by-Step Instructions** - Numbered, detailed steps covering prep, cooking, and serving. Include temperatures, timing, and visual cues (e.g., "golden brown," "internal temperature reaches {{style.temperatureExample}}")
+11. **Chef's Tips** - 2-3 pro tips for best results
+12. **Storage Instructions** - How to store leftovers and for how long
+13. **Serving Suggestions** - Ideas for sides, garnishes, or presentation
+14. **Nutritional Notes** - Brief note on dietary considerations if relevant
+15. **Variations** - 1-2 ways to customize the recipe
+
+SPELLING AND UNITS — every later step copies your numbers word for word, so write them correctly now:
+{{style.spelling}}
+{{style.units}}
+
+Important: The recipe must be for a REAL dish that actually exists. Do not invent fictional ingredients or cooking methods. Ensure the recipe is coherent and the ingredients match the title and description. Write in a warm, encouraging tone.
+
+Return the recipe as structur
+{
+  "recipe_title": "string",
+  "recipe_description": "string",
+  "prep_time": "string (e.g., '15 minutes')",
+  "cook_time": "string (e.g., '12 minutes')",
+  "total_time": "string (e.g., '27 minutes')",
+  "servings": "string (e.g., '24 cookies')",
+  "difficulty": "string (Easy/Medium/Hard)",
+  "ingredients": "array of strings, each item as 'quantity ingredient' (e.g., '{{style.ingredientExample}}')",
+  "equipment": "array of strings, each tool as a separate item",
+  "step_1": "string",
+  "step_2": "string",
+  "step_3": "string",
+  "step_4": "string",
+  "step_5": "string",
+  "step_6": "string",
+  "step_7": "string",
+  "step_8": "string",
+  "step_9": "string",
+  "step_10": "string",
+  "chef_tip_1": "string",
+  "chef_tip_2": "string",
+  "chef_tip_3": "string",
+  "storage_room_temp": "string",
+  "storage_freezer": "string",
+  "serving_suggestion_1": "string",
+  "serving_suggestion_2": "string",
+  "serving_suggestion_3": "string",
+  "nutritional_notes": "string",
+  "variation_1_name": "string",
+  "variation_1_description": "string",
+  "variation_2_name": "string",
+  "variation_2_description": "string"
+}
+
+Rules:
+- If a recipe needs fewer than 10 steps, leave remaining step keys as empty strings ""
+- If fewer than 3 tips/suggestions, leave extras as empty strings ""
+- Every key must exist in the output, even if empty
+- Use real recipes only, no fictional ingredients
+- Include the SEO keyword naturally in the title
+- Output raw JSON only, no markdown formatting

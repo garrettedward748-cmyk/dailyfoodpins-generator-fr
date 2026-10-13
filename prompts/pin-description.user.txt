@@ -1,0 +1,16 @@
+
+
+- Your role is to Write a compelling Pinterest Pin description for a PINTERES post about the title "{{seo.title}}" and never  exceed 400 characters.
+
+- The Description should be catchy, informative, and optimized for SEO full of keywords, Using annotation:{{spy.annotation}}
+
+- make sure you use the target keyword at the start of the descripion '{{seo.description}}'as the focus keyword.
+
+- Include a call-to-action encouraging users to click through and explore the recipes. 
+- No json no explanation just give the text directly 
+- The description length must be less then 400 characters.
+- no explanations, no markdown, no comments, no chit chat , 
+- do not think outloud just give the board name by it self 
+- No Hashtags at all never use hashtags ever  
+#important note 
+**NEVER EXCEED 400 CHARACTERS**

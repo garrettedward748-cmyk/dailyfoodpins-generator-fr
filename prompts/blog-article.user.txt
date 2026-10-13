@@ -1,0 +1,10 @@
+Question to answer: {{question}}
+
+Related recipe on the site (the printable card of this recipe appears under the article):
+Title: {{recipe.title}}
+About it: {{recipe.summary}}
+
+Web research on this question (notes to learn from, NOT text to copy):
+{{research}}
+
+Write the article now as the JSON object described.

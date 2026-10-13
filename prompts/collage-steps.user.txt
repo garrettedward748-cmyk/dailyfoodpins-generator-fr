@@ -1,0 +1,18 @@
+You are planning a step-by-step photo collage for "{{title}}" -- the kind of grid of still kitchen photographs that gets shared on Facebook: ingredients laid out, the mixing and baking stages, then the finished dish, arranged as a tidy wall of {{count}} little pictures.
+
+How it is made:
+{{recipe}}
+
+Write exactly {{count}} shots, covering this recipe from raw ingredients to the finished, plated dish, in that order. Each shot is ONE still photograph, not a video -- say only what the camera sees in that single frame, never what happens next or what happened before.
+
+Rules for each shot's "description":
+- Name the real ingredients, cookware or stage this photograph shows (e.g. "the measured flour, sugar, eggs and butter laid out on a marble counter", "a mixing bowl with the batter half-folded, a spatula resting on the rim", "the muffin tin filled with batter, about to go into the oven", "the baked cupcakes cooling on a wire rack", "the finished cupcakes frosted and arranged on a plate, one cut open to show the inside").
+- Only what the recipe actually has -- no ingredient or step it doesn't use, no alcohol, no pork.
+- A clean, bright, overhead or 45-degree still-life food-photography look: natural light, a tidy counter, no hands unless a shot specifically needs them (e.g. piping frosting).
+- The first shot is always the raw ingredients; the last shot is always the finished dish at its best.
+- About 20 to 40 words each.
+
+Answer with one valid JSON object and nothing else:
+{"shots":[{"description":""}]}
+
+{{note}}

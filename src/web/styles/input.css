@@ -1,0 +1,1507 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Article Platform — dashboard styling.
+ *
+ * The templates keep their semantic class names (.card, .badge.ok, .stat) and
+ * this layer implements them with Tailwind utilities. That is deliberate: the
+ * markup lives in ~2500 lines of tagged template literals, and rewriting every
+ * class to a utility string would churn all of it, break the tests that assert
+ * on class names, and gain nothing — the tokens in tailwind.config.js are the
+ * design system either way. New markup can still use utilities directly.
+ *
+ * Every rule states both themes explicitly rather than leaning on a variable
+ * that changes underneath it, so reading any line tells you what it does in
+ * both. `darkMode: 'class'`, so the switch is the `dark` class on <html>.
+ */
+
+@layer base {
+  html {
+    @apply bg-page dark:bg-page-dark;
+  }
+
+  body {
+    @apply bg-page font-sans text-[15px] text-slate-800 antialiased;
+    @apply dark:bg-page-dark dark:text-slate-100;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Pages slide softly into each other instead of flashing white
+     (cross-document view transitions; browsers without them just navigate). */
+  @view-transition {
+    navigation: auto;
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 160ms;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      animation: none;
+    }
+  }
+
+  ::selection {
+    @apply bg-brand text-white;
+  }
+
+  h1 {
+    @apply mb-1 text-[26px] font-bold tracking-tight text-slate-900 dark:text-white;
+  }
+
+  /* A spy title can run to a couple of hundred characters. */
+  h1.long {
+    @apply text-xl leading-snug;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  h2 {
+    @apply mt-10 mb-4 flex items-center gap-3;
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em];
+    @apply text-slate-500 dark:text-slate-400;
+  }
+
+  h3 {
+    @apply mb-3 text-base font-semibold text-slate-900 dark:text-white;
+  }
+
+  h4 {
+    @apply m-0 font-semibold;
+  }
+
+  a {
+    @apply text-slate-900 underline-offset-2 dark:text-slate-100;
+  }
+  a:hover {
+    @apply text-brand;
+  }
+  a {
+    @apply transition-colors duration-150;
+  }
+
+  strong {
+    @apply font-semibold;
+  }
+
+  summary {
+    @apply cursor-pointer font-medium;
+  }
+
+  pre {
+    @apply overflow-x-auto rounded-lg p-4 font-mono text-xs leading-relaxed;
+    @apply border border-edge bg-fill text-slate-800;
+    @apply dark:border-edge-dark dark:bg-page-dark dark:text-slate-300;
+  }
+}
+
+@layer components {
+  /* ------------------------------------------------------------ the header */
+
+  /* One light bar across the top: the name, the five sections as pills, and
+     the utilities. Sticky and slightly translucent so the page scrolls under
+     it. On a phone the sections move to a tab bar at the bottom (see the end
+     of this file). */
+  .topbar {
+    @apply sticky top-0 z-30 flex items-center gap-4 px-6;
+    @apply h-16 border-b border-edge/80 bg-white/80 backdrop-blur-xl;
+    @apply dark:border-edge-dark dark:bg-surface-dark/85;
+  }
+
+  .brand {
+    @apply flex flex-none items-center gap-3;
+  }
+
+  .brand a {
+    @apply flex items-center gap-2.5 text-[15px] font-bold tracking-tight no-underline;
+    @apply text-slate-900 dark:text-white;
+  }
+
+  /* The mark: a small gradient tile. */
+  .brand a::before {
+    content: '';
+    @apply block h-7 w-7 flex-none rounded-lg shadow-soft;
+    background: linear-gradient(135deg, #8b7cf6 0%, #6c5ce7 45%, #4fc3f7 100%);
+  }
+
+  .topbar nav {
+    @apply mx-auto flex items-center gap-1 rounded-full p-1;
+    @apply bg-fill dark:bg-fill-dark;
+  }
+
+  .topbar nav a {
+    @apply flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium no-underline;
+    @apply text-slate-500 transition-all duration-150 hover:text-slate-900;
+    @apply dark:text-slate-400 dark:hover:text-white;
+  }
+
+  .topbar nav a.active {
+    @apply bg-white text-brand shadow-soft hover:text-brand;
+    @apply dark:bg-surface-dark dark:text-white;
+  }
+
+  .topbar nav a svg {
+    @apply h-[17px] w-[17px] flex-none;
+    stroke-width: 1.8;
+  }
+
+  .rail-utils {
+    @apply flex flex-none items-center gap-1;
+  }
+
+  .rail-utils form {
+    @apply m-0 block;
+  }
+
+  .rail-utils a,
+  .rail-utils button {
+    @apply flex items-center gap-2 rounded-full border-0 px-3 py-1.5;
+    @apply text-[13px] font-medium no-underline shadow-none;
+    @apply bg-transparent text-slate-500 hover:bg-fill hover:text-slate-900;
+    @apply dark:bg-transparent dark:text-slate-400 dark:hover:bg-fill-dark dark:hover:text-white;
+  }
+
+  .rail-foot {
+    @apply hidden;
+  }
+
+  /* The dark-mode switch: a small track with a knob. */
+  .theme-switch {
+    @apply flex cursor-pointer items-center gap-2 rounded-full px-3 py-1.5;
+    @apply text-[13px] font-medium text-slate-500;
+    text-transform: none;
+    letter-spacing: normal;
+    margin: 0;
+  }
+
+  .theme-switch input {
+    @apply sr-only;
+  }
+
+  .theme-switch .track {
+    @apply relative h-5 w-9 flex-none rounded-full transition-colors duration-200;
+    @apply bg-slate-200 dark:bg-slate-700;
+  }
+
+  .theme-switch .track::after {
+    content: '';
+    @apply absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200;
+  }
+
+  .dark .theme-switch .track {
+    @apply bg-brand;
+  }
+  .dark .theme-switch .track::after {
+    transform: translateX(16px);
+  }
+
+  /* An account's own on/off switch (Channels -> Accounts): one per account
+     card, independent of every other account on every network. Submits the
+     moment it is flipped (see the onchange on its input) -- no separate
+     Save step, since there is nothing else to decide alongside it. */
+  .enable-switch {
+    @apply relative inline-flex flex-none cursor-pointer items-center;
+  }
+  .enable-switch input {
+    @apply sr-only;
+  }
+  .enable-switch .track {
+    @apply relative h-6 w-[52px] flex-none rounded-full transition-colors duration-200;
+    @apply bg-slate-300 dark:bg-slate-600;
+  }
+  .enable-switch .knob {
+    @apply absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200;
+  }
+  .enable-switch .label {
+    @apply absolute top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-wide text-white;
+  }
+  .enable-switch .label.on {
+    @apply left-2 opacity-0 transition-opacity duration-150;
+  }
+  .enable-switch .label.off {
+    @apply right-2 opacity-0 text-slate-600 transition-opacity duration-150 dark:text-slate-300;
+  }
+  .enable-switch input:not(:checked) ~ .track .label.off {
+    @apply opacity-100;
+  }
+  .enable-switch input:checked ~ .track {
+    @apply bg-emerald;
+  }
+  .enable-switch input:checked ~ .track .knob {
+    transform: translateX(26px);
+  }
+  .enable-switch input:checked ~ .track .label.on {
+    @apply opacity-100;
+  }
+
+  /* ------------------------------------------------------- main container */
+
+  main {
+    @apply min-h-[calc(100vh-4rem)];
+  }
+
+  .page {
+    @apply mx-auto w-full max-w-[88rem] px-8 pb-20 pt-8;
+  }
+
+  /* The section's pages: a segmented control under the header. */
+  .subnav {
+    @apply mb-7 inline-flex max-w-full flex-nowrap gap-1 overflow-x-auto rounded-xl p-1;
+    @apply border border-edge bg-white shadow-soft;
+    @apply dark:border-edge-dark dark:bg-surface-dark dark:shadow-none;
+    scrollbar-width: none;
+  }
+  .subnav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .subnav a {
+    @apply whitespace-nowrap rounded-lg px-3.5 py-1.5 text-sm font-medium no-underline;
+    @apply text-slate-500 transition-all duration-150 hover:bg-fill hover:text-slate-900;
+    @apply dark:text-slate-400 dark:hover:bg-fill-dark dark:hover:text-white;
+  }
+
+  .subnav a.active {
+    @apply bg-brand text-white shadow-sm hover:bg-brand hover:text-white;
+    @apply dark:bg-brand dark:text-white;
+  }
+
+  /* A group's own pages, under the tab that stands for them all. */
+  .subnav + .subnav-inner {
+    @apply -mt-4;
+  }
+  .subnav-inner {
+    @apply flex w-fit items-center;
+  }
+  .subnav-label {
+    @apply whitespace-nowrap px-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400;
+    @apply dark:text-slate-500;
+  }
+  .subnav-label:not(:first-child) {
+    @apply ml-1.5 border-l border-edge pl-4 dark:border-edge-dark;
+  }
+
+  .pagebar {
+    @apply mb-6 flex min-h-[34px] items-center justify-end gap-2.5;
+  }
+
+  .pagebar form {
+    @apply inline;
+  }
+
+  /* --------------------------------------------------------------- layout */
+
+  .row {
+    @apply flex items-center gap-2;
+  }
+  .row.wrap {
+    @apply flex-wrap;
+  }
+
+  .spread {
+    @apply flex items-start justify-between gap-5;
+  }
+  .spread > .row {
+    @apply flex-none flex-wrap justify-end;
+  }
+  .spread > :first-child {
+    @apply min-w-0;
+  }
+
+  .card {
+    @apply mb-4 rounded-2xl border border-edge/70 bg-surface p-6 shadow-soft;
+    @apply dark:border-edge-dark dark:bg-surface-dark dark:shadow-none;
+  }
+
+  .table-wrap {
+    @apply overflow-x-auto p-0;
+  }
+
+  .scroll-y {
+    @apply max-h-[430px] overflow-y-auto;
+  }
+
+  .split {
+    @apply grid items-start gap-x-6;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  }
+
+  .subtitle {
+    @apply mb-6 max-w-[68ch] text-sm text-slate-500 dark:text-slate-400;
+  }
+
+  .muted {
+    @apply text-slate-500 dark:text-slate-400;
+  }
+  .small {
+    @apply text-[13px];
+  }
+  .nowrap {
+    @apply whitespace-nowrap;
+  }
+  .mono {
+    @apply font-mono text-[0.88em];
+  }
+
+  /* --------------------------------------------------- stat metric cards */
+
+  /* `display: grid` written out rather than @apply'd: this class is itself
+     named .grid, and applying the utility of the same name to it is circular. */
+  .grid {
+    @apply my-5 gap-4;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+
+  .stat {
+    @apply relative overflow-hidden rounded-2xl border border-edge/70 bg-surface p-5 shadow-soft;
+    @apply transition-shadow duration-200 hover:shadow-lift;
+    @apply dark:border-edge-dark dark:bg-surface-dark dark:shadow-none;
+  }
+
+  /* A thin gradient line along the top of every counter. */
+  .stat::before {
+    content: '';
+    @apply absolute inset-x-0 top-0 h-1;
+    background: linear-gradient(90deg, #8b7cf6, #4fc3f7);
+    opacity: 0.7;
+  }
+
+  /* The indicator dot, top right. Neutral unless the card says otherwise. */
+  .stat::after {
+    content: '';
+    @apply absolute right-4 top-4 h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600;
+  }
+
+  .stat .value {
+    @apply text-[32px] font-bold tracking-tight text-slate-900 dark:text-white;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat .label {
+    @apply mt-2.5 text-[11px] font-semibold uppercase tracking-[0.1em];
+    @apply text-slate-500 dark:text-slate-400;
+  }
+
+  /* Queue running dry is the one counter that has to be noticed. */
+  .stat.supply-low::after {
+    @apply bg-amber;
+  }
+  .stat.supply-low .value {
+    @apply text-amber;
+  }
+
+  .stat.supply-empty::after {
+    @apply bg-danger;
+  }
+  .stat.supply-empty .value {
+    @apply text-danger;
+  }
+  .stat.supply-empty {
+    @apply border-danger/30 bg-danger-soft;
+  }
+
+  /* --------------------------------------------------------------- tables */
+
+  table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  thead {
+    @apply bg-fill/70 dark:bg-fill-dark/50;
+  }
+
+  th {
+    @apply whitespace-nowrap px-4 py-3 text-left;
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em];
+    @apply text-slate-500 dark:text-slate-400;
+    @apply border-b border-edge dark:border-edge-dark;
+  }
+
+  td {
+    @apply border-b border-edge px-4 py-3 align-top dark:border-edge-dark;
+  }
+
+  tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  tbody tr {
+    @apply transition-colors duration-150 hover:bg-brand/[0.035] dark:hover:bg-fill-dark/50;
+  }
+
+  .matrix td,
+  .matrix th {
+    @apply px-3 py-2;
+  }
+  .matrix select {
+    @apply min-w-[74px];
+  }
+  .matrix label {
+    @apply inline-flex items-center text-xs font-normal normal-case tracking-normal;
+  }
+
+  .pick {
+    @apply w-9;
+  }
+  .pick input[type='checkbox'] {
+    @apply m-0 w-auto;
+  }
+
+  tbody tr.picked {
+    @apply bg-brand-soft hover:bg-brand-soft;
+  }
+
+  /* ------------------------------------------------------------ run steps */
+
+  .card[class*='step-'] {
+    @apply border-l-4;
+  }
+  .step-ok {
+    @apply border-l-emerald;
+  }
+  .step-failed {
+    @apply border-l-danger;
+  }
+  .step-running {
+    @apply border-l-amber;
+  }
+
+  /* -------------------------------------------------------- status badges */
+
+  .badge,
+  .pill {
+    @apply inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5;
+    @apply text-[11px] font-semibold leading-normal;
+  }
+
+  .badge.ok {
+    @apply border-emerald/25 bg-emerald-soft text-emerald;
+  }
+  .badge.error {
+    @apply border-danger/25 bg-danger-soft text-danger;
+  }
+  .badge.warn {
+    @apply border-amber/25 bg-amber-soft text-amber;
+  }
+  .badge.busy {
+    @apply border-slate-300 bg-fill text-slate-600;
+    @apply dark:border-slate-700 dark:bg-fill-dark dark:text-slate-300;
+  }
+  .badge.muted {
+    @apply border-edge bg-transparent text-slate-500;
+    @apply dark:border-edge-dark dark:text-slate-400;
+  }
+  .badge.brand {
+    @apply border-brand/25 bg-brand-soft text-brand;
+  }
+
+  /* ------------------------------------------------ topic tags (Research) */
+  .tag-box {
+    @apply mt-1 flex min-h-[46px] w-full cursor-text flex-wrap items-center gap-2 rounded-xl border px-2.5 py-2;
+    @apply border-edge bg-surface dark:border-edge-dark dark:bg-page-dark;
+  }
+  .tag-box:focus-within {
+    @apply border-brand ring-2 ring-brand/25;
+  }
+  .tag {
+    @apply inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[13px] font-medium;
+    @apply border-brand/25 bg-brand-soft text-brand;
+  }
+  .tag button {
+    @apply -mr-1 ml-0.5 rounded-full px-1 leading-none text-brand/70 hover:text-brand;
+    background: none;
+    border: 0;
+    box-shadow: none;
+  }
+  .tag-box input[type='text'] {
+    @apply min-w-[220px] flex-1 border-0 bg-transparent p-1 shadow-none ring-0 focus:ring-0;
+  }
+  /* A reel beside an article in the same list: its own hue, so the eye can
+     tell the two apart without reading. */
+  .badge.reel {
+    @apply border-violet-500/25 bg-violet-500/10 text-violet-600 dark:text-violet-300;
+  }
+
+  .pill {
+    @apply border-edge text-slate-500 dark:border-edge-dark dark:text-slate-400;
+  }
+  .pill.ok {
+    @apply border-emerald/25 bg-emerald-soft text-emerald;
+  }
+  .pill.off {
+    @apply border-edge text-slate-400 dark:border-edge-dark dark:text-slate-500;
+  }
+
+  /* -------------------------------------------------------- alert banners */
+
+  /* ---------------------------------------------------------- home */
+
+  /* One line: is the automation on, and what is it doing right now. */
+  .statusbar {
+    @apply mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-edge/70 bg-surface px-5 py-3 text-sm shadow-soft;
+    @apply dark:border-edge-dark dark:bg-surface-dark;
+  }
+
+  .statusbar .light {
+    @apply inline-block h-2.5 w-2.5 rounded-full bg-slate-400;
+  }
+
+  .statusbar .light.on {
+    @apply bg-emerald;
+  }
+
+  /* Things that need a person: one row, one button. */
+  .attention {
+    @apply mb-6 flex flex-col gap-2;
+  }
+
+  .attention-row {
+    @apply flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge/70 bg-surface px-4 py-3 text-sm shadow-soft;
+    @apply dark:border-edge-dark dark:bg-surface-dark;
+  }
+
+  .attention-row.warn {
+    @apply border-amber/25 bg-amber-soft text-amber-700 dark:text-amber-200;
+  }
+
+  h2 .count {
+    @apply ml-2 inline-block rounded-full bg-brand-soft px-2 py-0.5 align-middle text-xs font-semibold text-brand;
+  }
+
+  .stat.bad .value {
+    @apply text-danger;
+  }
+
+  table.recent td {
+    @apply py-2.5;
+  }
+
+  .flash {
+    @apply mb-5 rounded-2xl border p-4 text-sm;
+    animation: flash-in 220ms ease-out;
+  }
+
+  .flash.ok {
+    @apply border-emerald/25 bg-emerald-soft text-emerald;
+  }
+  .flash.error {
+    @apply border-danger/25 bg-danger-soft text-danger;
+  }
+  .flash.warn {
+    @apply border-amber/25 bg-amber-soft;
+    @apply text-amber-700 dark:text-amber-200;
+  }
+
+  .flash ul {
+    @apply mt-2 list-disc pl-5;
+  }
+
+  /* The uppercase tag that opens a banner. */
+  .flash strong {
+    @apply mb-1.5 inline-block text-[11px] font-semibold uppercase tracking-[0.1em];
+  }
+
+  .flash code,
+  .flash .mono {
+    @apply rounded bg-black/5 px-1.5 py-0.5 font-mono text-[0.85em] dark:bg-white/10;
+  }
+
+  /* ---------------------------------------------------------------- forms */
+
+  .field {
+    @apply mb-4;
+  }
+  .field-row {
+    @apply flex flex-wrap gap-4;
+  }
+  .field-row .field {
+    flex: 1 1 220px;
+  }
+
+  /* A field whose control is a button: no label above it, so it needs pushing
+     down to sit on the same line as the inputs beside it. */
+  .field-row .field-action {
+    @apply flex items-end;
+    flex: 0 0 auto;
+  }
+
+  /* A checkbox and its words on one line, at text size. The card-sized
+     .choice is for picking between options and is far too heavy for a
+     yes/no inside a table row. */
+  .inline-check {
+    @apply m-0 inline-flex cursor-pointer items-center gap-2;
+    @apply text-sm font-normal normal-case tracking-normal;
+    @apply text-slate-700 dark:text-slate-300;
+  }
+
+  .inline-check input[type='checkbox'] {
+    @apply m-0 h-4 w-4 flex-none;
+  }
+
+  /* ------------------------------------------------------------ Reels */
+  /* Tiles, not table rows. What is being judged on this page is a video and
+     four photographs; a table forces that into a column narrow enough to wrap
+     a title over four lines while a 9:16 preview stretches the row past the
+     height of the screen. .grid already lays out auto-fit columns -- .tiles
+     only widens the minimum, because a 200px tile crops a portrait video to
+     the point of uselessness. */
+  .tiles {
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  }
+
+  /* A column, so .tile-actions can be pushed to the bottom: grid stretches
+     tiles to equal height, and without this a tile carrying an error message
+     lands its buttons lower than the tiles either side of it. */
+  .tile {
+    @apply flex flex-col overflow-hidden rounded-2xl border border-edge/70 bg-surface shadow-soft;
+    @apply dark:border-edge-dark dark:bg-surface-dark dark:shadow-none;
+  }
+
+  /* Fixed aspect so a row of tiles lines up whatever the media is, and the
+     page does not reflow as each video reports its dimensions. */
+  .tile-media {
+    @apply flex items-center justify-center bg-fill dark:bg-fill-dark;
+    aspect-ratio: 9 / 16;
+    max-height: 17rem;
+  }
+
+  .tile-media video {
+    @apply h-full w-full object-cover;
+  }
+
+  .tile-placeholder {
+    @apply p-4 text-center text-xs text-slate-500 dark:text-slate-400;
+  }
+
+  /* The candidate's four images, side by side. Short, because they are here to
+     say which article this is, not to be examined -- that is the composer. */
+  .tile-strip {
+    @apply flex gap-px bg-fill dark:bg-fill-dark;
+  }
+
+  .tile-strip img {
+    @apply h-24 min-w-0 flex-1 object-cover;
+  }
+
+  .tile-body {
+    @apply flex flex-1 flex-col gap-1.5 p-4;
+  }
+
+  .tile-title {
+    @apply text-sm font-medium leading-snug text-slate-800 dark:text-slate-100;
+  }
+
+  .tile-error {
+    @apply rounded-md px-2 py-1.5 text-danger;
+    @apply bg-danger-soft dark:bg-transparent;
+  }
+
+  /* Pushed to the bottom edge of the tile and separated by a rule, so tiles of
+     different text lengths still line their buttons up with each other. */
+  .tile-actions {
+    @apply mt-auto gap-2 border-t pt-3;
+    @apply border-edge dark:border-edge-dark;
+  }
+  /* A page picker in the actions shares its line with the button beside it;
+     the full-width select default is for forms, not for a row of buttons. */
+  .tile-actions form.row {
+    @apply flex-1 min-w-0 flex-nowrap;
+  }
+  .tile-actions select {
+    @apply w-auto min-w-0 flex-1;
+  }
+
+  /* ------------------------------------------------- Reel image picker */
+  /* Wider minimum than .tiles: this is where the choice is actually made, and
+     a thumbnail too small to read the plating by is a thumbnail that gets
+     picked at random.
+
+     Named .pick-grid, not .picker, and the distinction is not cosmetic: the
+     manual-run dialog further down this file is already .picker, and a second
+     rule of the same name turned that dialog into a grid container. It never
+     declares display itself, so it inherited this one's, and the modal
+     rendered as a squeezed column with its text clipped. Same name, same
+     specificity, different component. */
+  .pick-grid {
+    @apply mt-3 gap-3;
+    /* Written out rather than @apply'd, for the reason .grid above gives: this
+       file defines a .grid *component*, so `@apply grid` pulls in that whole
+       rule -- its my-5 and its 200px columns -- instead of the display utility
+       the name suggests. */
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  }
+
+  .pick-tile {
+    @apply relative flex cursor-pointer flex-col gap-1 rounded-lg p-2 transition-shadow;
+    @apply border border-edge dark:border-edge-dark;
+  }
+
+  /* The whole tile reads as chosen, not just the box. At this size a checkbox
+     alone is easy to miss when scanning four of them at once. */
+  .pick-tile:has(input:checked) {
+    @apply border-brand ring-1 ring-brand;
+  }
+
+  .pick-tile input[type='checkbox'] {
+    @apply absolute right-3 top-3 m-0 w-auto;
+  }
+
+  .pick-tile img {
+    @apply w-full rounded object-cover;
+    aspect-ratio: 9 / 16;
+  }
+
+  .pick-label {
+    @apply text-xs font-medium text-slate-700 dark:text-slate-300;
+  }
+
+  /* -------------------------------------------------------- Disclosure */
+  /* Used for the token instructions and the published list: steps you follow
+     once, and work already finished, both of which are worth finding and worth
+     nothing in the space where current work is judged. */
+  summary {
+    @apply cursor-pointer select-none py-1 text-sm font-medium;
+    @apply text-slate-700 dark:text-slate-300;
+  }
+
+  details[open] > summary {
+    @apply mb-2;
+  }
+
+  details ol {
+    @apply list-decimal space-y-1 pl-5;
+  }
+
+  details code {
+    @apply rounded px-1 py-0.5 text-xs;
+    @apply bg-fill dark:bg-fill-dark;
+  }
+
+  /* -------------------------------------------------- Buffer account list */
+  /* One column definition, shared by every row, so the fields line up down the
+     card without a table stretching them to fill it. The two text fields take
+     the slack; everything after them is as wide as its content. */
+  .accounts {
+    @apply m-0 mt-4 list-none space-y-2 p-0;
+  }
+
+  /* No background of its own: the row takes the card's, so the fields inside
+     it keep the contrast they have everywhere else on the page. Filling the
+     row with the input colour made every field vanish into it. */
+  .account {
+    @apply grid items-end gap-x-4 gap-y-3 rounded-xl border p-4;
+    @apply border-edge dark:border-edge-dark;
+    grid-template-columns:
+      1.5rem
+      minmax(10rem, 1fr)
+      minmax(14rem, 1.6fr)
+      auto
+      auto
+      auto;
+  }
+
+  .account-index {
+    @apply pb-2 font-mono text-xs text-slate-400 dark:text-slate-500;
+  }
+
+  /* The label sits above its field, in the same small caps the rest of the
+     forms use, so a token box is never an unexplained rectangle. */
+  .account-field {
+    @apply m-0 block min-w-0 normal-case tracking-normal;
+  }
+
+  .account-field > span {
+    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em];
+    @apply text-slate-500 dark:text-slate-400;
+  }
+
+  .account-field input {
+    @apply my-0 w-full;
+  }
+
+  .account-rotation,
+  .account-state,
+  .account-actions {
+    @apply pb-2;
+  }
+
+  .account-state {
+    @apply flex flex-col items-start gap-1 whitespace-nowrap;
+  }
+
+  .account-actions {
+    @apply flex items-center gap-2;
+  }
+
+  .account-actions form {
+    @apply m-0;
+  }
+
+  /* Adding one reads as the same row, one step further down the card. */
+  .account-add {
+    @apply mt-4 flex flex-wrap items-end gap-4 border-t pt-4;
+    @apply border-edge dark:border-edge-dark;
+  }
+
+  .account-add .account-field {
+    flex: 1 1 16rem;
+  }
+
+  @media (max-width: 900px) {
+    .account {
+      grid-template-columns: 1.5rem 1fr;
+    }
+    .account-field,
+    .account-rotation,
+    .account-state,
+    .account-actions {
+      grid-column: 2;
+      @apply pb-0;
+    }
+  }
+
+  label {
+    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em];
+    @apply text-slate-500 dark:text-slate-400;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply w-full rounded-xl border px-3.5 py-2.5 text-sm transition-all duration-150;
+    @apply border-edge bg-surface text-slate-900 placeholder:text-slate-400;
+    @apply dark:border-edge-dark dark:bg-page-dark dark:text-slate-100 dark:placeholder:text-slate-500;
+  }
+
+  input:hover,
+  select:hover,
+  textarea:hover {
+    @apply border-slate-300 dark:border-slate-600;
+  }
+
+  input:focus,
+  select:focus,
+  textarea:focus {
+    @apply border-brand outline-none ring-2 ring-brand/25;
+  }
+
+  textarea {
+    @apply resize-y font-mono text-[13px] leading-relaxed;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  [type='checkbox']:focus-visible {
+    @apply outline-none ring-2 ring-brand/50 ring-offset-2;
+    @apply ring-offset-page dark:ring-offset-page-dark;
+  }
+
+  /* The text-input rule above gives every input full width and padding;
+     a checkbox stretched across a table cell reads as a bar, not a box. */
+  [type='checkbox'],
+  [type='radio'] {
+    accent-color: #6c5ce7;
+    @apply h-4 w-4 flex-none p-0;
+  }
+
+  .help {
+    @apply mt-1.5 text-xs text-slate-500 dark:text-slate-400;
+  }
+
+  .matrix input[type='checkbox'],
+  label input[type='checkbox'] {
+    @apply mr-1.5 w-auto;
+  }
+
+  /* -------------------------------------------------------------- buttons */
+
+  button,
+  .button {
+    @apply relative inline-flex cursor-pointer select-none items-center justify-center gap-1.5 whitespace-nowrap;
+    @apply rounded-xl border px-4 py-2 text-[13px] font-semibold leading-normal no-underline;
+    @apply border-edge bg-white text-slate-700 shadow-sm;
+    @apply transition-all duration-150 ease-out;
+    @apply hover:-translate-y-px hover:border-slate-300 hover:text-slate-900 hover:shadow-soft;
+    @apply active:translate-y-0 active:scale-[0.97] active:shadow-none;
+    @apply dark:border-edge-dark dark:bg-surface-dark dark:text-slate-300 dark:hover:bg-fill-dark dark:hover:text-white;
+  }
+
+  button.primary,
+  .button.primary {
+    @apply border-transparent text-white shadow-soft hover:text-white hover:shadow-lift;
+    background: linear-gradient(135deg, #7c6cf0 0%, #6c5ce7 55%, #5b4bd8 100%);
+  }
+  button.primary:hover,
+  .button.primary:hover {
+    filter: brightness(1.06);
+  }
+
+  button.danger,
+  .button.danger {
+    @apply border-danger/25 bg-white text-danger hover:border-danger/40 hover:bg-danger-soft hover:text-danger;
+    @apply dark:border-danger/40 dark:bg-transparent dark:text-danger;
+  }
+
+  button.browser,
+  .button.browser {
+    @apply border-edge bg-white text-slate-700;
+    @apply dark:border-edge-dark dark:bg-surface-dark dark:text-slate-300;
+  }
+
+  button.small,
+  .button.small {
+    @apply rounded-lg px-2.5 py-1 text-xs;
+  }
+
+  button:disabled {
+    @apply cursor-not-allowed opacity-45 shadow-none;
+    transform: none;
+  }
+  button:disabled:hover {
+    @apply bg-white dark:bg-surface-dark;
+  }
+
+  /* Pressed and waiting for the server: the label fades, a spinner turns. */
+  button.is-loading,
+  .button.is-loading {
+    @apply pointer-events-none;
+    color: transparent !important;
+  }
+  button.is-loading::after,
+  .button.is-loading::after {
+    content: '';
+    @apply absolute h-4 w-4 rounded-full border-2 border-current;
+    border-color: #6c5ce7;
+    border-right-color: transparent;
+    animation: spin 0.6s linear infinite;
+  }
+  button.primary.is-loading::after,
+  .button.primary.is-loading::after {
+    border-color: #fff;
+    border-right-color: transparent;
+  }
+
+  .save-bar {
+    @apply sticky bottom-4 z-10 mt-7 flex items-center gap-4 rounded-2xl border p-4 shadow-lift;
+    @apply border-edge bg-surface dark:border-edge-dark dark:bg-surface-dark dark:shadow-none;
+  }
+
+  /* --------------------------------------------------------- bulk actions */
+
+  .bulkbar {
+    @apply mb-4 flex flex-wrap items-center gap-x-5 gap-y-3 rounded-2xl border p-4 shadow-soft;
+    @apply border-edge bg-surface opacity-60 transition-opacity;
+    @apply dark:border-edge-dark dark:bg-surface-dark;
+  }
+
+  .bulkbar.armed {
+    @apply border-brand/30 opacity-100;
+  }
+
+  .bulk-count {
+    @apply whitespace-nowrap text-sm font-semibold;
+  }
+  .bulk-count span:first-child {
+    @apply font-mono text-lg text-brand;
+  }
+  .bulk-count .muted {
+    @apply font-normal;
+  }
+
+  .bulk-actions {
+    @apply flex flex-1 flex-wrap items-center gap-x-4 gap-y-2.5;
+  }
+
+  .bulk-group {
+    @apply flex items-center gap-2 border-r pr-4;
+    @apply border-edge dark:border-edge-dark;
+  }
+  .bulk-group:last-of-type {
+    @apply border-r-0 pr-0;
+  }
+  .bulk-group select {
+    @apply w-auto min-w-[150px];
+  }
+  .bulk-group label {
+    @apply m-0 normal-case tracking-normal;
+  }
+
+  .toolbar {
+    @apply mb-3.5 flex flex-wrap items-end gap-2.5;
+  }
+  .toolbar .field {
+    @apply mb-0;
+  }
+  .toolbar input,
+  .toolbar select {
+    @apply w-auto min-w-[180px];
+  }
+
+  /* ---------------------------------------------------------- view picker */
+
+  .viewbar {
+    @apply mb-4 rounded-2xl border p-4 shadow-soft;
+    @apply border-edge bg-surface dark:border-edge-dark dark:bg-surface-dark dark:shadow-none;
+  }
+
+  .viewbar-line {
+    @apply flex flex-wrap items-center gap-2.5;
+  }
+
+  .viewbar-line label {
+    @apply m-0 text-sm font-normal normal-case tracking-normal;
+  }
+
+  .viewbar-line select {
+    @apply w-auto min-w-[180px] font-medium;
+  }
+  .viewbar-line input[type='search'] {
+    @apply w-auto;
+    flex: 1 1 200px;
+  }
+
+  .viewbar-blurb {
+    @apply mt-3 max-w-[80ch] text-[13px] text-slate-500 dark:text-slate-400;
+  }
+
+  /* --------------------------------------------------------- keyword list */
+
+  .kwlist td {
+    @apply align-middle;
+  }
+
+  .kwtitle {
+    @apply text-sm font-semibold no-underline;
+    @apply text-slate-900 dark:text-white;
+  }
+  .kwtitle:hover {
+    @apply text-brand underline;
+  }
+
+  .dots {
+    @apply mb-1.5 flex items-center gap-1.5;
+  }
+
+  .dot {
+    @apply inline-block h-2.5 w-2.5 flex-none rounded-full;
+  }
+  .dot.go {
+    @apply bg-emerald;
+  }
+  .dot.done {
+    @apply bg-slate-300 dark:bg-slate-600;
+  }
+  .dot.no {
+    @apply border border-slate-300 bg-transparent dark:border-slate-600;
+  }
+  .dot.unlinked {
+    @apply h-1.5 w-1.5 bg-slate-200 dark:bg-slate-700;
+  }
+
+  .legend {
+    @apply mt-3 flex flex-wrap items-center gap-1.5;
+  }
+  .legend .dot {
+    @apply ml-2.5;
+  }
+  .legend .dot:first-child {
+    @apply ml-0;
+  }
+
+  /* --------------------------------------------------------- radio choices */
+
+  .choice {
+    @apply m-0 flex cursor-pointer items-start gap-2.5 rounded-2xl border p-4;
+    @apply border-edge text-sm font-normal normal-case tracking-normal transition-colors;
+    @apply text-slate-900 hover:border-slate-300;
+    @apply dark:border-edge-dark dark:text-slate-100 dark:hover:border-slate-600;
+    flex: 1 1 220px;
+  }
+  .choice.on {
+    @apply border-brand/40 bg-brand-soft;
+  }
+  .choice input {
+    @apply mt-1 w-auto;
+  }
+  .choice span {
+    @apply flex flex-col gap-1;
+  }
+
+  /* --------------------------------------------------------------- empty */
+
+  /* The manual run picker. A native <dialog>, so the backdrop, the modal
+     behaviour and Escape-to-close come from the browser. */
+  .picker {
+    @apply w-[min(28rem,calc(100vw-2rem))] rounded-2xl p-6 shadow-lift;
+    @apply border border-edge bg-surface text-slate-900;
+    @apply dark:border-edge-dark dark:bg-surface-dark dark:text-slate-100;
+  }
+
+  /* A closed <dialog> is hidden by the browser's own stylesheet, and any author
+     rule that sets display on it silently defeats that -- which is exactly what
+     happened when a second .picker existed. Stating it here, with a specificity
+     a bare class cannot match, means this dialog cannot be un-hidden by a rule
+     that merely shares its name. */
+  .picker:not([open]) {
+    @apply hidden;
+  }
+
+  .picker::backdrop {
+    @apply bg-slate-900/50 backdrop-blur-sm;
+  }
+
+  .picker h2 {
+    @apply mb-1 text-lg font-semibold tracking-tight;
+  }
+
+  .picker .subtitle {
+    @apply mb-5 mt-0;
+  }
+
+  .picker .save-bar {
+    @apply mt-6 justify-end;
+  }
+
+  .empty {
+    @apply px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400;
+  }
+
+  /* ---------------------------------------------------------------- chart */
+
+  .chart {
+    @apply mt-3.5;
+  }
+  .spark {
+    @apply block overflow-visible;
+  }
+
+  .key {
+    @apply ml-3 mr-1 inline-block h-2.5 w-2.5 rounded-sm align-baseline;
+  }
+  .key.brand {
+    @apply bg-emerald;
+  }
+  .key.red {
+    @apply bg-danger;
+  }
+
+  /* -------------------------------------------------------------- article */
+
+  .article > summary {
+    @apply flex list-none items-baseline gap-3 text-base font-semibold;
+    @apply text-slate-900 dark:text-white;
+  }
+  .article > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .article > summary::before {
+    content: '';
+    @apply h-0 w-0 flex-none border-y-4 border-l-[6px] border-y-transparent border-l-brand;
+    @apply transition-transform;
+  }
+  .article[open] > summary::before {
+    transform: rotate(90deg);
+  }
+
+  .article > summary .muted {
+    @apply ml-auto font-normal;
+  }
+
+  .article-body {
+    @apply mt-5 max-w-[74ch];
+  }
+
+  .article-title {
+    @apply mb-2 text-xl font-semibold tracking-tight text-slate-900 dark:text-white;
+  }
+
+  .article-block {
+    @apply mt-6;
+  }
+  .article-block h4 {
+    @apply mb-2 border-b pb-1.5 text-[11px] font-semibold uppercase tracking-[0.1em];
+    @apply border-edge text-slate-500 dark:border-edge-dark dark:text-slate-400;
+  }
+  .article-block p {
+    @apply mb-3;
+  }
+  .article-block ul {
+    @apply list-disc pl-5;
+  }
+  .article-block li {
+    @apply mb-1;
+  }
+  .article-block dt {
+    @apply mt-2.5 text-[13px] font-semibold text-slate-500 dark:text-slate-400;
+  }
+  .article-block dd {
+    @apply mt-0.5;
+  }
+
+  .facts {
+    @apply m-0 grid gap-x-5 gap-y-2;
+    grid-template-columns: minmax(130px, auto) 1fr;
+  }
+  .facts dt {
+    @apply pt-0.5 text-[11px] font-semibold uppercase tracking-[0.08em];
+    @apply text-slate-500 dark:text-slate-400;
+  }
+  .facts dd {
+    @apply m-0;
+    overflow-wrap: anywhere;
+  }
+
+  /* ----------------------------------------------------------------- diff */
+
+  .diff {
+    @apply mt-2.5 overflow-x-auto rounded-lg border font-mono text-xs leading-relaxed;
+    @apply border-edge dark:border-edge-dark;
+  }
+  .diff div {
+    @apply px-3 py-0.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .diff .del {
+    @apply bg-danger-soft text-danger;
+  }
+  .diff .add {
+    @apply bg-emerald-soft text-emerald;
+  }
+
+  /* ----------------------------------------------------- the image set */
+
+  .shots {
+    @apply mt-3.5 grid gap-3.5;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .shot {
+    @apply block overflow-hidden rounded-lg border no-underline transition-colors;
+    @apply border-edge hover:border-slate-300;
+    @apply dark:border-edge-dark dark:hover:border-slate-600;
+  }
+
+  .shot img {
+    @apply block w-full bg-fill object-cover dark:bg-page-dark;
+    aspect-ratio: 3 / 4;
+  }
+
+  .shot span {
+    @apply block px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em];
+    @apply text-slate-500 dark:text-slate-400;
+  }
+
+  /* ----------------------------------------------------------- topic group */
+
+  .group-chip {
+    @apply inline-block whitespace-nowrap rounded-md border px-2 py-0.5 font-mono text-[11px];
+    @apply border-edge text-slate-500 dark:border-edge-dark dark:text-slate-400;
+  }
+  .group-chip.big {
+    @apply px-3 py-1 text-[13px] text-slate-900 dark:text-white;
+  }
+
+  .groupcard {
+    @apply border-l-4 border-l-brand;
+  }
+
+  /* --------------------------------------------------------------- sign in */
+
+  .docket {
+    @apply overflow-hidden rounded-3xl border shadow-lift;
+    @apply border-edge bg-surface dark:border-edge-dark dark:bg-surface-dark;
+  }
+
+  .docket-head {
+    @apply flex justify-between gap-3 px-7 pt-6;
+    @apply text-[11px] font-semibold uppercase tracking-[0.12em];
+    @apply text-slate-500 dark:text-slate-400;
+  }
+
+  .docket-body {
+    @apply px-7 pb-8 pt-4;
+  }
+  .docket-body h1 {
+    @apply mb-2.5 text-2xl;
+  }
+  .docket-body .subtitle {
+    @apply mb-6 text-sm;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes flash-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@layer utilities {
+  /* The sign-in page has no header. */
+  body.signin main {
+    @apply grid min-h-screen place-items-center px-6 py-6;
+    background:
+      radial-gradient(40rem 28rem at 15% 10%, rgba(139, 124, 246, 0.16), transparent 70%),
+      radial-gradient(36rem 26rem at 85% 90%, rgba(79, 195, 247, 0.14), transparent 70%);
+  }
+
+  /* Laptops: seven sections fit by tightening the rail before names give way. */
+  @media (max-width: 1500px) {
+    .topbar nav a {
+      @apply gap-1.5 px-2.5;
+    }
+    .theme-switch > span:first-child,
+    .brand .pill {
+      @apply hidden;
+    }
+  }
+
+  /* Tablets and small laptops: section names give way to icons. */
+  @media (max-width: 1240px) {
+    .topbar nav a span {
+      @apply hidden;
+    }
+    .topbar nav a {
+      @apply px-3;
+    }
+    .theme-switch > span:first-child {
+      @apply hidden;
+    }
+  }
+
+  /* Phones: the sections become a tab bar at the bottom, like an app. */
+  @media (max-width: 760px) {
+    /* No blur on the header here: a blurred parent traps the fixed tab bar
+       inside it instead of pinning it to the bottom of the screen. */
+    .topbar {
+      @apply h-14 gap-2 bg-white px-4 dark:bg-surface-dark;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .brand .pill {
+      @apply hidden;
+    }
+    .topbar nav {
+      @apply fixed inset-x-0 bottom-0 z-40 m-0 justify-around rounded-none p-1;
+      @apply border-t border-edge bg-white/95 backdrop-blur-xl;
+      @apply dark:border-edge-dark dark:bg-surface-dark/95;
+      padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
+    }
+    .topbar nav a {
+      @apply flex-1 flex-col gap-0.5 rounded-xl px-1 py-1.5 text-[10.5px] font-semibold;
+    }
+    .topbar nav a span {
+      @apply inline;
+    }
+    .topbar nav a svg {
+      @apply h-[21px] w-[21px];
+    }
+    .topbar nav a.active {
+      @apply bg-brand-soft text-brand shadow-none;
+    }
+    .rail-utils {
+      @apply ml-auto;
+    }
+    .rail-utils a.browser {
+      @apply hidden; /* still under Setup -> Browser */
+    }
+    .rail-utils a,
+    .rail-utils button {
+      @apply px-2.5;
+    }
+    .page {
+      @apply px-4 pb-28 pt-5;
+    }
+    h1 {
+      @apply text-[22px];
+    }
+    .card {
+      @apply p-4;
+    }
+    .split {
+      grid-template-columns: 1fr;
+    }
+    .spread {
+      @apply flex-wrap;
+    }
+    .save-bar {
+      @apply bottom-20;
+    }
+    .bulk-actions,
+    .bulk-group,
+    .toolbar,
+    .viewbar-line {
+      @apply flex-wrap;
+    }
+    .bulk-group {
+      @apply w-full border-r-0 pr-0;
+    }
+    .bulk-group select,
+    .toolbar input,
+    .toolbar select,
+    .viewbar-line select {
+      @apply min-w-0 flex-1;
+    }
+    /* Bigger targets for a thumb. */
+    button,
+    .button {
+      @apply min-h-[40px] px-4;
+    }
+    button.small,
+    .button.small {
+      @apply min-h-[34px];
+    }
+    input,
+    select,
+    textarea {
+      @apply text-base; /* 16px: iOS does not zoom into the field */
+    }
+
+    /* Tables become a stack of cards; layout.ts labels each cell with its
+       column name (data-label) and marks the table .stack. */
+    table.stack thead {
+      @apply hidden;
+    }
+    table.stack,
+    table.stack tbody,
+    table.stack tr,
+    table.stack td {
+      @apply block w-full;
+    }
+    table.stack tr {
+      @apply mb-3 rounded-2xl border border-edge bg-surface p-3 shadow-soft;
+      @apply dark:border-edge-dark dark:bg-surface-dark;
+    }
+    table.stack td {
+      @apply flex items-start justify-between gap-3 border-0 px-1 py-1.5 text-right;
+    }
+    table.stack td[data-label]::before {
+      content: attr(data-label);
+      @apply flex-none pt-0.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400;
+    }
+    table.stack td:not([data-label]) {
+      @apply justify-start text-left;
+    }
+    .table-wrap:has(table.stack) {
+      @apply overflow-visible;
+    }
+    .card:has(> .table-wrap > table.stack),
+    .card.table-wrap:has(table.stack) {
+      @apply border-0 bg-transparent p-0 shadow-none;
+    }
+  }
+}

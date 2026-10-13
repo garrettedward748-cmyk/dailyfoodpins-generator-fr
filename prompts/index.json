@@ -1,0 +1,218 @@
+{
+ "spy-validation": {
+  "sourceNode": "Spy Validation",
+  "model": "gpt-oss:120b",
+  "format": null,
+  "hasSystem": true
+ },
+ "pick-board": {
+  "sourceNode": "Extact the best board",
+  "model": "gpt-oss:120b",
+  "format": null,
+  "hasSystem": false
+ },
+ "recipe-generator": {
+  "sourceNode": "Recipe generator ",
+  "model": "gpt-oss:20b",
+  "format": null,
+  "hasSystem": true
+ },
+ "pin-description": {
+  "sourceNode": "PIN desc Gen",
+  "model": "gpt-oss:120b",
+  "format": null,
+  "hasSystem": false
+ },
+ "part-2": {
+  "sourceNode": "Part 2",
+  "model": "gemma4:31b",
+  "format": "json",
+  "hasSystem": true
+ },
+ "part-1": {
+  "sourceNode": "Part 1",
+  "model": "gemma4:31b",
+  "format": "json",
+  "hasSystem": true
+ },
+ "image-prompts": {
+  "sourceNode": "Prompt generator ",
+  "model": "gemma4:31b",
+  "format": null,
+  "hasSystem": true
+ },
+ "part-3": {
+  "sourceNode": "Part 3",
+  "model": "gemma4:31b",
+  "format": "json",
+  "hasSystem": true
+ },
+ "part-1.fallback": {
+  "sourceNode": "Part 1 -",
+  "model": "gemma4:31b",
+  "format": "json",
+  "hasSystem": true
+ },
+ "part-2.fallback": {
+  "sourceNode": "Part 2 - ",
+  "model": "gemma4:31b",
+  "format": "json",
+  "hasSystem": true
+ },
+ "part-3.fallback": {
+  "sourceNode": "Part 3 -",
+  "model": "gemma4:31b",
+  "format": "json",
+  "hasSystem": true
+ },
+ "repair-json": {
+  "sourceNode": "Article Json",
+  "model": "gpt-oss:120b",
+  "format": null,
+  "hasSystem": true
+ },
+ "reel-caption": {
+  "sourceNode": "Reels",
+  "model": "gpt-oss:120b",
+  "format": null,
+  "hasSystem": false
+ },
+ "reel-plan": {
+  "sourceNode": "Reels",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": true
+ },
+ "blog-article": {
+  "sourceNode": "Blog article",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": true
+ },
+ "blog-questions": {
+  "sourceNode": "Blog questions",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
+ },
+ "site-page": {
+  "sourceNode": "Site pages (About, Contact, Privacy, Terms, Disclaimer)",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": true
+ },
+ "site-page-facts": {
+  "sourceNode": "Site pages: draft the facts",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": true
+ },
+ "facebook-post": {
+  "sourceNode": "Facebook post",
+  "model": "gpt-oss:120b",
+  "format": null,
+  "hasSystem": false
+ },
+ "collage-steps": {
+  "sourceNode": "Collage step shots",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
+ },
+ "collage-caption": {
+  "sourceNode": "Collage caption",
+  "model": "gpt-oss:120b",
+  "format": null,
+  "hasSystem": false
+ },
+ "suggest-boards": {
+  "sourceNode": "Suggest Pinterest boards",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
+ },
+ "research-filter": {
+  "sourceNode": "Keyword research filter",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
+ },
+ "research-topics": {
+  "sourceNode": "Keyword research topic ideas",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
+ },
+ "serp-brief": {
+  "sourceNode": "Google research brief",
+  "model": "gpt-oss:120b",
+  "format": null,
+  "hasSystem": false
+ },
+ "reel-steps": {
+  "sourceNode": "Reel step captions",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
+ },
+ "reel-process": {
+  "sourceNode": "Reel process shots",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
+ },
+ "reel-hands": {
+  "sourceNode": "Reel hands-only prompt",
+  "model": "gpt-oss:120b",
+  "format": null,
+  "hasSystem": false
+ },
+ "instagram-post": {
+  "sourceNode": "Instagram caption",
+  "model": "gpt-oss:120b",
+  "format": null,
+  "hasSystem": false
+ },
+ "queue-check": {
+  "sourceNode": "Keyword queue check",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
+ },
+ "recipe-tools": {
+  "sourceNode": "Recipe tools for affiliate links",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
+ },
+ "gsc-classify": {
+  "sourceNode": "Search Console opportunities",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
+ },
+ "radar-sort": {
+  "sourceNode": "Radar (social posts -> article ideas)",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
+ },
+ "taxonomy-fill": {
+  "sourceNode": "Taxonomy pages (categories, cuisines, tags)",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
+ },
+ "extra-post": {
+  "sourceNode": "More posts",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
+ },
+ "comment-keyword": {
+  "sourceNode": "Comment keyword",
+  "model": "gpt-oss:120b",
+  "format": null,
+  "hasSystem": false
+ }
+}

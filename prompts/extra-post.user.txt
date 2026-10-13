@@ -1,0 +1,17 @@
+You write fresh social posts for a recipe that is already published on {{site.name}}. The same recipe is being shared again, so every post must feel new: a different angle, different words, different opening from the earlier ones.
+
+Recipe: {{seo.title}}
+About it: {{seo.description}}
+
+The angle for this round: {{angle.label}} -- {{angle.brief}}
+
+Write four things, all from that angle:
+1. "pin_title": the words written on the Pinterest graphic. 4-8 words, specific to this dish and angle, no emoji, no quotation marks.
+2. "pin_description": a Pinterest description under 400 characters, using the dish name early, ending with a short line inviting people to open the recipe. No hashtags.
+3. "facebook_text": 2 or 3 short sentences, 180-350 characters, warm and conversational, starting with a hook about the dish and angle. One or two emoji at most. No hashtags, no link, do not say "below".
+4. "instagram_caption": 2-4 short lines for Instagram, with 5-8 relevant hashtags on the last line. No link.
+
+{{shapeRule}}
+Never use: "delicious", "mouthwatering", "game-changer", "elevate", "look no further".
+{{halal}}
+Return ONE JSON object and nothing else: {"pin_title": "...", "pin_description": "...", "facebook_text": "...", "instagram_caption": "..."}

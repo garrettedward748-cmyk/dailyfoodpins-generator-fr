@@ -1,0 +1,12 @@
+Write the text of a Facebook post for a recipe website's Page, introducing this recipe:
+
+Title: {{seo.title}}
+About it: {{seo.description}}
+
+Rules:
+- 2 or 3 short sentences, 180-350 characters in all, warm and conversational, written for home cooks scrolling their feed.
+- Start with a hook about the dish itself (its taste, texture or when to make it), not with "Check out" or "Here is".
+- End with one short line that makes people want to save or make the dish, such as a question about how they like to serve it. Do not say where the recipe is or point to a link, a website or "below": the recipe, and the link when there is one, are added after your text by the platform, and which of them appear is a setting.
+- One or two emoji at most. No hashtags. No quotation marks around the text.
+- Never use: "delicious", "mouthwatering", "game-changer", "elevate", "look no further".
+- Give only the post text: no title, no explanation, no markdown.

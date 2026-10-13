@@ -1,0 +1,14 @@
+Write the "{{page.title}}" page of {{site.name}}.
+
+What the page must contain:
+{{page.spec}}
+
+Facts the owner gave about the site (the only personal facts you may use):
+{{facts}}
+
+What the site really publishes right now (use it to be specific; do not list more than a few titles):
+{{content}}
+
+{{notes}}
+
+Return ONE JSON object and nothing else: {"html": "..."}

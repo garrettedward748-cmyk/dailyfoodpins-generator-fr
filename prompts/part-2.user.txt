@@ -1,0 +1,92 @@
+Write Part 2 of a DailyFoodPins recipe article: the recipe card.
+
+═══════════════════════════════════════════════════════════════
+SOURCE — USE EXACTLY, DO NOT DEVIATE
+═══════════════════════════════════════════════════════════════
+
+SEO keyword: {{seo.keyword}}
+Working title: {{seo.title}}
+Category: {{seo.category}}
+Cuisine: {{seo.cuisine}}
+
+FULL RECIPE (parse and consume every field):
+{{recipe.raw}}
+
+Before writing anything, list the exact ingredients and their quantities from
+the source. They are fixed. Do not rename, substitute, round or add to them.
+Every temperature and time you give must be the one in the source.
+
+═══════════════════════════════════════════════════════════════
+OUTPUT — EXACTLY THESE KEYS, NO OTHERS
+═══════════════════════════════════════════════════════════════
+
+{
+  "servings": 0,
+  "servings_unit": "",
+  "yield_text": "",
+  "prep_minutes": 0,
+  "cook_minutes": 0,
+  "rest_minutes": 0,
+  "difficulty": "",
+  "ingredients": [],
+  "steps": [],
+  "tips_html": ""
+}
+
+═══════════════════════════════════════════════════════════════
+FIELD REQUIREMENTS
+═══════════════════════════════════════════════════════════════
+
+servings
+- A whole number, from the source. No text, no range.
+
+servings_unit
+- What one serving is: "servings", "pieces", "flatbreads", "bowls".
+
+yield_text
+- How much the recipe makes, in words: "Makes 12 flatbreads". Leave "" if the
+  servings number already says it.
+
+prep_minutes / cook_minutes / rest_minutes
+- Whole numbers of minutes: {{times.card}}
+- rest_minutes covers resting, proving, marinating and chilling. It is often
+  the number that decides the dish — never fold it into prep.
+- Do not output a total. It is worked out from these three.
+
+difficulty
+- Exactly one of: easy, medium, hard.
+
+ingredients
+- An array of objects, ONE PER LINE of the list, in the order they are used.
+- Shape: {"amount": "", "unit": "", "item": "", "note": ""}
+  - amount: the number only, as written: "2", "1/2", "250".
+  - unit: one of {{style.ingredientUnits}}. Leave "" for whole things
+    ("2 onions" is amount "2", unit "", item "onions").
+  - item: the ingredient, no quantity inside it.
+  - note: the preparation, if any: "finely chopped", "at room temperature".
+    Leave "" when there is none.
+- 8 to 14 lines. Do NOT group them into sections and do NOT add a "section"
+  key: this site lists ingredients as one flat list.
+
+steps
+- An array of 6 to 8 objects, in order.
+- Shape: {"heading": "", "body": "", "timer_seconds": null}
+  - heading: 2 to 5 words, imperative, naming the action.
+    "Make a slack dough", "Blanch the olives", "Stretch it thin".
+  - body: 2 to 4 sentences. Say what to do, what it should look, feel or
+    smell like when it is right, and why that matters. Address the cook as
+    "you". Keep the source's exact times and temperatures, written the way this site
+    writes them: {{style.temperatureExample}}.
+  - timer_seconds: whole seconds when the step has one unattended wait
+    (simmering, resting, baking). null otherwise. 20 minutes is 1200.
+- Cover the whole method. Do not stop early and do not merge two techniques
+  into one step to save space.
+
+tips_html
+- ONE cook's note, as a single <p>, 30 to 60 words.
+- The thing that most often goes wrong, and how to tell it is going wrong in
+  time to fix it. Not a summary of the steps. Not encouragement.
+
+{{feedback}}
+
+Output ONLY the JSON object. Start with { and end with }.

@@ -1,0 +1,13 @@
+TOPIC GROUP (context only, never the subject): {{spy.group}}
+
+THE SPECIFIC DISH TO WRITE ABOUT:
+Title: {{spy.title}}
+Description: {{spy.description}}
+Notes: {{spy.annotation}}
+Link: {{spy.articleUrl}}
+
+Categories:
+{{categoryTitles}}
+
+Cuisines:
+{{cuisineTitles}}

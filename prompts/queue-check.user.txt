@@ -1,0 +1,16 @@
+These are keywords waiting to be written as recipe articles on a recipe website. Each one should name ONE dish someone can cook from one recipe.
+
+Keywords (numbered; the dish name, then its topic group in brackets):
+{{items}}
+
+Flag every keyword that is NOT one cookable dish:
+- "topic": a theme, occasion or collection rather than a dish ("christmas dessert recipes", "baby shower dessert table", "fall dessert", "dessert gourmand", "greek yogurt dessert").
+- "list": a round-up or list of several dishes ("10 easy dinners", "best cookies for a party").
+- "not food": not about cooking at all, or a brand, shop, restaurant, tool or person.
+- "unclear": too vague or broken to know which dish it is.
+
+Do NOT flag a real single dish, even a simple or unusual one ("banana pudding", "air fryer chicken thighs", "mango sticky rice", "peach cobbler cheesecake").
+When unsure, do not flag.
+
+Answer with one valid JSON object and nothing else, using the numbers from the list:
+{"flag":[{"n":3,"why":"topic"}]}

@@ -1,0 +1,6 @@
+What the site publishes right now:
+{{content}}
+
+{{notes}}
+
+Return ONE JSON object and nothing else: {"why": "...", "testing": "...", "extra": "..."}

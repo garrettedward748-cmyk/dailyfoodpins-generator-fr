@@ -1,0 +1,38 @@
+Write the closing sections of a DailyFoodPins recipe article.
+
+SEO keyword: {{seo.keyword}}
+Working title: {{seo.title}}
+
+RECIPE:
+{{recipe.raw}}
+
+Return ONLY this JSON, with every key filled:
+
+{
+  "notes_html": "",
+  "faqs": [],
+  "nutrition": {
+    "calories": 0,
+    "protein_g": 0,
+    "carbs_g": 0,
+    "fat_g": 0,
+    "fiber_g": 0,
+    "sugar_g": 0,
+    "sodium_mg": 0
+  },
+  "tags": []
+}
+
+- notes_html: exactly two sections, each an <h2> then one <p> of 40 to 60
+  words. Pick two of: "What to serve with it", "Making it ahead",
+  "Storing and reheating", "Getting the texture right".
+- faqs: exactly three {"question": "", "answer_html": ""}. Practical
+  questions the steps do not already answer. Each answer one <p>, 25 to 50
+  words, direct answer first.
+- nutrition: per serving, from the source where it has figures and estimated
+  from the ingredients where it does not.
+- tags: 4 to 7 short lowercase tags. Never repeat the category or cuisine.
+
+{{feedback}}
+
+Start with { and end with }.

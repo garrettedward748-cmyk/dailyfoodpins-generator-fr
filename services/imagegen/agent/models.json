@@ -1,0 +1,41 @@
+{
+  "video_models": {
+    "PAYGATE_TIER_TWO": {
+      "frame_2_video": {
+        "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_lite_low_priority",
+        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_lite_low_priority"
+      },
+      "start_end_frame_2_video": {
+        "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_lite_low_priority",
+        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_lite_low_priority"
+      },
+      "reference_frame_2_video": {
+        "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_r2v_fast_landscape_ultra_relaxed",
+        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_r2v_fast_landscape_ultra_relaxed"
+      }
+    },
+    "PAYGATE_TIER_ONE": {
+      "frame_2_video": {
+        "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_s_fast",
+        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_s_fast_portrait"
+      },
+      "start_end_frame_2_video": {
+        "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_s_fast_fl",
+        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_s_fast_portrait_fl"
+      },
+      "reference_frame_2_video": {
+        "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_r2v_fast",
+        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_r2v_fast_portrait"
+      }
+    }
+  },
+  "upscale_models": {
+    "VIDEO_RESOLUTION_4K": "veo_3_1_upsampler_4k",
+    "VIDEO_RESOLUTION_1080P": "veo_3_1_upsampler_1080p"
+  },
+  "image_models": {
+    "NANO_BANANA_PRO": "GEM_PIX_2",
+    "NANO_BANANA_2": "BELUGA",
+    "NANO_BANANA_2_LITE": "HARBOR_SEAL"
+  }
+}

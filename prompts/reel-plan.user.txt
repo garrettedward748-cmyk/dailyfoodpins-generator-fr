@@ -1,0 +1,46 @@
+Recipe: {{article.title}}
+
+How it is made:
+{{article.recipe}}
+
+The photographs available, by name, with what each shows:
+{{article.imagePrompts}}
+You may only film from these: {{sources}}
+
+Presenter: {{presenter.name}} — voice: {{presenter.voice}}
+Format for this reel: {{format.title}} — {{format.shape}}
+Length: {{targetSeconds}} seconds = {{scenes}} scenes of 10 seconds each.
+Call to action, which the last scene must carry: "{{cta}}"
+
+Write the storyboard as JSON:
+{
+  "format": "{{format.key}}",
+  "hook": "<the first spoken or shown line, under 8 words, that stops the scroll>",
+  "scenes": [
+    {
+      "seconds": 10,
+      "sources": ["<one to three photograph names this scene is filmed from>"],
+      "presenter": <true if the presenter is on screen in this scene>,
+      "image": "<the still frame this clip starts on, as an image prompt: subject, environment, camera, lighting, mood, style; 40 to 70 words>",
+      "motion": "<the complete video prompt: SUBJECT, ENVIRONMENT, CAMERA, LIGHTING, ACTION, MOOD and STYLE, in that order, 80 to 120 words, present tense, real-time speed>",
+      "line": "<what the presenter says in this scene, under 22 words, or an empty string for cooking sound only>"
+    }
+  ],
+  "cta": "{{cta}}"
+}
+
+An example of a "motion" at the standard required (a different dish, for the shape only):
+"A baked mac and cheese in a white oval dish, the top crust golden-brown with darker crisp edges, exactly as in the photograph. It sits on a scratched wooden board on a kitchen counter, a linen towel bunched at the left, a single fork resting at the front. Close-up at 45 degrees from the front, phone camera, a slight handheld drift toward the dish over the ten seconds. Window light from the left, a soft shadow falling right, a small reflection on the sauce. A hand enters from the right with a serving spoon, presses it through the crust with an audible crack, lifts a scoop, and the cheese stretches then snaps as the spoon tilts toward the lens. Steam rises from the opening. Warm and hungry. Shot on a phone, natural colours, real-time speed."
+
+Rules:
+- Exactly {{scenes}} scenes. Follow the format's shape.
+- Every "motion" contains all six elements in order. Never a bare camera move ("camera pushes in, steam billows") and never a list of adjectives.
+- The dish is the one in the photographs in every scene: same food, same plate, same colours, same portion. Nothing added or swapped; nothing the recipe does not have.
+- One action per scene at real-time speed, filmable inside ten seconds. Never "slowly" or "slow motion".
+- Use the same photograph in more than one scene when a different shot earns it; vary the rhythm: a close, then a pull-back, then a hand.
+- The presenter appears in at least one scene if there is one, and not in every scene. A presenter named "nobody" never appears. When she is on screen, describe her in SUBJECT: what she wears, where she stands, what her hands do while she speaks.
+- A scene where the presenter is not on screen but has a line is a voiceover; the "motion" then shows only the dish.
+- Lines are spoken, not read: short, warm, first person, no hashtags, no links. The same voice, tone and pace in every scene.
+- The last scene's line ends with the call to action, word for word.
+
+{{note}}

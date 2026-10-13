@@ -1,0 +1,51 @@
+# Local development / testing on your own machine.
+#   docker compose -f docker-compose.local.yml up -d --build
+#
+# Differences from the deployment file: binds to localhost only, uses a bind
+# mount so you can inspect the database, and mounts prompts read-write so you
+# can edit them without rebuilding.
+
+services:
+  platform:
+    build: .
+    container_name: article-platform-local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      DB_PATH: /app/data/platform.db
+      LOG_LEVEL: debug
+      IMAGE_BASE_URL: http://imagegen:8100
+      IMAGEGEN_VNC_URL: http://imagegen:6080
+      FB_WEBHOOK_VERIFY_TOKEN: ${FB_WEBHOOK_VERIFY_TOKEN:-}
+    volumes:
+      - ./data:/app/data
+      - ./prompts:/app/prompts
+      - shared-secret:/run/shared:ro
+
+  # The image service. Chrome takes about a minute to come up, and the Google
+  # sign-in is a one-time manual step through http://localhost:8080/browser.
+  imagegen:
+    build: ./services/imagegen
+    container_name: article-platform-imagegen-local
+    restart: unless-stopped
+    # Not published: reach it through the platform's /browser page, the same
+    # way as in production, so local testing exercises the real path.
+    environment:
+      API_KEY: ${IMAGE_API_KEY:-}
+      FLOW_PROJECT_ID: ${FLOW_PROJECT_ID:-}
+      API_HOST: 0.0.0.0
+      API_PORT: 8100
+      WS_HOST: 127.0.0.1
+      WS_PORT: 9222
+      FLOW_AGENT_DIR: /data
+      CHROME_PROFILE_DIR: /data/chrome-profile
+      MAX_CONCURRENT_REQUESTS: 1
+    volumes:
+      - ./data/imagegen:/data
+      - shared-secret:/run/shared
+    security_opt:
+      - seccomp:unconfined
+
+volumes:
+  shared-secret:

@@ -1,0 +1,24 @@
+Write ONE video-generation prompt for a 20-second vertical (9:16) hands-only cooking reel for "{{title}}", in the style of the most-watched ASMR recipe reels: a single continuous take, top-down and 45-degree close-ups, gloved hands preparing the dish from raw ingredients through to the finished, plated result, with no voice, no on-screen text and no music -- only natural cooking sounds.
+
+How it is made:
+{{recipe}}
+
+Two prompts written this way, for other recipes, so you can match their shape and level of detail exactly:
+
+---
+Cinematic close-up food video of preparing skillet brownies. Top-down and 45-degree angle shots on a white marble countertop. Hands wearing matte black nitrile gloves placing two peeled bananas into a black cast-iron skillet, cracking eggs, sifting cocoa powder, and vigorously mixing with a fork into a glossy smooth batter. Sprinkling chocolate chips, placing a glass lid. Cut to the baked result: cutting a warm slice, lifting it with a spatula showing steaming, gooey melted texture. Served on a white ceramic plate, garnished with a strawberry slice, spoon scooping a decadent mouthful. Moody professional lighting, 4k, hyper-realistic, slow motion.
+---
+Cinematic ASMR food preparation video of skillet brownies. Soft dramatic studio lighting on a white marble table. Hands in black gloves placing two peeled bananas into a black cast-iron pan, cracking fresh eggs, dusting cocoa powder, mashing and blending smoothly with a fork into a rich glossy chocolate batter. Sprinkling chocolate chips, covering with a glass lid. Cut to baked brownie: slicing and lifting a warm piece with a spatula revealing molten melted chocolate and steam. Placed on a white plate, topped with a fresh strawberry slice, a metal spoon scoops a soft molten bite. Hyper-detailed, 4K, slow motion, professional culinary videography.
+---
+
+Write a new one, in exactly that spirit, for THIS recipe:
+
+- Open on "Cinematic" or "Cinematic ASMR" food preparation video of {{title}}, said plainly, not the recipe's full SEO title.
+- Name the real cookware this recipe actually uses (a skillet, a saucepan, a mixing bowl, a baking tray, a pot) and a plausible premium countertop (white marble, dark stone, pale wood) -- pick what suits the dish, not skillet-and-marble by default.
+- Walk through the real steps of the recipe above, in order, each as one short clause naming the real ingredient and the real action on it (placing, pouring, cracking, whisking, sifting, folding, sprinkling, kneading, rolling, slicing, pressing into the pan, sliding into the oven) -- only what the recipe actually has, nothing invented.
+- "Cut to" the finished result: plating or lifting a portion, showing the real texture this dish has when done (melted and gooey, crisp and golden, set and creamy -- whatever is true of it, never steam on a cold or baked dish).
+- Close on it served and garnished the way the dish is actually finished (a dusting, a drizzle, a fresh garnish, a scoop), with one small gesture of eating or serving -- a spoon, a knife, a pour.
+- Always: gloved hands only, never a face. Always end with lighting and quality words close to "Moody professional lighting, 4k, hyper-realistic, slow motion." or "Hyper-detailed, 4K, slow motion, professional culinary videography."
+- About 100 to 160 words, one paragraph, no line breaks, no headings, no quotation marks around it.
+
+Answer with the finished prompt and nothing else -- no preamble, no explanation, no markdown.

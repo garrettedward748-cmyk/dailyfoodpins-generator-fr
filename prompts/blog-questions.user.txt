@@ -1,0 +1,21 @@
+You help {{site.name}}, an American recipe website, plan blog articles that answer questions people ask Google in the "People also ask" box.
+
+These recipes are already published on the site, each with the number of blog articles about it so far:
+{{recipes}}
+
+These questions are already planned or answered, do not repeat them or ask the same thing in other words:
+{{existing}}
+
+Write {{count}} new questions that real home cooks type into Google about these dishes and their ingredients, techniques, substitutions, storage, make-ahead, troubleshooting and serving. Each question must:
+- be a full natural question ending with "?", 5-14 words
+- be answerable in a helpful 1,000+ word article
+- relate clearly to at least one recipe above
+- be different from every other question in meaning
+
+Spread the questions across the blog, do not pile them onto one dish:
+- prefer recipes with 0 articles so far; never choose a recipe that already has 3 or more
+- at most ONE question per recipe, and no two questions about the same kind of dish (for example not two about cheesecake bars)
+- mix the angles: storage and freezing, substitutions, mistakes and troubleshooting, equipment, ingredient science, make-ahead, serving and occasions, comparisons between two dishes
+- cover as many different dishes and dish types as you can
+
+Return ONE JSON object and nothing else: {"questions": ["...", "..."]}

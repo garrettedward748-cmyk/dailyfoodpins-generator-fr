@@ -1,0 +1,40 @@
+Write the opening of a DailyFoodPins recipe article.
+
+SEO keyword: {{seo.keyword}}
+Working title: {{seo.title}}
+Category: {{seo.category}}
+Cuisine: {{seo.cuisine}}
+
+RECIPE:
+{{recipe.raw}}
+
+TIMES — the only durations you may write in the title, headline, meta description
+and introduction (a time from the method itself may also be repeated exactly):
+{{times.summary}}
+
+Return ONLY this JSON, with every key filled:
+
+{
+  "title": "",
+  "slug": "",
+  "headline": "",
+  "title_tag": "",
+  "meta_desc": "",
+  "focus_keyword": "",
+  "intro_html": ""
+}
+
+- title: "Local Name: Plain Description", under 65 characters. It must
+  contain a colon and must never end with the word "Recipe".
+- slug: the title lowercase with hyphens, ASCII only.
+- headline: 8 to 14 words, no colon, no full stop, not a repeat of the title.
+- title_tag: under 60 characters, carries the keyword.
+- meta_desc: 140 to 155 characters.
+- focus_keyword: the search phrase, lowercase.
+- intro_html: exactly two <p> paragraphs, 120 to 180 words together. Say what the
+  dish is, then the one thing that decides whether it works. Address the
+  cook as "you". No anecdotes, no persona, no marketing language.
+
+{{feedback}}
+
+Start with { and end with }.

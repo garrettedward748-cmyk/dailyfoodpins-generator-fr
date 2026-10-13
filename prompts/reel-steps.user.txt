@@ -1,0 +1,18 @@
+You write the on-screen words for a short recipe reel about "{{title}}".
+
+The reel opens on a video of the finished dish, then shows three photos from the method, in this order:
+1. {{stepA}}
+2. {{stepB}}
+3. {{stepC}}
+
+The recipe, for the facts:
+{{recipe}}
+
+Write:
+- "hook": 3 to 6 words shown over the opening video, that make someone stop scrolling (e.g. "Cookie dough meets cheesecake", "The easiest bars you'll bake"). No question marks, no emoji, no hashtags.
+- "steps": exactly three captions, one per photo above and in the same order, each 3 to 7 words, saying what happens in that photo as an instruction, with a time or temperature when the recipe gives one (e.g. "Press the dough into the pan", "Bake 35 min at 350°F").
+
+Plain words, sentence case, no exclamation marks, no emoji, no quotes inside the text.
+
+Answer with one valid JSON object and nothing else:
+{"hook":"","steps":["","",""]}

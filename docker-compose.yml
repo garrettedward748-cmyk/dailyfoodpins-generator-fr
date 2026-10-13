@@ -1,0 +1,76 @@
+services:
+  platform:
+    build: .
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      - AUTH_PASSWORD
+      - ENCRYPTION_KEY
+      - IMAGE_API_KEY
+      - FLOW_PROJECT_ID
+      - FB_WEBHOOK_VERIFY_TOKEN
+      - PORT=8080
+      - HOST=0.0.0.0
+      - DB_PATH=/app/data/platform.db
+      - IMAGEGEN_VNC_URL=http://imagegen:6080
+    volumes:
+      - platform-data:/app/data
+      - shared-secret:/run/shared:ro
+    networks:
+      - web
+      - backend
+      - dokploy-network
+      - default
+    depends_on:
+      - imagegen
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -qO-
+        - http://127.0.0.1:8080/healthz
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+  imagegen:
+    build: ./services/imagegen
+    restart: unless-stopped
+    environment:
+      - API_KEY=${IMAGE_API_KEY:-}
+      - FLOW_PROJECT_ID
+      - API_HOST=0.0.0.0
+      - API_PORT=8100
+      - WS_HOST=127.0.0.1
+      - WS_PORT=9222
+      - FLOW_AGENT_DIR=/data
+      - CHROME_PROFILE_DIR=/data/chrome-profile
+      - MAX_CONCURRENT_REQUESTS=${MAX_CONCURRENT_REQUESTS:-2}
+      - API_COOLDOWN=${API_COOLDOWN:-10}
+    volumes:
+      - shared-secret:/run/shared
+      - imagegen-data:/data
+    networks:
+      - backend
+    security_opt:
+      - seccomp:unconfined
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -qO-
+        - http://127.0.0.1:8100/health
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+networks:
+  web: null
+  backend: null
+  dokploy-network:
+    external: true
+volumes:
+  platform-data: null
+  imagegen-data: null
+  shared-secret: null

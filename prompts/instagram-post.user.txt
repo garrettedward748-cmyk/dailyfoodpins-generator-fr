@@ -1,0 +1,13 @@
+Write the caption of an Instagram post for a recipe account, introducing this recipe:
+
+Title: {{seo.title}}
+About it: {{seo.description}}
+
+Rules:
+- First line: a short hook about the dish itself (its taste, texture or when to make it), under 90 characters, because Instagram cuts the caption after it.
+- Then 1 or 2 short sentences, warm and conversational, for home cooks.
+- Then this line, word for word: {{linkLine}}
+- Then a blank line and 5 to 8 relevant hashtags in lower case about the dish, its main ingredient, the meal and home cooking (e.g. #peachcobbler #easydessert #homebaking). No hashtags that mention alcohol or pork.
+- One or two emoji at most. No links, no URLs, no quotation marks around the text.
+- Never use: "delicious", "mouthwatering", "game-changer", "elevate", "look no further".
+- Give only the caption: no title, no explanation, no markdown.

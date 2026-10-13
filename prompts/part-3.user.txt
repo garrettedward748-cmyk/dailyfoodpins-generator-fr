@@ -1,0 +1,85 @@
+Write Part 3 of a DailyFoodPins recipe article: the sections after the recipe
+card, the questions, the nutrition and the tags.
+
+═══════════════════════════════════════════════════════════════
+SOURCE — USE EXACTLY, DO NOT DEVIATE
+═══════════════════════════════════════════════════════════════
+
+SEO keyword: {{seo.keyword}}
+Working title: {{seo.title}}
+Category: {{seo.category}}
+Cuisine: {{seo.cuisine}}
+
+FULL RECIPE (parse and consume every field):
+{{recipe.raw}}
+
+Every quantity, temperature and time must be the one in the source, written
+the way this site writes them: {{style.temperatureExample}}.
+
+═══════════════════════════════════════════════════════════════
+OUTPUT — EXACTLY THESE KEYS, NO OTHERS
+═══════════════════════════════════════════════════════════════
+
+{
+  "notes_html": "",
+  "faqs": [],
+  "nutrition": {
+    "calories": 0,
+    "protein_g": 0,
+    "carbs_g": 0,
+    "fat_g": 0,
+    "fiber_g": 0,
+    "sugar_g": 0,
+    "sodium_mg": 0
+  },
+  "tags": []
+}
+
+═══════════════════════════════════════════════════════════════
+FIELD REQUIREMENTS
+═══════════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════════
+THE SHAPE OF THIS ARTICLE
+═══════════════════════════════════════════════════════════════
+
+{{structureSections}}
+
+The counts above are exact. Do not add a section or a question beyond them,
+and do not drop one to save space.
+
+═══════════════════════════════════════════════════════════════
+
+notes_html
+- Each section is an <h2> followed by one <p> of 40 to 60 words. Nothing else
+  between them.
+- Use the source's serving suggestions and storage notes. Where the source
+  is silent, say what the technique implies, not what would be nice.
+- Format: <h2>What to serve with it</h2><p>…</p><h2>Making it ahead</h2><p>…</p>
+
+faqs
+- Objects of the shape {"question": "", "answer_html": ""}, as many as THE
+  SHAPE above says.
+- Questions a cook asks before starting or halfway through, in their own
+  words: a substitution, a step that looks wrong, keeping or freezing it.
+- Never ask a question the steps already answer plainly.
+- When the recipe JSON has "google_questions" (what people really ask Google
+  about this dish), take the questions from there, worded as they are.
+- answer_html: one <p>, 25 to 50 words, a direct answer first and the reason
+  second. Say no when the answer is no.
+
+nutrition
+- Per serving. Whole numbers for calories and sodium_mg; one decimal is fine
+  for the gram fields.
+- Take the source's figures where it has them and estimate the rest from the
+  ingredients and the serving count. Use 0 only for a field that is genuinely
+  zero.
+
+tags
+- 4 to 7 short lowercase tags: the method, the diet, the occasion, the main
+  ingredient. "vegetarian", "one pot", "ramadan", "semolina", "make ahead".
+- No tag that repeats the category or the cuisine. No hashtags.
+
+{{feedback}}
+
+Output ONLY the JSON object. Start with { and end with }.

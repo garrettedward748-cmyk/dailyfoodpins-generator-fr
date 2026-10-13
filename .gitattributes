@@ -1,0 +1,9 @@
+# Normalise line endings. Critical for shell scripts: a .sh file checked out
+# with CRLF fails on Linux with "bad interpreter: /usr/bin/env bash^M".
+* text=auto eol=lf
+
+*.sh      text eol=lf
+Dockerfile text eol=lf
+*.png     binary
+*.jpg     binary
+*.webp    binary

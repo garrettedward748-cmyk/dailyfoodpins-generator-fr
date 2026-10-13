@@ -1,0 +1,12 @@
+# The build installs from requirements.txt; a host virtualenv would only bloat
+# the context (and is the wrong platform's binaries anyway).
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Runtime state. The container gets its own volume.
+*.db
+*.db-shm
+*.db-wal
+data/
