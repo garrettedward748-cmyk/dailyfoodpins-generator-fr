@@ -83,7 +83,7 @@ export const DEFAULT_CAPTION_STRUCTURES: { name: string; body: string }[] = [
   {
     name: 'The number first',
     body:
-      '- Open with the number that matters, alone on the first line: the minutes, the number of ingredients, the number of bowls. "Twelve minutes. One pan."\n'
+      '- Open with the number that matters, alone on the first line: the minutes, the number of ingredients, the number of bowls. "Douze minutes. Une seule poêle."\n'
       + '- Then two or three lines on what that number buys the cook, and the one step where it could go wrong.\n'
       + '- No question at the end: the number is the hook and a question after it only softens it.\n'
       + '- Then three to five hashtags on one line.',

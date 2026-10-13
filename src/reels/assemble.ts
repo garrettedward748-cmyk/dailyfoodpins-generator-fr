@@ -223,7 +223,7 @@ export async function assembleMixedReel(input: MixedReelInput, outPath: string, 
   });
   parts.push(
     `[${n + 1}:v]${fill},boxblur=24:2,eq=brightness=-0.18,fps=30,format=yuv420p,trim=0:${MIX.end},setpts=PTS-STARTPTS,` +
-      `drawtext=${font}${textFile('cta', input.cta.trim() || 'Full recipe in the caption', 16)}:fontcolor=white:fontsize=92:` +
+      `drawtext=${font}${textFile('cta', input.cta.trim() || 'La recette complète dans la légende', 16)}:fontcolor=white:fontsize=92:` +
       `line_spacing=18:box=1:boxcolor=black@0.35:boxborderw=40:x=(w-text_w)/2:y=(h-text_h)/2-120:` +
       `alpha='min(1,t/0.4)'[s${n + 1}]`,
   );

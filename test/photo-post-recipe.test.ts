@@ -68,14 +68,14 @@ describe('the Facebook photo post', () => {
     await facebookPostStep.run(ctx({}), input);
     expect(sent[0]!.text).toMatch(/^Tangy and bright\.\n\nPréparation 15 minutes\n\nINGRÉDIENTS\n• 2 lemons/);
     expect(sent[0]!.text).toContain('PRÉPARATION\n1. Mix.\n2. Bake.');
-    expect(sent[0]!.text.endsWith('Full recipe: https://d.com/r')).toBe(true);
+    expect(sent[0]!.text.endsWith('La recette complète : https://d.com/r')).toBe(true);
     expect(sent[0]!.firstComment).toBeUndefined();
   });
 
   it('puts the link in the first comment, or leaves it out', async () => {
     await facebookPostStep.run(ctx({ caption_fb_post_link: 'comment' }), input);
     expect(sent[0]!.text).not.toContain('https://');
-    expect(sent[0]!.firstComment).toBe('Full recipe: https://d.com/r');
+    expect(sent[0]!.firstComment).toBe('La recette complète : https://d.com/r');
     await facebookPostStep.run(ctx({ caption_fb_post_link: 'none', caption_fb_post_recipe: 'ingredients' }), input);
     expect(sent[0]!.text).not.toContain('https://');
     expect(sent[0]!.text).not.toContain('PRÉPARATION');
@@ -84,7 +84,7 @@ describe('the Facebook photo post', () => {
 
   it('is the old post when the recipe is off', async () => {
     await facebookPostStep.run(ctx({ caption_fb_post_recipe: 'none' }), input);
-    expect(sent[0]!.text).toBe('Tangy and bright.\n\nFull recipe: https://d.com/r');
+    expect(sent[0]!.text).toBe('Tangy and bright.\n\nLa recette complète : https://d.com/r');
   });
 });
 
@@ -98,12 +98,12 @@ describe('the Instagram photo post', () => {
     }, 'instagramBuffer');
   };
   const input = { seo: { title: 'Lemon Bars' } as never, title: 'Lemon Bars', postUrl: 'https://d.com/r', heroImageUrl: 'https://d.com/h.jpg' };
-  const written = 'Zesty and soft.\n\nFull recipe: link in bio\n\n#lemonbars #baking';
+  const written = 'Zesty and soft.\n\nLa recette complète : lien en bio\n\n#lemonbars #baking';
 
   it('puts the recipe under the caption, the link line after it, the hashtags last', async () => {
     await instagramPostStep.run(ctx({}, written), input);
     expect(sent[0]!.text).toBe(
-      'Zesty and soft.\n\nPréparation 15 minutes\n\nINGRÉDIENTS\n• 2 lemons\n• 1 cup sugar\n\nPRÉPARATION\n1. Mix.\n2. Bake.\n\nFull recipe: link in bio\n\n#lemonbars #baking',
+      'Zesty and soft.\n\nPréparation 15 minutes\n\nINGRÉDIENTS\n• 2 lemons\n• 1 cup sugar\n\nPRÉPARATION\n1. Mix.\n2. Bake.\n\nLa recette complète : lien en bio\n\n#lemonbars #baking',
     );
   });
 
@@ -159,9 +159,9 @@ describe('Buffer and the first comment on a Facebook photo post', () => {
       queries.push(query);
       return new Response(JSON.stringify({ data: { createPost: query.includes('firstComment') ? { message: 'First comment unavailable' } : { post: { id: 'F1' } } } }), { status: 200 });
     }));
-    const id = await new BufferClient('t').createFacebookImagePost({ channelId: 'c', text: 'x', imageUrl: 'https://s/i.jpg', firstComment: 'Full recipe: https://s/r' });
+    const id = await new BufferClient('t').createFacebookImagePost({ channelId: 'c', text: 'x', imageUrl: 'https://s/i.jpg', firstComment: 'La recette complète : https://s/r' });
     expect(id).toBe('F1');
-    expect(queries[0]).toMatch(/type: post\s+firstComment: "Full recipe: https:\/\/s\/r"/);
+    expect(queries[0]).toMatch(/type: post\s+firstComment: "La recette complète : https:\/\/s\/r"/);
     expect(queries[1]).not.toContain('firstComment');
   });
 });

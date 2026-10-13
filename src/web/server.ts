@@ -3864,7 +3864,7 @@ export function buildServer(
     let ideas = niche ? recallIdeas(niche) : null;
     if (niche && !query.job && !ideas) {
       const { candidates, notes } = await topicCandidates(niche, { serperKey, serperState });
-      const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: settings.get('timezone') });
+      const today = new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric', timeZone: settings.get('timezone') });
       try {
         const answer = await askPrompt(settings, encryptionKey, 'research-topics', {
           niche,
@@ -5381,7 +5381,7 @@ export function buildServer(
     settings.set('reel_length_seconds', String([15, 30, 45, 60].includes(length) ? length : 30));
     settings.set('reel_formats', JSON.stringify(chosen));
     settings.set('reel_fresh_images', asString(body.reel_fresh_images) === '1' ? 'true' : 'false');
-    settings.set('reel_cta_text', asString(body.reel_cta_text).trim() || 'Full recipe: {domain}');
+    settings.set('reel_cta_text', asString(body.reel_cta_text).trim() || 'La recette complète : {domain}');
     settings.set('reel_publisher', asString(body.reel_publisher) === 'buffer' ? 'buffer' : 'facebook');
     return redirect(reply, '/settings/reels', { kind: 'ok', message: 'Saved. Applies to the next reel.' });
   });

@@ -146,7 +146,7 @@ export function buildReelPrompt(c: {
       name: 'A warm adult female food-creator voice',
       voice: 'friendly, unhurried, enthusiastic',
     },
-    cta: c.cta || 'Full recipe on our site',
+    cta: c.cta || 'La recette complète sur notre site',
   });
 }
 

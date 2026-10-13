@@ -12,11 +12,11 @@ export function instagramLink(settings: Pick<Settings, 'get'>, postUrl: string):
   if (!postUrl.trim()) return { line: '' };
   const mode = settings.get('ig_link_mode') === 'comment' ? 'comment' : 'bio';
   if (mode === 'bio') {
-    return { line: settings.get('ig_bio_line').trim() || 'Full recipe: link in bio' };
+    return { line: settings.get('ig_bio_line').trim() || 'La recette complète : lien en bio' };
   }
-  const text = (settings.get('ig_comment_text').trim() || 'Full recipe: {url}');
+  const text = (settings.get('ig_comment_text').trim() || 'La recette complète : {url}');
   return {
-    line: settings.get('ig_comment_line').trim() || 'Full recipe in the first comment',
+    line: settings.get('ig_comment_line').trim() || 'La recette complète dans le premier commentaire',
     firstComment: text.includes('{url}') ? text.split('{url}').join(postUrl) : `${text} ${postUrl}`,
   };
 }

@@ -1,4 +1,4 @@
-Write the opening of a DailyFoodPins recipe article.
+Write the opening of a DailyFoodPins recipe article. Everything you write is in French; only the JSON keys stay English.
 
 SEO keyword: {{seo.keyword}}
 Working title: {{seo.title}}
@@ -24,16 +24,16 @@ Return ONLY this JSON, with every key filled:
   "intro_html": ""
 }
 
-- title: "Local Name: Plain Description", under 65 characters. It must
-  contain a colon and must never end with the word "Recipe".
-- slug: the title lowercase with hyphens, ASCII only.
+- title: « Nom du plat : description simple », under 65 characters. It must
+  contain a colon and must never end with the word « Recette »; the dish keeps its own name.
+- slug: the title lowercase with hyphens, ASCII only (no accents: é becomes e, œ becomes oe).
 - headline: 8 to 14 words, no colon, no full stop, not a repeat of the title.
 - title_tag: under 60 characters, carries the keyword.
 - meta_desc: 140 to 155 characters.
 - focus_keyword: the search phrase, lowercase.
 - intro_html: exactly two <p> paragraphs, 120 to 180 words together. Say what the
   dish is, then the one thing that decides whether it works. Address the
-  cook as "you". No anecdotes, no persona, no marketing language.
+  cook as « vous ». No anecdotes, no persona, no marketing language.
 
 {{feedback}}
 

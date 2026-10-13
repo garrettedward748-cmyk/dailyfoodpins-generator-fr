@@ -10,7 +10,7 @@ import { loadPrompt } from '../src/pipeline/prompts.js';
  */
 
 const reveal = FORMATS.find((f) => f.key === 'reveal')!;
-const CTA = 'Full recipe in the comments';
+const CTA = 'La recette complète in the comments';
 const rules = () => ({
   sources: ['hero', 'stepA', 'pin'] as ('hero' | 'stepA' | 'pin')[],
   hasPresenter: true,

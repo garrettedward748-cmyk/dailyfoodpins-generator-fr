@@ -277,8 +277,8 @@ describe("what a Short says under the video", () => {
   it('leads with the caption the platform already writes, then the two links', () => {
     const text = youtubeDescription('Garlic Butter Salmon Bites', caption, 'https://s.com/recipe/salmon', 's.com');
     expect(text.startsWith('Twelve minutes, start to plate.')).toBe(true);
-    expect(text).toContain('Full recipe: https://s.com/recipe/salmon');
-    expect(text).toContain('More recipes: https://s.com');
+    expect(text).toContain('La recette complète : https://s.com/recipe/salmon');
+    expect(text).toContain('Plus de recettes : https://s.com');
     // The hashtags survive: YouTube shows the first three above the title.
     expect(text).toContain('#salmon');
   });
@@ -290,13 +290,13 @@ describe("what a Short says under the video", () => {
 
   it('leaves out a link it does not have, without a stray blank line', () => {
     expect(youtubeDescription('T', caption, '', '')).toBe(caption);
-    expect(youtubeDescription('T', caption, 'https://s.com/r', '')).toContain('Full recipe: https://s.com/r');
-    expect(youtubeDescription('T', caption, 'https://s.com/r', '')).not.toContain('More recipes');
+    expect(youtubeDescription('T', caption, 'https://s.com/r', '')).toContain('La recette complète : https://s.com/r');
+    expect(youtubeDescription('T', caption, 'https://s.com/r', '')).not.toContain('Plus de recettes');
   });
 
   it('does not write the scheme twice when the domain carries one', () => {
     const text = youtubeDescription('T', caption, '', 'https://s.com');
-    expect(text).toContain('More recipes: https://s.com');
+    expect(text).toContain('Plus de recettes : https://s.com');
     expect(text).not.toContain('https://https://');
   });
 
@@ -314,8 +314,8 @@ describe('what every reel says when it goes out', () => {
     return {
       title,
       body,
-      facebook: postUrl ? `${body}\n\nFull recipe: ${postUrl}` : body,
-      instagram: `${body}\n\nFull recipe: link in bio`,
+      facebook: postUrl ? `${body}\n\nLa recette complète : ${postUrl}` : body,
+      instagram: `${body}\n\nLa recette complète : lien en bio`,
     };
   };
 
@@ -325,7 +325,7 @@ describe('what every reel says when it goes out', () => {
     const out = compose('Garlic Butter Salmon Bites', caption, 'https://s.com/r/salmon');
     expect(out.facebook.startsWith('Twelve minutes, start to plate.')).toBe(true);
     expect(out.facebook).toContain('#salmon');
-    expect(out.facebook).toContain('Full recipe: https://s.com/r/salmon');
+    expect(out.facebook).toContain('La recette complète : https://s.com/r/salmon');
     expect(out.instagram.startsWith('Twelve minutes, start to plate.')).toBe(true);
     // The link never goes in an Instagram caption; its line says where it is.
     expect(out.instagram).not.toContain('https://');
@@ -334,7 +334,7 @@ describe('what every reel says when it goes out', () => {
   it('falls back to the title when no caption was written', () => {
     const out = compose('Garlic Butter Salmon Bites', '', 'https://s.com/r/salmon');
     expect(out.body).toBe('Garlic Butter Salmon Bites');
-    expect(out.facebook).toBe('Garlic Butter Salmon Bites\n\nFull recipe: https://s.com/r/salmon');
+    expect(out.facebook).toBe('Garlic Butter Salmon Bites\n\nLa recette complète : https://s.com/r/salmon');
   });
 
   it('keeps a title for Pinterest and YouTube even when only a caption exists', () => {

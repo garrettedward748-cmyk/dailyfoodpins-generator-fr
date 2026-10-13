@@ -109,7 +109,7 @@ describe('clip + steps reels', () => {
     // raw setting: one Call to action serves every site, so {domain} is what
     // keeps one site's address off another site's reels.
     expect(settings.get('reel_cta_text')).toContain('{domain}');
-    expect(input.cta).toBe('Full recipe: bitespoon.com');
+    expect(input.cta).toBe('La recette complète : bitespoon.com');
     expect(input.music).toBeUndefined();
   });
 

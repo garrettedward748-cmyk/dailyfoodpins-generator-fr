@@ -46,42 +46,42 @@ export const DEFAULT_BLOG_STRUCTURES: { name: string; body: string }[] = [
     body:
       '- 1,000-1,500 words in total, organised under 4-7 <h2> headings (with <h3> where useful).\n'
       + '- Short paragraphs, <ul>/<ol> lists for steps, options and comparisons. A small <table> is welcome when it truly compares things.\n'
-      + '- Finish with <h2>Frequently asked questions</h2> and 3-4 related questions as <h3>, each answered in 2-4 sentences.',
+      + '- Finish with <h2>Questions fréquentes</h2> and 3-4 related questions as <h3>, each answered in 2-4 sentences.',
   },
   {
     name: 'Comparison first',
     body:
       '- 1,000-1,400 words in total, under 4-6 <h2> headings.\n'
       + '- The FIRST heading after the opening answer sets the options side by side in a <table>: what each one costs the cook in time, effort or result, and who each suits. Then the headings that follow explain the table rather than repeat it.\n'
-      + '- Finish with <h2>Frequently asked questions</h2> and 3-4 related questions as <h3>, each answered in 2-4 sentences.',
+      + '- Finish with <h2>Questions fréquentes</h2> and 3-4 related questions as <h3>, each answered in 2-4 sentences.',
   },
   {
     name: 'Walk it through',
     body:
       '- 1,000-1,400 words in total, under 4-6 <h2> headings.\n'
       + '- The spine of the article is an ordered walk-through: an <ol> of the actual steps, each step saying what it should look or feel like when it is right. The headings around it cover what to have ready and what to do afterwards.\n'
-      + '- Finish with <h2>Common mistakes</h2>: 3-4 named mistakes as <h3>, each with what it produces and how to avoid it. No question block in this shape.',
+      + '- Finish with <h2>Erreurs courantes</h2>: 3-4 named mistakes as <h3>, each with what it produces and how to avoid it. No question block in this shape.',
   },
   {
     name: 'Correct the belief',
     body:
       '- 1,100-1,500 words in total, under 4-6 <h2> headings.\n'
       + '- One heading must take the belief most cooks hold about this question and say plainly how much of it is true and how much is not. Give the reason, not just the verdict. Never mock the belief or invent a study.\n'
-      + '- Finish with <h2>Frequently asked questions</h2> and 3-4 related questions as <h3>, each answered in 2-4 sentences.',
+      + '- Finish with <h2>Questions fréquentes</h2> and 3-4 related questions as <h3>, each answered in 2-4 sentences.',
   },
   {
     name: 'Short and dense',
     body:
       '- 700-1,000 words in total, under 3-4 <h2> headings. Nothing in this article is there to fill space.\n'
       + '- Prefer lists and one small <table> over paragraphs wherever the content is a set of facts rather than an explanation.\n'
-      + '- Finish with <h2>The short version</h2>: a <ul> of 4-6 single-line takeaways a reader could screenshot. No question block in this shape.',
+      + '- Finish with <h2>L’essentiel en bref</h2>: a <ul> of 4-6 single-line takeaways a reader could screenshot. No question block in this shape.',
   },
   {
     name: 'The long answer',
     body:
       '- 1,500-2,000 words in total, under 6-8 <h2> headings. Use this length on the detail a shorter article leaves out, never on restating.\n'
       + '- One heading must be troubleshooting: what goes wrong, what it looks like when it does, and what to do about it, as an <h3> each.\n'
-      + '- Finish with <h2>Frequently asked questions</h2> and 4-5 related questions as <h3>, each answered in 2-4 sentences.',
+      + '- Finish with <h2>Questions fréquentes</h2> and 4-5 related questions as <h3>, each answered in 2-4 sentences.',
   },
 ];
 

@@ -1440,8 +1440,8 @@ export function youtubeDescription(
   recipes: readonly string[] = [],
 ): string {
   const body = caption.trim() || title.trim();
-  const link = links.recipe && postUrl.trim() ? `Full recipe: ${postUrl.trim()}` : '';
-  const site = links.site && domain.trim().includes('.') ? `More recipes: https://${domain.trim().replace(/^https?:\/\//, '')}` : '';
+  const link = links.recipe && postUrl.trim() ? `La recette complète : ${postUrl.trim()}` : '';
+  const site = links.site && domain.trim().includes('.') ? `Plus de recettes : https://${domain.trim().replace(/^https?:\/\//, '')}` : '';
 
   return composeWithRecipe({ body, recipes, tail: [[link, site].filter(Boolean).join('\n')], limit: 5000 });
 }

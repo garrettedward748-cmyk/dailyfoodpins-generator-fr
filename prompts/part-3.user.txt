@@ -1,5 +1,5 @@
 Write Part 3 of a DailyFoodPins recipe article: the sections after the recipe
-card, the questions, the nutrition and the tags.
+card, the questions, the nutrition and the tags. Everything you write is in French; only the JSON keys stay English.
 
 ═══════════════════════════════════════════════════════════════
 SOURCE — USE EXACTLY, DO NOT DEVIATE
@@ -55,7 +55,8 @@ notes_html
   between them.
 - Use the source's serving suggestions and storage notes. Where the source
   is silent, say what the technique implies, not what would be nice.
-- Format: <h2>What to serve with it</h2><p>…</p><h2>Making it ahead</h2><p>…</p>
+- Format: <h2>Avec quoi servir ce plat</h2><p>…</p><h2>À préparer à l'avance</h2><p>…</p>
+  Headings are in French, sentence case, no final full stop.
 
 faqs
 - Objects of the shape {"question": "", "answer_html": ""}, as many as THE
@@ -76,8 +77,8 @@ nutrition
   zero.
 
 tags
-- 4 to 7 short lowercase tags: the method, the diet, the occasion, the main
-  ingredient. "vegetarian", "one pot", "ramadan", "semolina", "make ahead".
+- 4 to 7 short lowercase French tags: the method, the diet, the occasion, the main
+  ingredient. « végétarien », « one pot », « ramadan », « semoule », « à préparer à l'avance ».
 - No tag that repeats the category or the cuisine. No hashtags.
 
 {{feedback}}

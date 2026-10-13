@@ -30,9 +30,9 @@ describe('article structures', () => {
 
   it('asks for genuinely different articles, not six wordings of one', () => {
     const [, mistake, decision, traditional, ingredient, short] = DEFAULT_STRUCTURES;
-    expect(mistake!.sections).toContain('What goes wrong and why');
+    expect(mistake!.sections).toContain('Ce qui tourne mal et pourquoi');
     expect(decision!.sections).toContain('FOUR questions');
-    expect(traditional!.sections).toContain('How it differs from the traditional method');
+    expect(traditional!.sections).toContain('Ce qui change par rapport à la méthode traditionnelle');
     expect(ingredient!.sections).toMatch(/cannot be found/);
     expect(short!.intro).toContain('EXACTLY ONE <p>');
     // The intros do not all ask for the same number of paragraphs.

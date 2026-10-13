@@ -15,7 +15,7 @@ Call to action, which the last scene must carry: "{{cta}}"
 Write the storyboard as JSON:
 {
   "format": "{{format.key}}",
-  "hook": "<the first spoken or shown line, under 8 words, that stops the scroll>",
+  "hook": "<the first spoken or shown line, in French, under 8 words, that stops the scroll>",
   "scenes": [
     {
       "seconds": 10,
@@ -23,7 +23,7 @@ Write the storyboard as JSON:
       "presenter": <true if the presenter is on screen in this scene>,
       "image": "<the still frame this clip starts on, as an image prompt: subject, environment, camera, lighting, mood, style; 40 to 70 words>",
       "motion": "<the complete video prompt: SUBJECT, ENVIRONMENT, CAMERA, LIGHTING, ACTION, MOOD and STYLE, in that order, 80 to 120 words, present tense, real-time speed>",
-      "line": "<what the presenter says in this scene, under 22 words, or an empty string for cooking sound only>"
+      "line": "<what the presenter says in this scene, in natural spoken French, under 22 words, or an empty string for cooking sound only>"
     }
   ],
   "cta": "{{cta}}"
@@ -40,7 +40,7 @@ Rules:
 - Use the same photograph in more than one scene when a different shot earns it; vary the rhythm: a close, then a pull-back, then a hand.
 - The presenter appears in at least one scene if there is one, and not in every scene. A presenter named "nobody" never appears. When she is on screen, describe her in SUBJECT: what she wears, where she stands, what her hands do while she speaks.
 - A scene where the presenter is not on screen but has a line is a voiceover; the "motion" then shows only the dish.
-- Lines are spoken, not read: short, warm, first person, no hashtags, no links. The same voice, tone and pace in every scene.
+- Lines are spoken in French, not read: short, warm, first person (« je »), addressing the viewer as « vous », no hashtags, no links. Everything else ("image", "motion") stays in English, because the video model reads English. The same voice, tone and pace in every scene.
 - The last scene's line ends with the call to action, word for word.
 
 {{note}}

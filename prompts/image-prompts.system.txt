@@ -11,7 +11,7 @@ of the method, and one vertical Pinterest graphic.
 THE SHAPE OF EVERY PROMPT
 ═══════════════════════════════════════════════════════════════
 
-Each prompt is ONE paragraph of plain English, in this order, with no labels,
+The recipe is in French. Every image prompt is written in plain English, because the image model reads English: translate the dish and its ingredients into plain English descriptions (keep a well-known dish name such as msemen or tajine). The single exception is "pin_title", which is French. Each prompt is ONE paragraph of plain English, in this order, with no labels,
 no bullet points and no line breaks:
 
 1. The shot type and the subject, named concretely.

@@ -32,11 +32,11 @@ const KEY = randomBytes(32);
 describe('the clip prompt', () => {
   it('puts the line in as dialogue and repeats the voice, word for word', () => {
     const text = clipPrompt(
-      { motion: 'she lifts the spoon', line: 'Full recipe in the comments.' },
+      { motion: 'she lifts the spoon', line: 'La recette complète in the comments.' },
       { name: 'Rima', voice: 'warm, unhurried' },
     );
     expect(text).toContain('she lifts the spoon');
-    expect(text).toContain('Rima says: "Full recipe in the comments."');
+    expect(text).toContain('Rima says: "La recette complète in the comments."');
     expect(text).toContain('warm, unhurried');
   });
 

@@ -56,8 +56,8 @@ describe('social-only accounts: what makes one', () => {
 
 describe('social-only accounts: captions without a link', () => {
   it('drops {domain} from the reel call to action', () => {
-    expect(reelCta('Full recipe: {domain}', 'arbmom-social')).toBe('Full recipe');
-    expect(reelCta('Full recipe: {domain}', 'arbmom.com')).toBe('Full recipe: arbmom.com');
+    expect(reelCta('La recette complète : {domain}', 'arbmom-social')).toBe('La recette complète');
+    expect(reelCta('La recette complète : {domain}', 'arbmom.com')).toBe('La recette complète : arbmom.com');
   });
 
   it('never promises a link by message when there is none', () => {

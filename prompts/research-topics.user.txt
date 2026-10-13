@@ -1,10 +1,10 @@
-You plan content for a recipe website for home cooks in the United States. Its niche: "{{niche}}". Today is {{today}}.
+You plan content for a recipe website for home cooks in France. Its niche: "{{niche}}". Today is {{today}}. Everything you write is in French, the way French people search.
 
 Some real Google searches around the niche, as hints:
 {{candidates}}
 
-1. "topics": list 35 SPECIFIC dish families inside the niche that Americans search for a lot, each with many recipes inside it. Name them the way people search, WITHOUT putting the niche word in front: for "dessert" write "cheesecake", "brownies", "banana pudding", "cobbler", "no bake cookies" -- never "dessert bars" or "dessert tacos". 1-3 words each. Not too broad (the niche itself) and not one exact recipe. No restaurants, brands or tools. Most popular first.
-2. "seasonal": 6-8 topics within the niche for the holidays and seasons of the next 4-8 weeks after today (Pinterest users search 4-6 weeks ahead), e.g. in October: "halloween treats", "pumpkin desserts", "thanksgiving pies".
+1. "topics": list 35 SPECIFIC dish families inside the niche that French people search for a lot, each with many recipes inside it. Name them the way people search, WITHOUT putting the niche word in front: for « dessert » write « cheesecake », « brownies », « far breton », « crumble », « clafoutis » -- never « barres de dessert » or « tacos dessert ». 1-3 words each. Not too broad (the niche itself) and not one exact recipe. No restaurants, brands or tools. Most popular first.
+2. "seasonal": 6-8 topics within the niche for the holidays and seasons of the next 4-8 weeks after today (Pinterest users search 4-6 weeks ahead), e.g. in October: « soupes de potimarron », « tartes aux pommes », « plats mijotés d'automne » (French seasons and occasions: Ramadan, Aïd, Noël, Pâques, galette des rois, chandeleur, rentrée, barbecue d'été — but no pork or alcohol).
 
 Each has a "why": one short line.
 
@@ -13,4 +13,4 @@ The site's categories and how many recipes each already has:
 When that list is real (not "(not available)"), also give each topic a "category": the ONE name from the list it would be filed under, copied exactly. Spread the topics across ALL the categories, including the ones with few or no recipes; do not let the biggest category fill the list. Skip "category" when the list is not available.
 
 Answer with one valid JSON object and nothing else:
-{"topics":[{"topic":"cheesecake","why":"...","category":"Cheesecakes"}],"seasonal":[{"topic":"halloween treats","why":"...","category":"Seasonal"}]}
+{"topics":[{"topic":"cheesecake","why":"...","category":"Cheesecakes"}],"seasonal":[{"topic":"soupes de potimarron","why":"...","category":"Saisonnier"}]}

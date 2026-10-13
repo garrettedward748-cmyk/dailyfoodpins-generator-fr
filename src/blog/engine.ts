@@ -204,8 +204,8 @@ export function ensureLinks(html: string, links: SiteContentItem[]): string {
   const items = missing
     .map((l) => `<li><a href="${l.url}">${l.title.replace(/</g, '&lt;')}</a></li>`)
     .join('');
-  const block = `<h2>Keep reading</h2><ul>${items}</ul>`;
-  const faq = html.search(/<h2>\s*Frequently asked questions/i);
+  const block = `<h2>À lire aussi</h2><ul>${items}</ul>`;
+  const faq = html.search(/<h2>\s*(?:Questions fréquentes|Frequently asked questions)/i);
   return faq >= 0 ? html.slice(0, faq) + block + html.slice(faq) : html + block;
 }
 

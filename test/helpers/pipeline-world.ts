@@ -76,8 +76,8 @@ const PART_2 = {
 
 const PART_3 = {
   notes_html:
-    '<h2>What to serve with it</h2><p>Serve the chicken with roasted potatoes or a crisp green salad. The pan sauce is rich, so something sharp on the side keeps each bite balanced and light.</p>'
-    + '<h2>Making it ahead</h2><p>Season the chicken a day ahead and keep it uncovered in the refrigerator. The skin dries out overnight, which helps it crisp faster when it meets the hot pan.</p>',
+    '<h2>Avec quoi servir ce plat</h2><p>Serve the chicken with roasted potatoes or a crisp green salad. The pan sauce is rich, so something sharp on the side keeps each bite balanced and light.</p>'
+    + '<h2>À préparer à l\'avance</h2><p>Season the chicken a day ahead and keep it uncovered in the refrigerator. The skin dries out overnight, which helps it crisp faster when it meets the hot pan.</p>',
   faqs: [
     { question: 'Can I use boneless thighs?', answer_html: '<p>Yes, but shorten the roasting time because they cook faster. Check the center with a thermometer rather than trusting the clock.</p>' },
     { question: 'How do I keep the skin crisp?', answer_html: '<p>Dry it well and keep the pan hot. Moisture is what turns skin soft, so remove it before the chicken goes in.</p>' },

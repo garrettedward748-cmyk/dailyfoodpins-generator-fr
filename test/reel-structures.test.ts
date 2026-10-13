@@ -51,14 +51,14 @@ describe('the shipped structures', () => {
 
 describe('the prompt a clip is filmed from', () => {
   const build = (shape?: string) =>
-    buildReelPrompt({ title: 'Apple Crumble Tart', presenter: null, cta: 'Full recipe: arbmom.com', shape });
+    buildReelPrompt({ title: 'Apple Crumble Tart', presenter: null, cta: 'La recette complète : arbmom.com', shape });
 
   it('puts the chosen scenes in, and keeps the closing line whatever they say', () => {
     const shape = DEFAULT_REEL_STRUCTURES[2]!.body;
     const prompt = build(shape);
     expect(prompt).toContain('SCENE 1 — 0–2 sec | THE MISTAKE');
-    expect(prompt).toContain('word for word: "Full recipe: arbmom.com"');
-    expect(prompt).toContain('Subtitle: "Full recipe: arbmom.com"');
+    expect(prompt).toContain('word for word: "La recette complète : arbmom.com"');
+    expect(prompt).toContain('Subtitle: "La recette complète : arbmom.com"');
     expect(prompt).not.toMatch(/\{\{/);
   });
 

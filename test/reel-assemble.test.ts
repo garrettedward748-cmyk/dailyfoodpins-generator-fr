@@ -46,7 +46,7 @@ describe.skipIf(!ffmpegAvailable)('assembling a reel', () => {
     const b = clip('b.mp4', 1, '640x640');
     const out = join(dir, 'out.mp4');
 
-    await assembleReel([a, b], out, { ctaText: "Full recipe: it's in the comments", ffmpeg: FFMPEG });
+    await assembleReel([a, b], out, { ctaText: "La recette complète : it's in the comments", ffmpeg: FFMPEG });
 
     expect(statSync(out).size).toBeGreaterThan(0);
     const probe = execFileSync(FFPROBE, [

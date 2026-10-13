@@ -1,4 +1,4 @@
-Write Part 2 of a DailyFoodPins recipe article: the recipe card.
+Write Part 2 of a DailyFoodPins recipe article: the recipe card. Everything you write is in French; only the JSON keys stay English. "difficulty" keeps the English value easy, medium or hard.
 
 ═══════════════════════════════════════════════════════════════
 SOURCE — USE EXACTLY, DO NOT DEVIATE
@@ -41,10 +41,10 @@ servings
 - A whole number, from the source. No text, no range.
 
 servings_unit
-- What one serving is: "servings", "pieces", "flatbreads", "bowls".
+- What one serving is, in French: « portions », « pièces », « galettes », « bols ».
 
 yield_text
-- How much the recipe makes, in words: "Makes 12 flatbreads". Leave "" if the
+- How much the recipe makes, in words: « Pour 12 galettes ». Leave "" if the
   servings number already says it.
 
 prep_minutes / cook_minutes / rest_minutes
@@ -61,9 +61,9 @@ ingredients
 - Shape: {"amount": "", "unit": "", "item": "", "note": ""}
   - amount: the number only, as written: "2", "1/2", "250".
   - unit: one of {{style.ingredientUnits}}. Leave "" for whole things
-    ("2 onions" is amount "2", unit "", item "onions").
+    (« 2 oignons » is amount "2", unit "", item "oignons").
   - item: the ingredient, no quantity inside it.
-  - note: the preparation, if any: "finely chopped", "at room temperature".
+  - note: the preparation, if any: « finement haché », « à température ambiante ».
     Leave "" when there is none.
 - 8 to 14 lines. Do NOT group them into sections and do NOT add a "section"
   key: this site lists ingredients as one flat list.
@@ -72,10 +72,10 @@ steps
 - An array of 6 to 8 objects, in order.
 - Shape: {"heading": "", "body": "", "timer_seconds": null}
   - heading: 2 to 5 words, imperative, naming the action.
-    "Make a slack dough", "Blanch the olives", "Stretch it thin".
+    « Préparez une pâte souple », « Blanchissez les olives », « Étirez finement ».
   - body: 2 to 4 sentences. Say what to do, what it should look, feel or
     smell like when it is right, and why that matters. Address the cook as
-    "you". Keep the source's exact times and temperatures, written the way this site
+    « vous ». Keep the source's exact times and temperatures, written the way this site
     writes them: {{style.temperatureExample}}.
   - timer_seconds: whole seconds when the step has one unattended wait
     (simmering, resting, baking). null otherwise. 20 minutes is 1200.

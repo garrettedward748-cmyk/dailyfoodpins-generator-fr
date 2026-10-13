@@ -1,4 +1,4 @@
-Create a complete, real, and detailed recipe based on the source below.
+Create a complete, real, and detailed recipe based on the source below. Write every value in natural French (the source may be in English: understand it, then write the recipe in French, never a word-for-word translation). The JSON keys stay in English.
 
 THE SOURCE RECIPE — this is the dish, follow it:
 Source title: {{spy.title}}
@@ -22,14 +22,14 @@ Generate a full recipe that naturally incorporates the keyword into the recipe t
 
 1. **Recipe Title** - A catchy, descriptive title that includes or closely relates to the SEO keyword
 2. **Description** - A 2-3 sentence appetizing description matching the SEO description tone
-3. **Prep Time** - One time, written "N minutes" or "N hours M minutes". Never a range.
-4. **Cook Time** - One time, written the same way. "0 minutes" for a dish that is not cooked.
+3. **Prep Time** - One time, written « N minutes » or « N heures M minutes ». Never a range.
+4. **Cook Time** - One time, written the same way. « 0 minute » for a dish that is not cooked.
 5. **Total Time** - The whole time from starting to eating: Prep Time + Cook Time + any resting, chilling, marinating or standing time the method needs, written the same way. It can never be less than Prep Time + Cook Time. A wait the method names (an hour to chill, 20 minutes to come to room temperature) is part of it.
 6. **Servings** - Number of servings
-7. **Difficulty Level** - Easy, Medium, or Hard
+7. **Difficulty Level** - Easy, Medium, or Hard (these three English words only)
 8. **Ingredients List** - Complete with exact measurements in the units rule below, organized by component if needed
 9. **Equipment Needed** - List of kitchen tools required
-10. **Step-by-Step Instructions** - Numbered, detailed steps covering prep, cooking, and serving. Include temperatures, timing, and visual cues (e.g., "golden brown," "internal temperature reaches {{style.temperatureExample}}")
+10. **Step-by-Step Instructions** - Numbered, detailed steps covering prep, cooking, and serving. Include temperatures, timing, and visual cues (e.g., « bien doré », « la température à cœur atteint {{style.temperatureExample}} »)
 11. **Chef's Tips** - 2-3 pro tips for best results
 12. **Storage Instructions** - How to store leftovers and for how long
 13. **Serving Suggestions** - Ideas for sides, garnishes, or presentation
@@ -40,7 +40,7 @@ SPELLING AND UNITS — every later step copies your numbers word for word, so wr
 {{style.spelling}}
 {{style.units}}
 
-Important: The recipe must be for a REAL dish that actually exists. Do not invent fictional ingredients or cooking methods. Ensure the recipe is coherent and the ingredients match the title and description. Write in a warm, encouraging tone.
+Important: The recipe must be for a REAL dish that actually exists. Do not invent fictional ingredients or cooking methods. Ensure the recipe is coherent and the ingredients match the title and description. Write in a warm, encouraging tone, addressing the cook as « vous » and using the imperative.
 
 Return the recipe as structur
 {
@@ -49,7 +49,7 @@ Return the recipe as structur
   "prep_time": "string (e.g., '15 minutes')",
   "cook_time": "string (e.g., '12 minutes')",
   "total_time": "string (e.g., '27 minutes')",
-  "servings": "string (e.g., '24 cookies')",
+  "servings": "string (e.g., '24 biscuits' or '4 personnes')",
   "difficulty": "string (Easy/Medium/Hard)",
   "ingredients": "array of strings, each item as 'quantity ingredient' (e.g., '{{style.ingredientExample}}')",
   "equipment": "array of strings, each tool as a separate item",

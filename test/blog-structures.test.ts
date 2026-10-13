@@ -36,8 +36,8 @@ describe('blog structures', () => {
     const endings = DEFAULT_BLOG_STRUCTURES.map((x) => x.body.match(/Finish with <h2>([^<]+)<\/h2>/)?.[1]);
     // Not every article ends with the same question block any more.
     expect(new Set(endings).size).toBeGreaterThan(1);
-    expect(endings).toContain('Common mistakes');
-    expect(endings).toContain('The short version');
+    expect(endings).toContain('Erreurs courantes');
+    expect(endings).toContain('L’essentiel en bref');
     expect(DEFAULT_BLOG_STRUCTURES.some((x) => /<table>/.test(x.body))).toBe(true);
     expect(DEFAULT_BLOG_STRUCTURES.some((x) => /troubleshooting/i.test(x.body))).toBe(true);
   });
@@ -94,6 +94,6 @@ describe('the shape as the blog prompt reads it', () => {
 
   it('no longer hard-codes the question block it used to end with', () => {
     const template = readFileSync('prompts/blog-article.system.txt', 'utf8');
-    expect(template).not.toContain('Finish with <h2>Frequently asked questions</h2>');
+    expect(template).not.toContain('Finish with <h2>Questions fréquentes</h2>');
   });
 });

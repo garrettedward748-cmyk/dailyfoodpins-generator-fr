@@ -1,4 +1,4 @@
-Write the recipe card for a DailyFoodPins article.
+Write the recipe card for a DailyFoodPins article. Everything you write is in French; only the JSON keys stay English.
 
 SEO keyword: {{seo.keyword}}
 Working title: {{seo.title}}
@@ -25,13 +25,13 @@ Return ONLY this JSON, with every key filled:
 
 - servings: a whole number. Minutes: whole numbers, {{times.card}}
   rest_minutes covers resting, proving and chilling.
-- difficulty: easy, medium or hard.
+- difficulty: easy, medium or hard (these three English values only).
 - ingredients: 8 to 14 objects, one per line, in use order, each
   {"amount": "", "unit": "", "item": "", "note": ""}. One flat list, no
   sections. The amount is the number only; the item carries no quantity. The
   unit is one of {{style.ingredientUnits}}.
 - steps: 6 to 8 objects, each {"heading": "", "body": "", "timer_seconds":
-  null}. heading is 2 to 5 imperative words. body is 2 to 4 sentences saying
+  null}. heading is 2 to 5 imperative French words, addressing the cook as « vous ». body is 2 to 4 sentences saying
   what to do, how to tell it is right, and why. Temperatures are written
   like {{style.temperatureExample}}. timer_seconds only for an unattended wait.
 - tips_html: one <p>, 30 to 60 words, on what most often goes wrong.

@@ -161,12 +161,12 @@ export function facebookPost(input: {
   keyword?: string;
 }): { text: string; firstComment?: string } {
   const url = (input.postUrl ?? '').trim();
-  const line = url ? `Full recipe: ${url}` : '';
+  const line = url ? `La recette complète : ${url}` : '';
   const recipe = input.recipe.trim();
   // With a recipe the hashtags close the post, under it, not between the words and the recipe.
   const { body, tags } = recipe ? splitHashtags(input.body) : { body: input.body.trim(), tags: '' };
   const word = (input.keyword ?? '').trim();
-  const invite = input.link === 'keyword' && word && url ? `Comment "${word.toUpperCase()}" and we'll message you the full recipe link!` : '';
+  const invite = input.link === 'keyword' && word && url ? `Commentez « ${word.toUpperCase()} » et nous vous envoyons le lien de la recette complète !` : '';
   const parts = [body, recipe, input.link === 'text' ? line : '', invite, tags].filter(Boolean);
 
   return {

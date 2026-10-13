@@ -41,24 +41,26 @@ export interface ResearchResult {
 }
 
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('');
-const QUESTION_STARTS = ['how to make', 'how long', 'can you', 'what is', 'why is', 'is', 'how do you'];
+const QUESTION_STARTS = ['comment faire', 'comment préparer', 'combien de temps', 'peut-on', 'est-ce que', 'pourquoi', 'comment conserver', 'quelle'];
 
 /** Searches that are not a recipe or a cooking question. */
 const OFF_TOPIC =
-  /\b(near me|delivery|restaurant|restaurants|menu|price|prices|cost|store|stores|walmart|costco|target|aldi|kroger|trader joe'?s?|mcdonald'?s?|starbucks|coupon|png|clipart|clip art|drawing|meme|svg|tattoo|wallpaper|shirt|lyrics|movie|game|logo|jobs?|reddit|youtube|tiktok|instagram|calories in|nutrition facts)\b/i;
+  /(?<![\p{L}])(near me|delivery|restaurant|restaurants|menu|price|prices|cost|store|stores|walmart|costco|target|aldi|kroger|trader joe'?s?|mcdonald'?s?|starbucks|coupon|png|clipart|clip art|drawing|meme|svg|tattoo|wallpaper|shirt|lyrics|movie|game|logo|jobs?|reddit|youtube|tiktok|instagram|calories in|nutrition facts|près de chez moi|pres de chez moi|livraison|restaurants?|prix|coût|cout|magasin|carrefour|leclerc|auchan|lidl|intermarché|intermarche|monoprix|picard|thiriet|mcdo|quick|burger king|bon de réduction|code promo|dessin|coloriage|paroles|film|jeu|emploi|offre d'emploi|calories dans|valeurs nutritionnelles|marmiton|cyril lignac|philippe etchebest)(?![\p{L}])/iu;
 
-const QUESTION = /^(how|what|why|when|where|which|who|can|could|is|are|do|does|did|should|will|would)\b/i;
+const QUESTION = /^(how|what|why|when|where|which|who|can|could|is|are|do|does|did|should|will|would|comment|pourquoi|quand|où|ou est|quel|quelle|quels|quelles|qui|que|quoi|combien|peut-on|puis-je|peut on|est-ce|est ce|faut-il|faut il|doit-on|doit on|sert-on|se conserve|se congèle)(?![\p{L}])/iu;
 
 /** Words that make a keyword a list of dishes rather than one. */
-const BROAD = /\b(recipes|ideas|dishes|meals|options|list|types|kinds|varieties)\b/i;
+const BROAD = /(?<![\p{L}])(recipes|ideas|dishes|meals|options|list|types|kinds|varieties|recettes|idées|idees|plats|repas|liste|types|sortes|variétés|varietes|façons|facons)(?![\p{L}])/iu;
 
 /** "How do you make banana pudding cookies?" -> "banana pudding cookies"; null for other questions. */
 export function howToMakeDish(question: string): string | null {
-  const m = /^how (?:to|do you|do i|can i|can you) (?:make|bake|cook|prepare) (?:a |an |the )?(.+?)\??$/i.exec(question.trim());
+  const q = question.trim();
+  const m = /^how (?:to|do you|do i|can i|can you) (?:make|bake|cook|prepare) (?:a |an |the )?(.+?)\??$/i.exec(q)
+    ?? /^comment (?:faire|préparer|cuisiner|cuire|réaliser|réussir|faire cuire) (?:des |du |de la |de l'|d'|un |une |le |la |les |l')?(.+?)\s?\??$/iu.exec(q);
   if (!m) return null;
   const dish = m[1]!.trim();
   // "... from scratch", "... with vanilla wafers": a way of making the dish, still a question worth a post.
-  return /\b(from scratch|with|without|in|at home|using|ahead|the day|the night)\b/i.test(dish) ? null : dish;
+  return /(?<![\p{L}])(from scratch|with|without|in|at home|using|ahead|the day|the night|maison|avec|sans|à l'avance|a l'avance|la veille)(?![\p{L}])/iu.test(dish) ? null : dish;
 }
 
 export const isQuestion = (text: string): boolean => QUESTION.test(text.trim()) || text.trim().endsWith('?');
@@ -67,7 +69,7 @@ const withTimeout: typeof fetch = (url, init = {}) => fetch(url, { ...init, sign
 
 /** One Google Autocomplete call: the suggestions, in Google's order. */
 export async function autocomplete(query: string, fetchImpl: typeof fetch = withTimeout): Promise<string[]> {
-  const url = `https://suggestqueries.google.com/complete/search?client=firefox&hl=en&gl=us&ie=utf-8&oe=utf-8&q=${encodeURIComponent(query)}`;
+  const url = `https://suggestqueries.google.com/complete/search?client=firefox&hl=fr&gl=fr&ie=utf-8&oe=utf-8&q=${encodeURIComponent(query)}`;
   const response = await fetchImpl(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
   if (!response.ok) throw new Error(`Autocomplete HTTP ${response.status}`);
   const body = (await response.json()) as [string, string[]];
@@ -89,7 +91,7 @@ export async function serperSearch(
   const response = await fetchImpl('https://google.serper.dev/search', {
     method: 'POST',
     headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ q: query, gl: 'us', hl: 'en' }),
+    body: JSON.stringify({ q: query, gl: 'fr', hl: 'fr' }),
   });
   if (!response.ok) {
     const text = await response.text().catch(() => '');

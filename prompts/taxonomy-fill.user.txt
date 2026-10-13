@@ -1,4 +1,4 @@
-You write the text of one {{kind}} page on {{site.name}} ({{site.domain}}), a recipe website for home cooks in the United States.
+You write the text of one {{kind}} page on {{site.name}} ({{site.domain}}), a French recipe website for home cooks in France. Write everything in natural French, addressing the reader as « vous »; the JSON keys stay in English.
 
 Page: "{{name}}" ({{kind}}) — {{count}} published recipes — {{url}}
 
@@ -8,14 +8,14 @@ Recipes on this page (use these exact titles and links, nothing else):
 Write ONLY these fields: {{fields}}
 
 How each field must be:
-- title_tag: 50 to 60 characters. Starts with the main search phrase people type for this page (for example "Easy Breakfast Recipes", "Authentic Mexican Recipes", "Air Fryer Recipes"), then a short benefit. No site name, no quotes, no emoji.
-- meta_desc: 140 to 155 characters, plain text. Says what the reader will find on the page and ends with a light invitation ("Find your next favorite."). Uses the main phrase once, naturally.
+- title_tag: 50 to 60 characters. Starts with the main search phrase people type for this page (for example « Recettes de petit-déjeuner faciles », « Recettes marocaines authentiques », « Recettes à l'air fryer »), then a short benefit. No site name, no quotes, no emoji.
+- meta_desc: 140 to 155 characters, plain text. Says what the reader will find on the page and ends with a light invitation (« Trouvez votre prochaine recette favorite. »). Uses the main phrase once, naturally.
 - intro_html: one <p>. For a category or cuisine: 1 to 2 sentences, at most 45 words — it sits above the recipe grid. For a tag: 2 to 3 sentences, at most 70 words, and it may link one or two of the recipes above.
 - body_html: 300 to 500 words, shown under the recipe grid. 2 to 4 <h2> subheadings with short <p> paragraphs, at most one <ul>. Helpful and specific: what defines {{name}}, the flavors or techniques behind it, practical tips, how to choose a recipe from this page. Mention 3 to 5 of the recipes above by their exact titles, each linked once as <a href="their link">title</a>. If there are no recipes, link none.
 
 Rules:
-- Write for people first: concrete, warm, no filler, no keyword stuffing, no clichés like "look no further" or "in today's fast-paced world".
-- Never invent facts, statistics, awards or personal stories. No first person ("I", "we tested").
+- Write for people first: concrete, warm, no filler, no keyword stuffing, no clichés like « ne cherchez plus » or « dans notre monde en perpétuel mouvement ».
+- Never invent facts, statistics, awards or personal stories. No first person (« je », « nous avons testé »).
 - No <h1>, no FAQ, no images, no tables, no inline styles.
 {{halal}}
 

@@ -4,12 +4,12 @@ Keywords (numbered; the dish name, then its topic group in brackets):
 {{items}}
 
 Flag every keyword that is NOT one cookable dish:
-- "topic": a theme, occasion or collection rather than a dish ("christmas dessert recipes", "baby shower dessert table", "fall dessert", "dessert gourmand", "greek yogurt dessert").
-- "list": a round-up or list of several dishes ("10 easy dinners", "best cookies for a party").
+- "topic": a theme, occasion or collection rather than a dish (« desserts de Noël », « buffet de baby shower », « dessert d'automne », « dessert gourmand », « dessert au yaourt grec »).
+- "list": a round-up or list of several dishes (« 10 dîners faciles », « meilleurs biscuits pour une fête »).
 - "not food": not about cooking at all, or a brand, shop, restaurant, tool or person.
 - "unclear": too vague or broken to know which dish it is.
 
-Do NOT flag a real single dish, even a simple or unusual one ("banana pudding", "air fryer chicken thighs", "mango sticky rice", "peach cobbler cheesecake").
+Do NOT flag a real single dish, even a simple or unusual one (« far breton », « cuisses de poulet à l'air fryer », « riz gluant à la mangue », « cheesecake façon crumble aux pêches »).
 When unsure, do not flag.
 
 Answer with one valid JSON object and nothing else, using the numbers from the list:

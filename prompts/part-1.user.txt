@@ -1,4 +1,4 @@
-Write Part 1 of a DailyFoodPins recipe article: the metadata and the introduction.
+Write Part 1 of a DailyFoodPins recipe article: the metadata and the introduction. Everything you write is in French; only the JSON keys stay English.
 
 ═══════════════════════════════════════════════════════════════
 SOURCE — USE EXACTLY, DO NOT DEVIATE
@@ -40,24 +40,25 @@ FIELD REQUIREMENTS
 
 title
 - MUST contain a colon. The dish's own name, then a colon, then a plain
-  description of what it is.
-- Pattern: "Msemen: Moroccan Square Flatbread", "Chorba Frik: Algerian Lamb
-  and Freekeh Soup", "Apple Pie Cheesecake Tacos: Sweet Tortilla Dessert".
+  description of what it is, in French.
+- Pattern: « Msemen : crêpes feuilletées marocaines », « Chorba frik : soupe
+  algérienne à l'agneau et au freekeh », « Tacos façon tarte aux pommes : dessert croustillant ». Use a plain ASCII colon, and put
+  a space before it only if the French pattern calls for it.
 - Keep the local name first when the dish has one. Do not translate it away.
-- NEVER end the title with the word "Recipe". A title without a colon, or one
-  ending in "Recipe", is wrong: put the colon form here, not in the headline.
+- NEVER end the title with the word « Recette ». A title without a colon, or one
+  ending in « Recette », is wrong: put the colon form here, not in the headline.
 - Under 65 characters.
 
 slug
-- The title, lowercase, hyphens, no colon, no filler words. ASCII only.
+- The title, lowercase, hyphens, no colon, no filler words. ASCII only: drop the accents (é becomes e, ç becomes c, œ becomes oe).
 
 headline
 - One line under the title. A plain sentence fragment, 8 to 14 words, saying
   what makes the dish work or what the result is like.
 - MUST NOT contain a colon, and must not repeat the title or restate its
-  description. If the title is "Msemen: Moroccan Square Flatbread", the
-  headline is something like "Folded and stretched thin so it cooks in
-  layers, not one slab".
+  description. If the title is « Msemen : crêpes feuilletées marocaines », the
+  headline is something like « Pliée et étirée finement pour cuire en
+  couches plutôt qu'en une seule galette ».
 - No full stop at the end.
 
 title_tag
@@ -73,7 +74,7 @@ focus_keyword
 
 intro_html
 {{structureIntro}}
-- Address the cook as "you". No anecdote. No history lesson. No promise.
+- Address the cook as « vous ». No anecdote. No history lesson. No promise.
 - Weave the focus keyword into the first paragraph once, where it reads
   naturally. Never twice.
 

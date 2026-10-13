@@ -6,8 +6,8 @@ Posts (numbered; engagement, then the post):
 {{items}}
 
 For each post worth an article, answer:
-- "recipe": the post is about ONE dish someone would cook from a recipe. Give "title": the article title in the site's own words, naming the dish plainly (e.g. "Garlic Butter Salmon Bites"), and "group": the short topic it belongs to, 1 to 3 words, lower case (e.g. "salmon").
-- "question": the post raises a real cooking question an article can answer (how long, can you freeze, how to store, why did it, what to serve with, substitute for…). Give "title": that question, phrased as a question.
+- "recipe": the post is about ONE dish someone would cook from a recipe. Give "title": the article title in French, in the site's own words, naming the dish plainly (e.g. « Bouchées de saumon à l'ail et au beurre »), and "group": the short topic it belongs to, 1 to 3 words, lower case (e.g. « saumon »).
+- "question": the post raises a real cooking question an article can answer (combien de temps, peut-on congeler, comment conserver, pourquoi, avec quoi servir, par quoi remplacer…). Give "title": that question, phrased as a question, in French.
 
 Leave out, with no answer at all:
 - anything that is about the page itself, a person, a brand, a giveaway, an offer or an event
@@ -19,4 +19,4 @@ Leave out, with no answer at all:
 A loud post is not automatically a good article. Most posts should be left out.
 
 Answer with one valid JSON object and nothing else, using the numbers from the list:
-{"keep":[{"n":1,"type":"recipe","title":"Garlic Butter Salmon Bites","group":"salmon"},{"n":4,"type":"question","title":"Can you freeze cheesecake?"}]}
+{"keep":[{"n":1,"type":"recipe","title":"Bouchées de saumon à l'ail et au beurre","group":"saumon"},{"n":4,"type":"question","title":"Peut-on congeler un cheesecake ?"}]}

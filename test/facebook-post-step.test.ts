@@ -105,7 +105,7 @@ describe('the Facebook post', () => {
     const c = ctx({ fb_enabled: '1', reel_publisher: 'buffer' });
     const out = await facebookPostStep.run(c.value, input);
     expect(out).toEqual({ postId: 'P1', imageUrl: 'https://d.com/image/recipes/fb.jpg', source: 'pin' });
-    expect(c.posts[0]!.text).toBe('Tangy, buttery and ready in an hour.\n\nFull recipe: https://d.com/recipe/lemon-bars');
+    expect(c.posts[0]!.text).toBe('Tangy, buttery and ready in an hour.\n\nLa recette complète : https://d.com/recipe/lemon-bars');
     expect(c.uploads[0]!.subarray(0, 3).toString('hex')).toBe('ffd8ff'); // a jpeg, 1080x1350
   });
 
@@ -274,7 +274,7 @@ describe('publishing directly through Graph API', () => {
     await facebookPostStep.run(c.value, input);
 
     expect(fbClient.commentOnPost).toEqual([
-      { pageId: '1000', postId: '1000_2000', message: 'Full recipe: https://d.com/recipe/lemon-bars' },
+      { pageId: '1000', postId: '1000_2000', message: 'La recette complète : https://d.com/recipe/lemon-bars' },
     ]);
   });
 

@@ -127,7 +127,7 @@ export async function planReel(input: {
   format: ReelFormat;
   cta?: string;
 }): Promise<ReelPlan> {
-  const cta = input.cta?.trim() || 'Full recipe on our site';
+  const cta = input.cta?.trim() || 'La recette complète sur notre site';
   const vars = {
     article: {
       title: input.article.title,

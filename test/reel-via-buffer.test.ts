@@ -130,7 +130,7 @@ describe('publishing a reel through Buffer', () => {
     expect(deps.scheduleReel).toHaveBeenCalledWith({
       siteId,
       runId: expect.anything(),
-      text: expect.stringMatching(/^.+\n\nFull recipe: https:\/\/bitespoon\.com\/stew$/),
+      text: expect.stringMatching(/^.+\n\nLa recette complète : https:\/\/bitespoon\.com\/stew$/),
       videoUrl: 'https://bitespoon.com/video/videos/reel-1.mp4',
       // Named, so Facebook does not list it as "Untitled Video".
       title: 'Stew',

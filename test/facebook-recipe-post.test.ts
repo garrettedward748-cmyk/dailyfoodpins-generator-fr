@@ -69,14 +69,14 @@ describe('where the link goes', () => {
 
   it('in the text: after the recipe, nothing in the comment', () => {
     expect(facebookPost({ ...base, link: 'text' })).toEqual({
-      text: 'Twelve minutes. One pan.\n\nINGRÉDIENTS\n• 1 egg\n\nFull recipe: https://s.com/r',
+      text: 'Twelve minutes. One pan.\n\nINGRÉDIENTS\n• 1 egg\n\nLa recette complète : https://s.com/r',
     });
   });
 
   it('in the first comment: the post itself has no link', () => {
     const post = facebookPost({ ...base, link: 'comment' });
     expect(post.text).not.toContain('https://');
-    expect(post.firstComment).toBe('Full recipe: https://s.com/r');
+    expect(post.firstComment).toBe('La recette complète : https://s.com/r');
   });
 
   it('nowhere: neither the text nor a comment', () => {
@@ -86,7 +86,7 @@ describe('where the link goes', () => {
   });
 
   it('with no recipe, the caption and the link alone, as before', () => {
-    expect(facebookPost({ ...base, recipe: '', link: 'text' }).text).toBe('Twelve minutes. One pan.\n\nFull recipe: https://s.com/r');
+    expect(facebookPost({ ...base, recipe: '', link: 'text' }).text).toBe('Twelve minutes. One pan.\n\nLa recette complète : https://s.com/r');
   });
 });
 
@@ -158,7 +158,7 @@ describe('a Facebook reel with the recipe in it', () => {
     const { text, firstComment } = scheduled(deps);
     expect(text.startsWith('Twelve minutes. One pan.\n\nPréparation 15 minutes')).toBe(true);
     expect(text).toContain('3. Cook on low for eight hours.');
-    expect(text.endsWith('Full recipe: https://bitespoon.com/stew')).toBe(true);
+    expect(text.endsWith('La recette complète : https://bitespoon.com/stew')).toBe(true);
     expect(firstComment).toBeUndefined();
   });
 
@@ -169,7 +169,7 @@ describe('a Facebook reel with the recipe in it', () => {
 
     const { text, firstComment } = scheduled(deps);
     expect(text).not.toContain('https://');
-    expect(firstComment).toBe('Full recipe: https://bitespoon.com/stew');
+    expect(firstComment).toBe('La recette complète : https://bitespoon.com/stew');
   });
 
   it('sends no link at all when told none', async () => {
@@ -189,7 +189,7 @@ describe('a Facebook reel with the recipe in it', () => {
     const deps = fakeDeps();
     await publishReel(reelOf(reelId), deps);
 
-    expect(scheduled(deps).text).toBe('Twelve minutes. One pan.\n\nFull recipe: https://bitespoon.com/stew');
+    expect(scheduled(deps).text).toBe('Twelve minutes. One pan.\n\nLa recette complète : https://bitespoon.com/stew');
   });
 
   it('still posts the caption and link when the run has no recipe to show', async () => {
@@ -197,7 +197,7 @@ describe('a Facebook reel with the recipe in it', () => {
     const deps = fakeDeps({ facebookRecipe: 'full', facebookLink: 'text' });
     await publishReel(reelOf(reelId), deps);
 
-    expect(scheduled(deps).text).toBe('Twelve minutes. One pan.\n\nFull recipe: https://bitespoon.com/stew');
+    expect(scheduled(deps).text).toBe('Twelve minutes. One pan.\n\nLa recette complète : https://bitespoon.com/stew');
     expect(getReel(reelId)!.status).toBe('published');
   });
 });
@@ -217,11 +217,11 @@ describe('Buffer and a plan with no first comment', () => {
       );
     }));
 
-    const id = await new BufferClient('t').createReel({ channelId: 'c1', text: 'x', videoUrl: 'https://s/v.mp4', firstComment: 'Full recipe: https://s/r' });
+    const id = await new BufferClient('t').createReel({ channelId: 'c1', text: 'x', videoUrl: 'https://s/v.mp4', firstComment: 'La recette complète : https://s/r' });
 
     expect(id).toBe('FB1');
     expect(queries).toHaveLength(2);
-    expect(queries[0]).toContain('firstComment: "Full recipe: https://s/r"');
+    expect(queries[0]).toContain('firstComment: "La recette complète : https://s/r"');
     expect(queries[1]).not.toContain('firstComment');
   });
 
@@ -238,16 +238,16 @@ describe('the YouTube description lines', () => {
   const caption = 'Twelve minutes.';
   it('has both by default, either can be left off, and both off leaves the caption alone', () => {
     const both = youtubeDescription('T', caption, 'https://s.com/r', 's.com');
-    expect(both).toContain('Full recipe: https://s.com/r');
-    expect(both).toContain('More recipes: https://s.com');
+    expect(both).toContain('La recette complète : https://s.com/r');
+    expect(both).toContain('Plus de recettes : https://s.com');
 
     const noSite = youtubeDescription('T', caption, 'https://s.com/r', 's.com', { recipe: true, site: false });
-    expect(noSite).toContain('Full recipe');
-    expect(noSite).not.toContain('More recipes');
+    expect(noSite).toContain('La recette complète');
+    expect(noSite).not.toContain('Plus de recettes');
 
     const noRecipe = youtubeDescription('T', caption, 'https://s.com/r', 's.com', { recipe: false, site: true });
-    expect(noRecipe).not.toContain('Full recipe');
-    expect(noRecipe).toContain('More recipes');
+    expect(noRecipe).not.toContain('La recette complète');
+    expect(noRecipe).toContain('Plus de recettes');
 
     expect(youtubeDescription('T', caption, 'https://s.com/r', 's.com', { recipe: false, site: false })).toBe(caption);
   });
@@ -434,12 +434,12 @@ describe('a reel that carries the recipe to YouTube and Instagram', () => {
 describe('the YouTube description with a recipe', () => {
   it('puts the recipe after the caption and before the link lines', () => {
     const text = youtubeDescription('T', 'Twelve minutes.', 'https://s.com/r', 's.com', { recipe: true, site: true }, ['RECIPE']);
-    expect(text).toBe('Twelve minutes.\n\nRECIPE\n\nFull recipe: https://s.com/r\nMore recipes: https://s.com');
+    expect(text).toBe('Twelve minutes.\n\nRECIPE\n\nLa recette complète : https://s.com/r\nPlus de recettes : https://s.com');
   });
 
   it('is what it was without a recipe', () => {
     expect(youtubeDescription('T', 'Twelve minutes.', 'https://s.com/r', 's.com')).toBe(
-      'Twelve minutes.\n\nFull recipe: https://s.com/r\nMore recipes: https://s.com');
+      'Twelve minutes.\n\nLa recette complète : https://s.com/r\nPlus de recettes : https://s.com');
   });
 
   it('drops to the ingredients when the whole recipe would pass 5000 characters', () => {
@@ -452,7 +452,7 @@ describe('the YouTube description with a recipe', () => {
 describe('the Facebook post hashtags', () => {
   it('close the post under the recipe', () => {
     const { text } = facebookPost({ body: 'Words\n#a #b', recipe: 'RECIPE', postUrl: 'https://s/r', link: 'text' });
-    expect(text).toBe('Words\n\nRECIPE\n\nFull recipe: https://s/r\n\n#a #b');
+    expect(text).toBe('Words\n\nRECIPE\n\nLa recette complète : https://s/r\n\n#a #b');
   });
 });
 
@@ -531,7 +531,7 @@ describe('the Caption structures page: YouTube and Instagram recipe', () => {
 describe('the comment-keyword link mode', () => {
   it('invites the keyword in the post and sends no link and no first comment', () => {
     const out = facebookPost({ body: 'Fudgy brownies', recipe: '', postUrl: 'https://d.com/r/x', link: 'keyword', keyword: 'banana' });
-    expect(out.text).toContain('Comment "BANANA"');
+    expect(out.text).toContain('Commentez « BANANA »');
     expect(out.text).not.toContain('https://d.com/r/x');
     expect(out.firstComment).toBeUndefined();
   });

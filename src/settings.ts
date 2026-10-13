@@ -594,7 +594,7 @@ export const SETTING_SPECS: SettingSpec[] = [
     group: 'reels',
     secret: false,
     hidden: true,
-    default: 'Full recipe: {domain}',
+    default: 'La recette complète : {domain}',
     help:
       'The last thing every reel says and shows. Write {domain} and each site stamps its own '
       + 'address, since one setting serves them all. Naming a place instead — "in the comments" — '
@@ -742,7 +742,7 @@ export const SETTING_SPECS: SettingSpec[] = [
     group: 'reels',
     secret: false,
     hidden: true,
-    default: 'Full recipe: link in bio',
+    default: 'La recette complète : lien en bio',
   },
   {
     key: 'ig_comment_line',
@@ -750,7 +750,7 @@ export const SETTING_SPECS: SettingSpec[] = [
     group: 'reels',
     secret: false,
     hidden: true,
-    default: 'Full recipe in the first comment 👇',
+    default: 'La recette complète dans le premier commentaire 👇',
   },
   {
     key: 'ig_comment_text',
@@ -758,7 +758,7 @@ export const SETTING_SPECS: SettingSpec[] = [
     group: 'reels',
     secret: false,
     hidden: true,
-    default: 'Full recipe: {url}',
+    default: 'La recette complète : {url}',
   },
   {
     key: 'recipe_tools_enabled',

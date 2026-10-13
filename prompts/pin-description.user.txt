@@ -1,16 +1,10 @@
+Write a compelling Pinterest Pin description, in natural French, for a recipe pin titled "{{seo.title}}". It must never exceed 400 characters.
 
+- The description is catchy, informative and optimized for French Pinterest search, using this annotation: {{spy.annotation}}
+- Use the target keyword at the very start of the description: '{{seo.description}}'.
+- Address the reader as « vous ». Include a call-to-action encouraging people to click through and explore the recipe (« Découvrez la recette »).
+- Plain French cookery vocabulary, no anglicisms, no marketing clichés (« délicieux », « incontournable », « ne cherchez plus »).
+- No JSON, no explanation, no markdown, no comments: give the description text directly.
+- No hashtags at all, ever.
 
-- Your role is to Write a compelling Pinterest Pin description for a PINTERES post about the title "{{seo.title}}" and never  exceed 400 characters.
-
-- The Description should be catchy, informative, and optimized for SEO full of keywords, Using annotation:{{spy.annotation}}
-
-- make sure you use the target keyword at the start of the descripion '{{seo.description}}'as the focus keyword.
-
-- Include a call-to-action encouraging users to click through and explore the recipes. 
-- No json no explanation just give the text directly 
-- The description length must be less then 400 characters.
-- no explanations, no markdown, no comments, no chit chat , 
-- do not think outloud just give the board name by it self 
-- No Hashtags at all never use hashtags ever  
-#important note 
-**NEVER EXCEED 400 CHARACTERS**
+IMPORTANT: NEVER EXCEED 400 CHARACTERS.

@@ -32,8 +32,8 @@ export interface ArticleStructure {
 
 /** The headings a section may take, offered to every structure that chooses freely. */
 const HEADING_POOL =
-  '"What to serve with it", "Making it ahead", "Storing and reheating", '
-  + '"Sweet or savoury", "Getting the texture right", "Choosing the cut"';
+  '"Avec quoi servir ce plat", "À préparer à l\'avance", "Conservation et réchauffage", '
+  + '"Sucré ou salé", "Réussir la texture", "Bien choisir la pièce"';
 
 /**
  * The shapes a fresh install starts with.
@@ -46,7 +46,7 @@ const HEADING_POOL =
  */
 export const DEFAULT_STRUCTURES: { name: string; intro: string; sections: string }[] = [
   {
-    name: 'Two paragraphs, two notes',
+    name: 'Deux paragraphes, deux notes',
     intro:
       '- EXACTLY TWO <p> paragraphs. Not one, not three. 120 to 180 words in total.\n'
       + '- First paragraph: what the dish is, where it sits in the kitchen it comes\n'
@@ -60,7 +60,7 @@ export const DEFAULT_STRUCTURES: { name: string; intro: string; sections: string
       + '- EXACTLY THREE questions in faqs.',
   },
   {
-    name: 'Open with the mistake',
+    name: 'Ouvrir sur l’erreur',
     intro:
       '- EXACTLY THREE <p> paragraphs. 150 to 200 words in total.\n'
       + '- First paragraph: the mistake most cooks make with this dish, and what it\n'
@@ -70,13 +70,13 @@ export const DEFAULT_STRUCTURES: { name: string; intro: string; sections: string
       + '- Third paragraph: the step that decides between the two.',
     sections:
       '- EXACTLY THREE sections in notes_html. The FIRST must be\n'
-      + '  <h2>What goes wrong and why</h2>: the failure named in the introduction, the\n'
+      + '  <h2>Ce qui tourne mal et pourquoi</h2>: the failure named in the introduction, the\n'
       + '  reason it happens, and how a cook spots it early enough to fix it.\n'
       + `- Choose the other two from: ${HEADING_POOL}.\n`
       + '- EXACTLY THREE questions in faqs.',
   },
   {
-    name: 'Open with the decision',
+    name: 'Ouvrir sur le choix',
     intro:
       '- EXACTLY TWO <p> paragraphs. 110 to 160 words in total.\n'
       + '- First paragraph: open on the choice the cook is weighing before they start —\n'
@@ -89,7 +89,7 @@ export const DEFAULT_STRUCTURES: { name: string; intro: string; sections: string
       + '  recipe where it has them, worded as people actually ask them.',
   },
   {
-    name: 'Against the traditional way',
+    name: 'Face à la méthode traditionnelle',
     intro:
       '- EXACTLY TWO <p> paragraphs. 130 to 180 words in total.\n'
       + '- First paragraph: how the dish is traditionally made, and where this version\n'
@@ -98,13 +98,13 @@ export const DEFAULT_STRUCTURES: { name: string; intro: string; sections: string
       + '- Second paragraph: what the result is like, and the step that decides it.',
     sections:
       '- EXACTLY TWO sections in notes_html. The FIRST must be\n'
-      + '  <h2>How it differs from the traditional method</h2>: what changes in the\n'
+      + '  <h2>Ce qui change par rapport à la méthode traditionnelle</h2>: what changes in the\n'
       + '  result, and when the traditional way is still the better choice.\n'
       + `- Choose the second from: ${HEADING_POOL}.\n`
       + '- EXACTLY THREE questions in faqs.',
   },
   {
-    name: 'The ingredient that decides it',
+    name: 'L’ingrédient qui décide de tout',
     intro:
       '- EXACTLY TWO <p> paragraphs. 120 to 170 words in total.\n'
       + '- First paragraph: the single ingredient this dish stands or falls on. What to\n'
@@ -119,7 +119,7 @@ export const DEFAULT_STRUCTURES: { name: string; intro: string; sections: string
       + '- EXACTLY THREE questions in faqs.',
   },
   {
-    name: 'Short up top, long below',
+    name: 'Court en haut, long en bas',
     intro:
       '- EXACTLY ONE <p> paragraph. 60 to 90 words.\n'
       + '- What the dish is, and the one thing that decides whether it works. Nothing\n'

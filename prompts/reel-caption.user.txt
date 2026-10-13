@@ -1,4 +1,4 @@
-Write a Facebook Reel caption for this recipe.
+Write a Facebook Reel caption, in natural French, for this recipe. Address the viewer as « vous ». Hashtags are in French and carry no accents.
 
 Dish: {{seo.title}}
 Niche: {{spy.group}}
@@ -11,8 +11,8 @@ THE SHAPE OF THIS CAPTION:
 Rules:
 - Follow THE SHAPE above exactly: its opening, its body, its ending.
 - The hashtags are lowercase and specific to the dish rather than generic food tags.
-- No links. No URLs. Do not mention a link, a website, a bio, or "recipe below" -- the platform adds the link itself, so it must not appear here in any form.
+- No links. No URLs. Do not mention a link, a website, a bio, or « recette ci-dessous » -- the platform adds the link itself, so it must not appear here in any form.
 - No emoji spam: at most two, and only if they earn their place.
-- Never use the words "delicious", "mouthwatering" or "game-changer".
+- Never use the words « délicieux », « succulent » or « révolutionnaire ».
 
 Return only the caption text.

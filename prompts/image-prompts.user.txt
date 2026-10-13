@@ -67,10 +67,11 @@ step_a, step_b, step_c
 - End each with: Editorial food blog photography, 3:2.
 
 pin_title
-- The words printed on the Pinterest graphic. 2 to 6 words, title case, the
-  dish's name or the promise of it: "Msemen, Layer by Layer", "The Flatbread
-  That Tears Into Sheets".
-- No exclamation marks, no "must-try", no "game-changer", no emoji, no
+- The words printed on the Pinterest graphic, written in French. 2 to 6 words,
+  French capitalisation (first word and proper nouns only), the dish's name or
+  the promise of it: « Msemen feuilleté », « La galette qui se déchire en
+  feuilles ». Every accent must be correct.
+- No exclamation marks, no « incontournable », no « révolutionnaire », no emoji, no
   hashtags, no site name.
 
 pin

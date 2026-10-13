@@ -289,7 +289,7 @@ describe('a reel moving through its states', () => {
     const [[publishCall]] = (deps.facebook.publishReel as ReturnType<typeof vi.fn>).mock.calls;
     const description = (publishCall as { description: string }).description;
     // The word is the dish's own (the title is "Stew"), kept on the reel for the webhook.
-    expect(description).toContain('Comment "STEW"');
+    expect(description).toContain('Commentez « STEW »');
     expect(getReel(reelId)!.trigger_keyword).toBe('stew');
     expect(description).not.toContain('https://bitespoon.com/stew');
   });
@@ -308,7 +308,7 @@ describe('a reel moving through its states', () => {
 
     const [[publishCall]] = (deps.facebook.publishReel as ReturnType<typeof vi.fn>).mock.calls;
     const description = (publishCall as { description: string }).description;
-    expect(description).toBe('Stew\n\nFull recipe: https://bitespoon.com/stew');
+    expect(description).toBe('Stew\n\nLa recette complète : https://bitespoon.com/stew');
     expect(commentOnReel).not.toHaveBeenCalled();
     expect(getReel(reelId)!.trigger_keyword).toBeNull();
   });

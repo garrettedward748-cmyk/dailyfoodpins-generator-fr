@@ -1,12 +1,12 @@
-Write the text of a Facebook post for a recipe website's Page, sharing a step-by-step photo collage of this recipe:
+Write the text of a Facebook post, in natural French, for a French recipe website's Page, sharing a step-by-step photo collage of this recipe:
 
 Title: {{seo.title}}
 About it: {{seo.description}}
 
 Rules:
-- 2 or 3 short sentences, 180-350 characters in all, warm and conversational, written for home cooks scrolling their feed.
-- Mention that the pictures show how it comes together, step by step, without saying "collage" or "grid".
-- End with one short line that makes people want to save or make the dish. Do not say where the recipe is or point to a link, a website or "below": the recipe, and the link when there is one, are added after your text by the platform.
+- 2 or 3 short sentences, 180-350 characters in all, warm and conversational, addressing the reader as « vous », written for home cooks scrolling their feed.
+- Mention that the pictures show how it comes together, step by step, without saying « collage » or « grille ».
+- End with one short line that makes people want to save or make the dish. Do not say where the recipe is or point to a link, a website or « ci-dessous »: the recipe, and the link when there is one, are added after your text by the platform.
 - One or two emoji at most. No hashtags. No quotation marks around the text.
-- Never use: "delicious", "mouthwatering", "game-changer", "elevate", "look no further".
+- Never use: « délicieux », « succulent », « révolutionnaire », « incontournable », « sublimer », « ne cherchez plus ».
 - Give only the post text: no title, no explanation, no markdown.

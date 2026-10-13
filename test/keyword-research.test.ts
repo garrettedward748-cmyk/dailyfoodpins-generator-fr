@@ -21,7 +21,7 @@ describe('keyword research', () => {
         'banana dessert': ['banana dessert recipes', 'banana dessert near me', 'banana dessert'],
         'banana dessert b': ['banana dessert bars', 'banana dessert bread pudding'],
         'banana dessert c': ['banana dessert cups', 'banana dessert bars'],
-        'how to make banana dessert': ['how to make banana dessert without oven'],
+        'comment faire banana dessert': ['comment faire banana dessert sans four'],
       }),
       serperKey: 'k',
       existingTitles: ['Banana Bread Pudding'],
@@ -33,7 +33,7 @@ describe('keyword research', () => {
     expect(recipes.filter((r) => r === 'banana dessert bars')).toHaveLength(1);
     expect(result.recipes.find((r) => r.text === 'banana dessert recipes')?.broad).toBe(true);
     expect(result.recipes.find((r) => r.text === 'banana dessert bread pudding')?.existing).toBe('Banana Bread Pudding');
-    expect(result.questions.map((q) => q.text)).toEqual(['How to make banana dessert without oven?']);
+    expect(result.questions.map((q) => q.text)).toEqual(['Comment faire banana dessert sans four?']);
     expect(result.notes.some((n) => n.startsWith('Serper'))).toBe(true); // the fake refused
   });
 

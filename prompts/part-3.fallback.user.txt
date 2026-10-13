@@ -1,4 +1,4 @@
-Write the closing sections of a DailyFoodPins recipe article.
+Write the closing sections of a DailyFoodPins recipe article. Everything you write is in French; only the JSON keys stay English.
 
 SEO keyword: {{seo.keyword}}
 Working title: {{seo.title}}
@@ -24,14 +24,14 @@ Return ONLY this JSON, with every key filled:
 }
 
 - notes_html: exactly two sections, each an <h2> then one <p> of 40 to 60
-  words. Pick two of: "What to serve with it", "Making it ahead",
-  "Storing and reheating", "Getting the texture right".
+  words. Pick two of: « Avec quoi servir ce plat », « À préparer à l'avance »,
+  « Conservation et réchauffage », « Réussir la texture ».
 - faqs: exactly three {"question": "", "answer_html": ""}. Practical
   questions the steps do not already answer. Each answer one <p>, 25 to 50
   words, direct answer first.
 - nutrition: per serving, from the source where it has figures and estimated
   from the ingredients where it does not.
-- tags: 4 to 7 short lowercase tags. Never repeat the category or cuisine.
+- tags: 4 to 7 short lowercase French tags. Never repeat the category or cuisine.
 
 {{feedback}}
 

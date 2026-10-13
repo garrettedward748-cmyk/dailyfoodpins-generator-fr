@@ -91,7 +91,7 @@ export const STEP_CONTEXTS: Record<string, Record<string, unknown>> = {
   'collage-caption': { seo: SEO },
   'comment-keyword': { title: 'Lemon Bars' },
   'collage-steps': { title: 'Lemon Bars', recipe: '{}', count: 9, note: '' },
-  'instagram-post': { seo: SEO, linkLine: 'Full recipe: link in bio' },
+  'instagram-post': { seo: SEO, linkLine: 'La recette complète : lien en bio' },
   'serp-brief': { keyword: 'banana pudding', questions: '- Can you freeze banana pudding?', pages: '[Page 1] ...' },
   'research-topics': { niche: 'dessert', today: 'October 1, 2026', candidates: '- dessert bars\n- dessert cups', siteMix: '- Cheesecakes: 12 recipes' },
   'extra-post': {

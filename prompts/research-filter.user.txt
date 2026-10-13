@@ -1,17 +1,17 @@
-You clean a list of real Google searches about "{{seed}}" for a recipe website for home cooks in the United States.
+You clean a list of real Google searches about "{{seed}}" for a French recipe website for home cooks in France. The searches are in French; keep them exactly as written.
 
 Searches (numbered):
 {{items}}
 
 Keep only:
-- "recipe": the name of ONE dish or drink someone would cook from a recipe (e.g. "pasta carbonara", "pasta salad recipe", "pasta e fagioli soup").
-- "question": a real, complete cooking question a recipe blog can answer usefully -- how to make, store, freeze, substitute, fix, time or serve something (e.g. "how long does pasta last in the fridge", "can you freeze pasta salad"). The search must already be phrased as a question.
+- "recipe": the name of ONE dish or drink someone would cook from a recipe (e.g. « gratin dauphinois », « recette de tajine de poulet », « soupe de potimarron »).
+- "question": a real, complete cooking question a recipe blog can answer usefully -- how to make, store, freeze, substitute, fix, time or serve something (e.g. « combien de temps se conserve la ratatouille au frigo », « peut-on congeler du gratin dauphinois »). The search must already be phrased as a question.
 
-Drop everything else: phrases that are not questions ("dessert using cream cheese", "dessert with peaches" are idea searches, not questions -- drop them), definitions, word origins and trivia ("what is dessert", "is dessert food", "why is dessert called dessert", "why is dessert a thing"), broken or unclear searches ("can you pudding", "does dessert mean"), slang, drinks named after the dish ("banana pudding moonshine"), bakeries and brands ("magnolia bakery banana pudding"), and odd one-off ingredient questions ("does banana pudding have xylitol"), restaurants, shops and brands ("pasta house", "pasta garage", "pasta queen"), places, tools and appliances ("pasta maker"), people, songs, places, generic lists ("pasta ideas"), and searches where the word is not food at all or is misread ("can you pasta a tooth" means dental paste, "how do you noodle for catfish" is fishing).
+Drop everything else: phrases that are not questions (« dessert avec de la crème fraîche », « dessert aux pêches » are idea searches, not questions -- drop them), definitions, word origins and trivia (« c'est quoi un dessert », « pourquoi dit-on dessert »), broken or unclear searches, slang, drinks named after the dish, bakeries and brands (« marmiton », « picard », « boulangerie paul »), and odd one-off ingredient questions, restaurants, shops and brands, places, tools and appliances (« machine à pâtes »), people, songs, places, generic lists (« idées de pâtes »), and searches where the word is not food at all or is misread (a word that means something else in French than food).
 
 Keep only ONE of searches that mean the same thing -- the clearest wording, which usually comes first:
-- the same dish in other words ("banana pudding milkshake" / "banana pudding shake", "banana pudding shots" / "banana pudding shooters");
-- the same question in other words ("can you make banana pudding the day before" / "ahead of time" / "the night before"; "can you freeze banana pudding" / "can you put banana pudding in the freezer").
+- the same dish in other words (« milkshake à la banane » / « shake banane »);
+- the same question in other words (« peut-on préparer le flan la veille » / « à l'avance »; « peut-on congeler le flan » / « se congèle-t-il »).
 
 Answer with one valid JSON object and nothing else, using the numbers from the list:
 {"keep":[{"n":1,"type":"recipe"},{"n":7,"type":"question"}]}

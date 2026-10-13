@@ -102,9 +102,9 @@ describe('links', () => {
   });
 
   it('adds any link the model left out, before the FAQ', () => {
-    const html = '<p>Answer.</p><h2>Frequently asked questions</h2><h3>Q?</h3><p>A.</p>';
+    const html = '<p>Answer.</p><h2>Questions fréquentes</h2><h3>Q?</h3><p>A.</p>';
     const out = ensureLinks(html, [content[0]!]);
-    expect(out.indexOf('Keep reading')).toBeLessThan(out.indexOf('Frequently asked'));
+    expect(out.indexOf('À lire aussi')).toBeLessThan(out.indexOf('Questions fréquentes'));
     expect(out).toContain('https://x.com/recipe/lemon-bars');
   });
 });

@@ -154,7 +154,7 @@ export function liveDeps(settings: Settings, key: Buffer): AutoDeps {
     },
     async topicIdeas(niche, siteMix = '(not available)') {
       const { candidates, notes } = await topicCandidates(niche, { serperKey, serperState });
-      const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: settings.get('timezone') });
+      const today = new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric', timeZone: settings.get('timezone') });
       const answer = await askPrompt(settings, key, 'research-topics', {
         niche,
         today,

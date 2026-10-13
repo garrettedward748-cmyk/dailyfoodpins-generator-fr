@@ -15,11 +15,11 @@ describe('the Buffer mutation for Instagram', () => {
       bodies.push(init.body);
       return new Response(JSON.stringify({ data: { createPost: { post: { id: 'IG1' } } } }), { status: 200 });
     }));
-    const id = await new BufferClient('t').createInstagramPost({ channelId: 'c1', text: 'Bars', type: 'reel', videoUrl: 'https://s/v.mp4', firstComment: 'Full recipe: https://s/r' });
+    const id = await new BufferClient('t').createInstagramPost({ channelId: 'c1', text: 'Bars', type: 'reel', videoUrl: 'https://s/v.mp4', firstComment: 'La recette complète : https://s/r' });
     expect(id).toBe('IG1');
     const q = JSON.parse(bodies[0]!).query as string;
     expect(q).toContain('video: { url: "https://s/v.mp4" }');
-    expect(q).toMatch(/instagram: \{\s*type: reel\s*shouldShareToFeed: true\s*isAiGenerated: true\s*firstComment: "Full recipe: https:\/\/s\/r"/);
+    expect(q).toMatch(/instagram: \{\s*type: reel\s*shouldShareToFeed: true\s*isAiGenerated: true\s*firstComment: "La recette complète : https:\/\/s\/r"/);
   });
 
   it('sends a post as an image', async () => {
@@ -47,7 +47,7 @@ describe('the Instagram post step', () => {
         settings: { get: (k: string) => ({ ig_link_mode: 'comment', ig_comment_line: 'Recipe below', ig_comment_text: 'Get it: {url}' } as Record<string, string>)[k] ?? '' },
         images: { download: vi.fn(async () => { throw new Error('no network in tests'); }) },
         siteApi: { uploadImage: vi.fn(), absoluteUrl: (p: string) => `https://d.com${p}` },
-        prompt: vi.fn(async () => ({ content: 'Peachy and creamy.\n\nFull recipe: link in bio (also in the first comment)\n\n#peachcobbler' })),
+        prompt: vi.fn(async () => ({ content: 'Peachy and creamy.\n\nLa recette complète : lien en bio (also in the first comment)\n\n#peachcobbler' })),
         instagramBuffer: { createInstagramPost: vi.fn(async (i: unknown) => { posts.push(i); return { postId: 'IG2', account: 'A' }; }) },
         async eachAccount(this: { instagramBuffer: unknown }, _p: string, send: (pool: unknown, profile: undefined, first: boolean) => Promise<string>) {
           return { postId: await send(this.instagramBuffer, undefined, true), accounts: 1 };
@@ -92,7 +92,7 @@ describe('Buffer free plan', () => {
         : { data: { createPost: { post: { id: 'IG9' } } } };
       return new Response(JSON.stringify(body), { status: 200 });
     }));
-    const id = await new BufferClient('t').createInstagramPost({ channelId: 'c', text: 'x', type: 'reel', videoUrl: 'https://s/v.mp4', firstComment: 'Full recipe: https://s/r' });
+    const id = await new BufferClient('t').createInstagramPost({ channelId: 'c', text: 'x', type: 'reel', videoUrl: 'https://s/v.mp4', firstComment: 'La recette complète : https://s/r' });
     expect(id).toBe('IG9');
     expect(queries).toHaveLength(2);
     expect(queries[1]).not.toContain('firstComment');

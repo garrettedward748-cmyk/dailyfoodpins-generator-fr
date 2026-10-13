@@ -4,10 +4,10 @@ Searches (numbered; how often the site appeared for it, and the site's page that
 {{items}}
 
 For each search worth an article, answer:
-- "recipe": the search names ONE dish someone would cook from a recipe (e.g. "banana bread with oil", "air fryer salmon bites"). Give "group": the short topic it belongs to, 1 to 3 words, lower case (e.g. "banana bread", "salmon").
-- "question": a real cooking question a blog article can answer (how long, can you freeze, how to store, why did it, what to serve with, substitute for…). It must already be phrased as a question or clearly ask one.
+- "recipe": the search names ONE dish someone would cook from a recipe (e.g. « cake à la banane sans beurre », « pilons de poulet à l'air fryer »). Give "group": the short topic it belongs to, 1 to 3 words, lower case (e.g. « cake banane », « saumon »).
+- "question": a real cooking question a blog article can answer (combien de temps, peut-on congeler, comment conserver, pourquoi, avec quoi servir, par quoi remplacer…). It must already be phrased as a question or clearly ask one.
 
-Leave out everything else: the site's own name, a person, a brand or restaurant, shopping or price searches, searches that only repeat the page's own recipe in other words (the page already answers them), lists ("10 easy dinners"), single vague words, and anything about alcohol or pork.
+Leave out everything else: the site's own name, a person, a brand or restaurant, shopping or price searches, searches that only repeat the page's own recipe in other words (the page already answers them), lists (« 10 dîners faciles »), single vague words, and anything about alcohol or pork.
 
 Answer with one valid JSON object and nothing else, using the numbers from the list:
-{"keep":[{"n":1,"type":"recipe","group":"banana bread"},{"n":4,"type":"question"}]}
+{"keep":[{"n":1,"type":"recipe","group":"cake banane"},{"n":4,"type":"question"}]}
