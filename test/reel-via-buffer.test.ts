@@ -1,9 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { closeDatabase, openDatabase } from '../src/db/index.js';
+import { closeDatabase, openDatabase, run as dbRun } from '../src/db/index.js';
 import {
+  addProfile,
   createReel,
   createRun,
+  firstProfile,
   getReel,
   insertFbToken,
   insertKeyword,
@@ -118,6 +120,20 @@ describe('publishing a reel through Buffer', () => {
       siteId, linkUrl: 'https://bitespoon.com/stew', videoUrl: 'https://bitespoon.com/video/videos/reel-1.mp4',
     }));
     expect(getReel(reelId)!.status).toBe('published');
+  });
+
+  it('goes through the account of the page the reel is for, not whichever account the run\'s turn held', async () => {
+    // Seven Facebook accounts in turn: the reel was shown for RecipeCorner2
+    // (Facebook 7) but went out through Recipesbuzz (Facebook 2), the run's turn.
+    const { reelId, siteId } = seed();
+    firstProfile(siteId, 'facebook');
+    const own = addProfile(siteId, 'facebook');
+    dbRun('UPDATE fb_pages SET profile_id = ? WHERE id = ?', own, reelOf(reelId).fb_page_id);
+    const deps = fakeDeps();
+
+    await publishReel(reelOf(reelId), deps);
+
+    expect(deps.scheduleReel).toHaveBeenCalledWith(expect.objectContaining({ profileId: own }));
   });
 
   it('puts the video on the site and schedules it, without touching the Page token', async () => {

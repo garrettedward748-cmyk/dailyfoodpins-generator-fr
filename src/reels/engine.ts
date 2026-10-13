@@ -1228,11 +1228,17 @@ async function publishReelOnce(reel: ReelView, deps: ReelDeps): Promise<void> {
  */
 async function publishThroughBuffer(
   reel: ReelView,
-  page: { id: number; page_id: string; name: string },
+  page: { id: number; page_id: string; name: string; profile_id?: number | null },
   video: Buffer,
   deps: ReelDeps,
 ): Promise<void> {
   if (!reel.site_id) throw new Error('This reel has no site to host its video on.');
+  // The reel's page is picked by its own rotation (pageForSite), the run's
+  // Facebook account by another (the account turn). On the rotation route the
+  // reel goes through its page's own account, so the page the reel says it is
+  // for is the page it lands on -- before this, a reel shown for RecipeCorner2
+  // went out through whichever account the run's turn held, Recipesbuzz.
+  const pageProfile = page.profile_id ?? undefined;
   const siteId = reel.site_id;
   const runId = (reel as { run_id?: number | null }).run_id ?? null;
   const channels = readChannels(reel);
@@ -1351,7 +1357,7 @@ async function publishThroughBuffer(
   };
 
   await network('facebook', async (profileId) => {
-    const id = await deps.scheduleReel({ siteId, runId, text, videoUrl, profileId, firstComment: facebook.firstComment, title });
+    const id = await deps.scheduleReel({ siteId, runId, text, videoUrl, profileId: profileId ?? pageProfile, firstComment: facebook.firstComment, title });
     if (id) markFbPageUsed(page.id); // null: the account is switched off, nothing was sent
     return id;
   });
