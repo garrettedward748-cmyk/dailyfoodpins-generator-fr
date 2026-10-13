@@ -14,6 +14,8 @@
  * and every later part is given those numbers and checked against them.
  */
 
+import type { WritingStyle } from './writing-style.js';
+
 export interface RecipeTimes {
   prep: number;
   cook: number;
@@ -47,9 +49,13 @@ function toNumber(text: string): number {
 const DURATION = new RegExp(
   // "30-minute" is a duration as much as "30 minutes": the optional hyphen is
   // what lets a title that says "30-Minute Steak" be held to the recipe too.
-  `(${NUMBER})(?:\\s*(?:-|–|—|to)\\s*(${NUMBER}))?\\s*-?\\s*(hours?|hrs?|minutes?|mins?)(?![a-z])`,
-  'gi',
+  // French is read as well: "2 heures", "1 h", "20 à 25 minutes", "45 min".
+  `(${NUMBER})(?:\\s*(?:-|–|—|to|à)\\s*(${NUMBER}))?\\s*-?\\s*(hours?|hrs?|heures?|h|minutes?|mins?)(?![\\p{L}])`,
+  'giu',
 );
+
+/** "1 h 30", "1h30", "1 heure 30", "2 heures 05": hours and minutes written as one figure, the French way. */
+const HOUR_MINUTE = /(?<![\d.,/])(\d{1,2})\s?(?:h|heures?)\s?([0-5]\d)(?![\d\p{L}])(?!\s*(?:g|kg|ml|cl|dl|l|cm|mm|°|%|min))/giu;
 
 /** One time found in a piece of text, in minutes. A range has two ends. */
 export interface Duration {
@@ -70,13 +76,28 @@ export interface Duration {
 export function durationsIn(text: string): Duration[] {
   const found: { start: number; end: number; unit: 'h' | 'm'; values: number[]; raw: string }[] = [];
 
+  // "1 h 30" is read first and its span set aside, so the "1 h" inside it is
+  // not counted a second time as a bare hour.
+  const taken: [number, number][] = [];
+  for (const match of text.matchAll(HOUR_MINUTE)) {
+    const start = match.index ?? 0;
+    taken.push([start, start + match[0].length]);
+    found.push({
+      start, end: start + match[0].length, unit: 'm',
+      values: [Number(match[1]) * 60 + Number(match[2])], raw: match[0],
+    });
+  }
+
   for (const match of text.matchAll(DURATION)) {
+    const at = match.index ?? 0;
+    if (taken.some(([s, e]) => at >= s && at < e)) continue;
     const unit = /^h/i.test(match[3]!) ? 'h' : 'm';
     const factor = unit === 'h' ? 60 : 1;
     const values = [toNumber(match[1]!), ...(match[2] ? [toNumber(match[2])] : [])].map((v) => v * factor);
     const start = match.index ?? 0;
     found.push({ start, end: start + match[0].length, unit, values, raw: match[0] });
   }
+  found.sort((a, b) => a.start - b.start);
 
   const out: Duration[] = [];
 
@@ -87,7 +108,7 @@ export function durationsIn(text: string): Duration[] {
     // An hours figure followed straight away by a minutes one is one time.
     if (
       current.unit === 'h' && next && next.unit === 'm' && current.values.length === 1
-      && /^\s*(?:and|,)?\s*$/i.test(text.slice(current.end, next.start))
+      && /^\s*(?:and|et|,)?\s*$/i.test(text.slice(current.end, next.start))
     ) {
       out.push({
         text: text.slice(current.start, next.end),
@@ -115,7 +136,7 @@ export function parseMinutes(value: unknown): number | null {
   if (typeof value !== 'string') return null;
 
   const text = value.trim();
-  if (text === '' || /^(?:none|n\/?a|not applicable|no(?:\s+cook(?:ing)?)?|-|—)$/i.test(text)) return 0;
+  if (text === '' || /^(?:none|n\/?a|not applicable|no(?:\s+cook(?:ing)?)?|aucun(?:e)?|néant|sans(?:\s+cuisson)?|-|—)$/iu.test(text)) return 0;
   if (/^0+(?:\.0+)?$/.test(text)) return 0;
 
   // A bare number is minutes: the prompt asks for "15 minutes" but a model
@@ -151,12 +172,16 @@ export function canonicalTimes(recipe: Record<string, unknown>): RecipeTimes | n
   return { prep, cook, rest: stated - active, total: stated, adjusted: false };
 }
 
-/** 47 -> "47 minutes", 65 -> "1 hour 5 minutes", 120 -> "2 hours". */
-export function formatMinutes(minutes: number): string {
+/**
+ * 47 -> "47 minutes", 65 -> "1 hour 5 minutes", 120 -> "2 hours".
+ * In French ("fr"): "47 minutes", "1 heure 5 minutes", "2 heures".
+ */
+export function formatMinutes(minutes: number, style: WritingStyle = 'us'): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
+  const fr = style === 'fr';
   const parts: string[] = [];
-  if (h > 0) parts.push(`${h} ${h === 1 ? 'hour' : 'hours'}`);
+  if (h > 0) parts.push(fr ? `${h} ${h === 1 ? 'heure' : 'heures'}` : `${h} ${h === 1 ? 'hour' : 'hours'}`);
   if (m > 0 || h === 0) parts.push(`${m} ${m === 1 ? 'minute' : 'minutes'}`);
   return parts.join(' ');
 }
@@ -173,7 +198,7 @@ export interface TimeBlocks {
   card: string;
 }
 
-export function timeBlocks(times: RecipeTimes | null): TimeBlocks {
+export function timeBlocks(times: RecipeTimes | null, style: WritingStyle = 'us'): TimeBlocks {
   if (!times) {
     return {
       prep: '', cook: '', rest: '', total: '',
@@ -185,11 +210,12 @@ export function timeBlocks(times: RecipeTimes | null): TimeBlocks {
     };
   }
 
+  const f = (m: number): string => formatMinutes(m, style);
   const lines = [
-    `- Prep: ${formatMinutes(times.prep)}`,
-    `- Cook: ${formatMinutes(times.cook)}`,
-    ...(times.rest > 0 ? [`- Resting, chilling or marinating: ${formatMinutes(times.rest)}`] : []),
-    `- Total: ${formatMinutes(times.total)}`,
+    `- Prep: ${f(times.prep)}`,
+    `- Cook: ${f(times.cook)}`,
+    ...(times.rest > 0 ? [`- Resting, chilling or marinating: ${f(times.rest)}`] : []),
+    `- Total: ${f(times.total)}`,
   ];
 
   return {

@@ -31,6 +31,11 @@ const NOT_THE_DISH = new Set([
   'best', 'easy', 'quick', 'simple', 'fast', 'homemade', 'perfect', 'ultimate', 'classic', 'creamy', 'delicious',
   'healthy', 'recipe', 'recipes', 'ideas', 'idea', 'make', 'made', 'how', 'why', 'what', 'ways', 'way', 'style',
   'minute', 'minutes', 'ingredient', 'ingredients', 'super', 'extra', 'ever', 'tasty', 'amazing', 'favorite',
+  // French (accents are stripped before this is consulted).
+  'les', 'des', 'une', 'aux', 'pour', 'avec', 'sans', 'sur', 'sous', 'dans', 'que', 'qui', 'votre', 'vos', 'notre', 'nos',
+  'recette', 'recettes', 'facile', 'faciles', 'rapide', 'rapides', 'simple', 'simples', 'maison', 'parfait', 'parfaite',
+  'meilleur', 'meilleure', 'ultime', 'classique', 'cremeux', 'cremeuse', 'delicieux', 'delicieuse', 'healthy', 'ideal',
+  'idees', 'idee', 'comment', 'faire', 'astuce', 'astuces',
 ]);
 
 /**
@@ -116,21 +121,21 @@ export function formatRecipe(recipe: Record<string, unknown>, mode: Exclude<Reci
     .filter(Boolean);
 
   const facts = [
-    text(recipe.prep_time) && `Prep ${text(recipe.prep_time)}`,
-    text(recipe.cook_time) && `Cook ${text(recipe.cook_time)}`,
-    text(recipe.servings) && `Serves ${text(recipe.servings)}`,
+    text(recipe.prep_time) && `Préparation ${text(recipe.prep_time)}`,
+    text(recipe.cook_time) && `Cuisson ${text(recipe.cook_time)}`,
+    text(recipe.servings) && `Portions ${text(recipe.servings)}`,
   ].filter(Boolean).join(' · ');
 
   const sections: string[] = [];
   if (ingredients.length > 0) {
-    sections.push(`INGREDIENTS\n${ingredients.map((item) => `• ${item}`).join('\n')}`);
+    sections.push(`INGRÉDIENTS\n${ingredients.map((item) => `• ${item}`).join('\n')}`);
   }
   if (mode === 'full' && steps.length > 0) {
-    sections.push(`METHOD\n${steps.map((step, i) => `${i + 1}. ${step}`).join('\n')}`);
+    sections.push(`PRÉPARATION\n${steps.map((step, i) => `${i + 1}. ${step}`).join('\n')}`);
   }
   if (sections.length === 0) return '';
 
-  return fixProperNouns([facts, ...sections].filter(Boolean).join('\n\n'));
+  return fixProperNouns([facts, ...sections].filter(Boolean).join('\n\n'), 'fr');
 }
 
 /** What goes in the post for this run, or '' for none. */

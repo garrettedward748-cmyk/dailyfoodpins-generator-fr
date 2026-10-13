@@ -40,16 +40,16 @@ describe('the recipe as post text', () => {
   it('lists ingredients and numbers the steps itself', () => {
     const text = formatRecipe(RECIPE, 'full');
     expect(text).toBe([
-      'Prep 15 minutes · Cook 8 hours · Serves 6 bowls',
-      'INGREDIENTS\n• 1 kg beef chuck, cubed\n• 3 carrots, sliced\n• 2 cups beef stock',
-      'METHOD\n1. Brown the beef in a hot pan.\n2. Add everything to the slow cooker.\n3. Cook on low for eight hours.',
+      'Préparation 15 minutes · Cuisson 8 hours · Portions 6 bowls',
+      'INGRÉDIENTS\n• 1 kg beef chuck, cubed\n• 3 carrots, sliced\n• 2 cups beef stock',
+      'PRÉPARATION\n1. Brown the beef in a hot pan.\n2. Add everything to the slow cooker.\n3. Cook on low for eight hours.',
     ].join('\n\n'));
   });
 
   it('leaves the method out when only ingredients are asked for', () => {
     const text = formatRecipe(RECIPE, 'ingredients');
-    expect(text).toContain('INGREDIENTS');
-    expect(text).not.toContain('METHOD');
+    expect(text).toContain('INGRÉDIENTS');
+    expect(text).not.toContain('PRÉPARATION');
   });
 
   it('prints nothing rather than a heading over nothing', () => {
@@ -65,11 +65,11 @@ describe('the recipe as post text', () => {
 });
 
 describe('where the link goes', () => {
-  const base = { body: 'Twelve minutes. One pan.', recipe: 'INGREDIENTS\n• 1 egg', postUrl: 'https://s.com/r' };
+  const base = { body: 'Twelve minutes. One pan.', recipe: 'INGRÉDIENTS\n• 1 egg', postUrl: 'https://s.com/r' };
 
   it('in the text: after the recipe, nothing in the comment', () => {
     expect(facebookPost({ ...base, link: 'text' })).toEqual({
-      text: 'Twelve minutes. One pan.\n\nINGREDIENTS\n• 1 egg\n\nFull recipe: https://s.com/r',
+      text: 'Twelve minutes. One pan.\n\nINGRÉDIENTS\n• 1 egg\n\nFull recipe: https://s.com/r',
     });
   });
 
@@ -145,7 +145,7 @@ describe('a Facebook reel with the recipe in it', () => {
   it('reads the recipe of the run the reel came from', () => {
     const { runId } = seed();
     expect(recipeOfRun(runId)).toMatchObject({ prep_time: '15 minutes' });
-    expect(recipePostText(runId, 'full')).toContain('METHOD');
+    expect(recipePostText(runId, 'full')).toContain('PRÉPARATION');
     expect(recipePostText(runId, 'none')).toBe('');
     expect(recipeOfRun(null)).toBeNull();
   });
@@ -156,7 +156,7 @@ describe('a Facebook reel with the recipe in it', () => {
     await publishReel(reelOf(reelId), deps);
 
     const { text, firstComment } = scheduled(deps);
-    expect(text.startsWith('Twelve minutes. One pan.\n\nPrep 15 minutes')).toBe(true);
+    expect(text.startsWith('Twelve minutes. One pan.\n\nPréparation 15 minutes')).toBe(true);
     expect(text).toContain('3. Cook on low for eight hours.');
     expect(text.endsWith('Full recipe: https://bitespoon.com/stew')).toBe(true);
     expect(firstComment).toBeUndefined();
@@ -178,8 +178,8 @@ describe('a Facebook reel with the recipe in it', () => {
     await publishReel(reelOf(reelId), deps);
 
     const { text, firstComment } = scheduled(deps);
-    expect(text).toContain('INGREDIENTS');
-    expect(text).not.toContain('METHOD');
+    expect(text).toContain('INGRÉDIENTS');
+    expect(text).not.toContain('PRÉPARATION');
     expect(text).not.toContain('https://');
     expect(firstComment).toBeUndefined();
   });
@@ -362,8 +362,8 @@ describe('the recipe candidates a network is offered', () => {
     const { runId } = seed();
     const full = recipeCandidates(runId, 'full');
     expect(full).toHaveLength(2);
-    expect(full[0]).toContain('METHOD');
-    expect(full[1]).not.toContain('METHOD');
+    expect(full[0]).toContain('PRÉPARATION');
+    expect(full[1]).not.toContain('PRÉPARATION');
     expect(recipeCandidates(runId, 'ingredients')).toEqual([full[1]]);
     expect(recipeCandidates(runId, 'none')).toEqual([]);
   });
@@ -411,7 +411,7 @@ describe('a reel that carries the recipe to YouTube and Instagram', () => {
     await publishReel(reelOf(a.reelId), deps);
     expect(calledWith(deps.youtubeShort).recipes).toHaveLength(2);
     expect(calledWith(deps.instagramReel).recipes).toHaveLength(1);
-    expect(calledWith(deps.instagramReel).recipes![0]).not.toContain('METHOD');
+    expect(calledWith(deps.instagramReel).recipes![0]).not.toContain('PRÉPARATION');
   });
 
   it('keeps the caption empty for an unticked network, recipe or not', async () => {
@@ -443,8 +443,8 @@ describe('the YouTube description with a recipe', () => {
   });
 
   it('drops to the ingredients when the whole recipe would pass 5000 characters', () => {
-    const text = youtubeDescription('T', 'Hi', 'https://s.com/r', 's.com', { recipe: true, site: true }, ['W'.repeat(5000), 'INGREDIENTS ONLY']);
-    expect(text).toContain('INGREDIENTS ONLY');
+    const text = youtubeDescription('T', 'Hi', 'https://s.com/r', 's.com', { recipe: true, site: true }, ['W'.repeat(5000), 'INGRÉDIENTS ONLY']);
+    expect(text).toContain('INGRÉDIENTS ONLY');
     expect(text).not.toContain('WWW');
   });
 });

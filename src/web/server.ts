@@ -1851,7 +1851,7 @@ export function buildServer(
 
     return redirect(reply, `/sites/${id}`, {
       kind: 'ok',
-      message: `${site.domain} is now written in ${style === 'uk' ? 'British spelling with metric units' : 'American spelling with US units'}. The next article uses it.`,
+      message: `${site.domain} is now written in ${style === 'fr' ? 'French with metric units' : style === 'uk' ? 'British spelling with metric units' : 'American spelling with US units'}. The next article uses it.`,
     });
   });
 

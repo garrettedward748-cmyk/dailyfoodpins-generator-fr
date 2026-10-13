@@ -543,8 +543,8 @@ export interface SiteInput {
   paused_reason?: string;
   paused_until?: string | null;
   auto_publish?: boolean;
-  /** Left undefined, the stored value is kept; a new site starts as "us". */
-  writing_style?: 'us' | 'uk';
+  /** Left undefined, the stored value is kept; a new site starts as "fr". */
+  writing_style?: 'fr' | 'us' | 'uk';
   /** Plaintext. Blank on update means "keep the stored one". */
   apiToken?: string;
   bufferToken?: string;
@@ -584,7 +584,7 @@ export function upsertSite(input: SiteInput, key: Buffer, id?: number): number {
       input.auto_publish === undefined
         ? existing.auto_publish
         : fromBool(input.auto_publish),
-      input.writing_style ?? existing.writing_style ?? 'uk',
+      input.writing_style ?? existing.writing_style ?? 'fr',
       encryptOrKeep(input.apiToken, existing.api_token_encrypted),
       encryptOrKeep(input.bufferToken, existing.buffer_token_encrypted),
       existing.id,
@@ -607,9 +607,9 @@ export function upsertSite(input: SiteInput, key: Buffer, id?: number): number {
     input.status === 'active' ? '' : (input.paused_reason ?? ''),
     input.status === 'active' ? null : (input.paused_until ?? null),
     fromBool(input.auto_publish ?? true),
-    // A site added from here on is American unless it is told otherwise: most
-    // readers are, and "uk" is the one that has to be chosen on purpose.
-    input.writing_style ?? 'us',
+    // French edition: a site added from here on is written in French (metric)
+    // unless it is told otherwise.
+    input.writing_style ?? 'fr',
     encryptOrKeep(input.apiToken, ''),
     encryptOrKeep(input.bufferToken, ''),
   ).lastInsertRowid;
@@ -2347,7 +2347,7 @@ export const setAutoPublish = (id: number, auto: boolean): void => {
 };
 
 /** Which spelling and units this site is written in. */
-export const setWritingStyle = (id: number, style: 'us' | 'uk'): void => {
+export const setWritingStyle = (id: number, style: 'fr' | 'us' | 'uk'): void => {
   run(
     "UPDATE sites SET writing_style = ?, updated_at = datetime('now') WHERE id = ?",
     style,

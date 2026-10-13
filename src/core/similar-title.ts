@@ -20,12 +20,26 @@ const NOISE = new Set([
   'a', 'an', 'the', 'and', 'or', 'of', 'for', 'with', 'in', 'on', 'to',
   'best', 'easy', 'quick', 'simple', 'perfect', 'ultimate', 'homemade',
   'recipe', 'recipes', 'how', 'make', 'making', 'your', 'my',
+  // French (accents already removed, see significantWords). Words of two letters
+  // or fewer — de, la, le, du, au, en, et, un — are dropped by the length rule.
+  'les', 'des', 'une', 'aux', 'pour', 'avec', 'sans', 'sur', 'sous', 'dans', 'que', 'qui', 'mon', 'mes', 'ton', 'tes',
+  'notre', 'nos', 'votre', 'vos', 'recette', 'recettes', 'facile', 'faciles', 'rapide', 'rapides', 'simple', 'simples',
+  'parfait', 'parfaite', 'parfaits', 'parfaites', 'maison', 'meilleur', 'meilleure', 'meilleurs', 'meilleures',
+  'ultime', 'classique', 'comment', 'faire', 'preparer', 'minutes', 'minute',
 ]);
 
 /** Title reduced to the words that actually name the dish. */
 export function significantWords(title: string): string[] {
   return title
     .toLowerCase()
+    // "crème brûlée" is two dishes' worth of letters, not "cr", "me", "br", "l"
+    // and "e": accents are folded away and ligatures spelled out, so a French
+    // title keeps its words and still compares equal to the same title typed
+    // without accents.
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/œ/g, 'oe')
+    .replace(/æ/g, 'ae')
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter((word) => word.length > 2 && !NOISE.has(word));

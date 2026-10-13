@@ -71,6 +71,7 @@ describe('pipeline end to end', () => {
         domain: 'testsite.com',
         status: 'active',
         pin_username: 'testsite',
+        writing_style: 'us' as const,
         project_id: 'p1',
         daily_target: 5,
         interval_minutes: 0,
@@ -475,6 +476,7 @@ describe('a run end to end, with the pieces combined', () => {
     const base = {
       status: 'active' as const,
       pin_username: 'x',
+      writing_style: 'us' as const,
       daily_target: 5,
       interval_minutes: 0,
       apiToken: 'test-token',

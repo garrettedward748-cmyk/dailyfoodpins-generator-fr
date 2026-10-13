@@ -1227,19 +1227,12 @@ export const MIGRATIONS: Migration[] = [
   },
   {
     id: '051-site-writing-style',
-    description: 'Spelling and units per site (us or uk), so a site is no longer written in British English by default',
+    description: 'Spelling and units per site (fr, us or uk); in this French edition a site is written in French by default',
     up(db) {
-      // Every site that exists keeps what it was written in until now —
-      // British spelling, metric first — so deploying this changes nothing by
-      // itself. A site added from here on starts as "us"; see upsertSite.
-      addColumn(db, 'sites', 'writing_style', "TEXT NOT NULL DEFAULT 'uk'");
-
-      // flavorza.com is written for American cooks (US measurements, a blog in
-      // American English) and was coming out as "savoury" and "260°C". Its own
-      // switch is on the site page; this only starts it in the right place.
-      if (hasTable(db, 'sites') && columns(db, 'sites').includes('writing_style')) {
-        db.prepare("UPDATE sites SET writing_style = 'us' WHERE domain = 'flavorza.com'").run();
-      }
+      // French edition: every site starts as "fr" (French spelling, metric
+      // units). "us" and "uk" stay available on the site page for an English
+      // site added next to the French ones.
+      addColumn(db, 'sites', 'writing_style', "TEXT NOT NULL DEFAULT 'fr'");
     },
   },
   {

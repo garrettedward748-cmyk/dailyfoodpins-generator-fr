@@ -60,9 +60,9 @@ const ARTICLE_CONTEXT = {
   recipe: { raw: '{}' },
   // The site's spelling and units, the recipe's times, the words no article
   // may use, and — on a retry only — what the last draft got wrong.
-  style: styleBlocks('us'),
-  times: timeBlocks({ prep: 10, cook: 12, rest: 5, total: 27, adjusted: false }),
-  rules: { banned: bannedList() },
+  style: styleBlocks('fr'),
+  times: timeBlocks({ prep: 10, cook: 12, rest: 5, total: 27, adjusted: false }, 'fr'),
+  rules: { banned: bannedList('fr') },
   feedback: '',
   // The chosen shape, which part 1 and part 3 interpolate. The sample carries
   // the shipped default rather than an empty string, because an empty one

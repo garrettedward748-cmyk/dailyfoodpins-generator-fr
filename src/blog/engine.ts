@@ -10,7 +10,7 @@ import { siteApiFor } from '../integrations/site-api-for.js';
 import { resolveProjectId } from '../core/project-id.js';
 import { fixProperNouns, fixProperNounsInHtml } from '../core/proper-nouns.js';
 import { checkBlogArticle, feedbackFor } from '../core/article-rules.js';
-import { normaliseStyle, styleBlocks } from '../core/writing-style.js';
+import { normaliseStyle, styleBlocks, type WritingStyle } from '../core/writing-style.js';
 import {
   blogShape, listBlogStructures, markQuestionBlogStructure, pickBlogStructure, siteBlogHistory,
   type BlogStructure,
@@ -167,7 +167,7 @@ export function clusterCap(settings: Settings): number | null {
 const ALLOWED = new Set(['p', 'h2', 'h3', 'ul', 'ol', 'li', 'strong', 'em', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'br', 'b', 'i']);
 
 /** Keep simple formatting only: no scripts, styles, event handlers or headings above h2. */
-export function cleanArticleHtml(html: string): string {
+export function cleanArticleHtml(html: string, style: WritingStyle = 'us'): string {
   let out = html.replace(/<(script|style|iframe|object|embed|form)\b[\s\S]*?<\/\1>/gi, '');
   out = out.replace(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi, '<h2>$1</h2>');
   out = out.replace(/<\/?([a-z0-9]+)\b[^>]*>/gi, (tag, name: string) => {
@@ -183,7 +183,7 @@ export function cleanArticleHtml(html: string): string {
     return `<${lower}>`;
   });
   // Proper nouns the model lower-cased, put right before anything reads this.
-  return fixProperNounsInHtml(out.replace(/<a>([\s\S]*?)<\/a>/gi, '$1').trim());
+  return fixProperNounsInHtml(out.replace(/<a>([\s\S]*?)<\/a>/gi, '$1').trim(), style);
 }
 
 /** Each url linked once: later links to a url already linked become plain text. */
@@ -372,7 +372,7 @@ export async function writeBlogArticle(
   }
   heartbeat();
 
-  let body = cleanArticleHtml(article.body_html);
+  let body = cleanArticleHtml(article.body_html, style);
   if (body.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length < 600) {
     throw new Error('The article came back too short (under 600 words).');
   }
@@ -387,7 +387,7 @@ export async function writeBlogArticle(
   heartbeat();
 
   const posted = await api.publishPost({
-    title: fixProperNouns(article.title.trim() || question.question),
+    title: fixProperNouns(article.title.trim() || question.question, style),
     slug: article.slug,
     title_tag: article.title_tag,
     meta_desc: article.meta_desc,

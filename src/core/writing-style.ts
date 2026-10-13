@@ -18,16 +18,21 @@
  *    a number — so those are checked, and a draft that breaks them is sent back.
  */
 
-export type WritingStyle = 'us' | 'uk';
+export type WritingStyle = 'fr' | 'us' | 'uk';
 
-export const WRITING_STYLES: readonly WritingStyle[] = ['us', 'uk'];
+export const WRITING_STYLES: readonly WritingStyle[] = ['fr', 'us', 'uk'];
 
-/** Anything that is not exactly "uk" is "us": the default for a site nobody configured. */
+/**
+ * This is the French edition of the platform: anything that is not exactly "us"
+ * or "uk" is "fr", the default for a site nobody configured. "us" and "uk" are
+ * kept so an English site can still be added next to the French ones.
+ */
 export function normaliseStyle(value: unknown): WritingStyle {
-  return value === 'uk' ? 'uk' : 'us';
+  return value === 'us' || value === 'uk' ? value : 'fr';
 }
 
 export const STYLE_LABELS: Record<WritingStyle, string> = {
+  fr: 'Français — orthographe française, °C et grammes',
   us: 'American — US spelling, °F and cups',
   uk: 'British — UK spelling, °C and grams',
 };
@@ -37,7 +42,7 @@ export const STYLE_LABELS: Record<WritingStyle, string> = {
  * ---------------------------------------------------------------------- */
 
 export interface StyleBlocks {
-  /** "us" or "uk", for a prompt that wants the bare word. */
+  /** "fr", "us" or "uk", for a prompt that wants the bare word. */
   code: WritingStyle;
   /** The spelling rule, written as the lines of a bulleted list. */
   spelling: string;
@@ -52,6 +57,12 @@ export interface StyleBlocks {
 }
 
 const SPELLING_RULE: Record<WritingStyle, string> = {
+  fr:
+    '- Write in natural, standard French (France), not a translation from English. Use every accent,\n'
+    + '  cedilla and ligature French spelling needs (é, è, ê, à, ç, ô, œ in œuf, bœuf, cœur). Use the\n'
+    + '  everyday French word, never the English one: courgette not zucchini, aubergine not eggplant,\n'
+    + '  crevettes not shrimps, levure chimique not baking powder, sucre glace not powdered sugar,\n'
+    + '  crème entière not heavy cream. Check every word before you answer.',
   us:
     '- American spelling throughout, with no British form anywhere: savory not\n'
     + '  savoury, flavor not flavour, color not colour, caramelize not caramelise,\n'
@@ -64,6 +75,12 @@ const SPELLING_RULE: Record<WritingStyle, string> = {
 };
 
 const UNITS_RULE: Record<WritingStyle, string> = {
+  fr:
+    '- Metric units only, written the French way: temperatures in °C with a space (180 °C), weights in g and\n'
+    + '  kg, volumes in ml, cl and l, lengths in cm. Spoons are « c. à soupe » and « c. à café », a small\n'
+    + '  amount is « une pincée ». Never use °F, cups, ounces, pounds, inches or sticks, and do not put them\n'
+    + '  in brackets either. A French oven setting may follow the Celsius figure in brackets: « 180 °C\n'
+    + '  (thermostat 6) ». The ingredient list uses metric units, c. à soupe and c. à café only.',
   us:
     '- US units first: temperatures in °F, volumes in cups, tablespoons and teaspoons,\n'
     + '  weights in ounces and pounds, lengths in inches. Put the metric figure in\n'
@@ -81,16 +98,19 @@ const UNITS_RULE: Record<WritingStyle, string> = {
 };
 
 const INGREDIENT_UNITS: Record<WritingStyle, string> = {
+  fr: '"g", "kg", "ml", "cl", "l", "c. à soupe", "c. à café", "pincée" — never "cup", "oz", "lb", "tbsp" or "tsp"',
   us: '"cup", "tbsp", "tsp", "oz", "lb", "pinch" — never "g", "kg", "ml" or "l"',
   uk: '"g", "kg", "ml", "l", "tbsp", "tsp" — never "cup", "oz" or "lb"',
 };
 
 const INGREDIENT_EXAMPLE: Record<WritingStyle, string> = {
+  fr: '225 g de beurre doux, fondu',
   us: '1 cup unsalted butter, melted',
   uk: '225 g unsalted butter, melted',
 };
 
 const TEMPERATURE_EXAMPLE: Record<WritingStyle, string> = {
+  fr: '74 °C',
   us: '165°F (74°C)',
   uk: '74°C (165°F)',
 };
@@ -256,14 +276,21 @@ function matchCase(original: string, replacement: string): string {
   return replacement;
 }
 
-/** The converter that moves text TOWARD `style`. */
-function towards(style: WritingStyle): Converter {
+/**
+ * The converter that moves text TOWARD `style`, or null for French, which has
+ * no British/American pairs: running the English table over French text would
+ * turn "courgette" into "zucchini" and "centre" into "center".
+ */
+function towards(style: WritingStyle): Converter | null {
+  if (style === 'fr') return null;
   return style === 'us' ? FROM_UK : FROM_US;
 }
 
 /** Put plain text into the site's spelling. Anything not in the table is returned untouched. */
 export function applySpelling(text: string, style: WritingStyle): string {
-  const { map, pattern } = towards(style);
+  const converter = towards(style);
+  if (converter === null) return text;
+  const { map, pattern } = converter;
   return text.replace(pattern, (match: string, offset: number) => {
     // Earl Grey is a name, not a colour.
     if (/^grey/i.test(match) && /earl\s+$/i.test(text.slice(0, offset))) return match;
@@ -288,7 +315,9 @@ export function applySpellingToHtml(html: string, style: WritingStyle): string {
 
 /** Words in `text` that are in the other spelling. Empty once applySpelling has run. */
 export function foreignSpellings(text: string, style: WritingStyle): string[] {
-  const { pattern } = towards(style);
+  const converter = towards(style);
+  if (converter === null) return [];
+  const { pattern } = converter;
   const found = new Set<string>();
 
   for (const match of text.matchAll(pattern)) {
@@ -327,14 +356,18 @@ function bracketed(text: string, index: number): boolean {
 export function temperatureProblems(text: string, style: WritingStyle, where: string): UnitProblem[] {
   const wrong = style === 'us' ? 'C' : 'F';
   const primary = style === 'us' ? '°F' : '°C';
+  const celsiusOnly = style === 'fr';
   const problems: UnitProblem[] = [];
 
   for (const match of text.matchAll(TEMPERATURE)) {
     if (match[2] !== wrong) continue;
-    if (bracketed(text, match.index ?? 0)) continue;
+    // A French site never prints Fahrenheit, so a bracket is no excuse there.
+    if (!celsiusOnly && bracketed(text, match.index ?? 0)) continue;
     problems.push({
       where,
-      detail: `"${match[0].trim()}" is written before any ${primary} figure — this site gives ${primary} first, with the other scale only in brackets after it`,
+      detail: celsiusOnly
+        ? `"${match[0].trim()}" is Fahrenheit — this site uses °C only (for example 180 °C), never °F, not even in brackets`
+        : `"${match[0].trim()}" is written before any ${primary} figure — this site gives ${primary} first, with the other scale only in brackets after it`,
     });
   }
   return problems;
@@ -349,6 +382,7 @@ export function temperatureProblems(text: string, style: WritingStyle, where: st
  * and is left alone.
  */
 const FOREIGN_AMOUNT: Record<WritingStyle, RegExp> = {
+  fr: /(\d+(?:[.,/]\d+)?(?:\s*[-–]\s*\d+(?:[.,/]\d+)?)?)\s?-?\s?(cups?|oz|ounces?|lbs?|pounds?|inch(?:es)?|sticks?|tbsp|tsp|tablespoons?|teaspoons?)\b/gi,
   us: /(\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?)\s?(g|kg|ml|l|cm|mm)\b(?![\w°])/gi,
   uk: /(\d+(?:[.,/]\d+)?(?:\s*[-–]\s*\d+(?:[.,/]\d+)?)?)\s?-?\s?(cups?|oz|ounces?|lbs?|pounds?|inch(?:es)?)\b/gi,
 };
@@ -358,10 +392,13 @@ export function measureProblems(text: string, style: WritingStyle, where: string
   const problems: UnitProblem[] = [];
 
   for (const match of text.matchAll(FOREIGN_AMOUNT[style])) {
-    if (bracketed(text, match.index ?? 0)) continue;
+    // No bracket exemption in French: US and imperial measures are not used at all.
+    if (style !== 'fr' && bracketed(text, match.index ?? 0)) continue;
     problems.push({
       where,
-      detail: `"${match[0].trim()}" is the wrong system for this site — write ${style === 'us' ? 'US measures (cups, ounces, pounds, inches)' : 'metric measures (grams, millilitres, centimetres)'}, with the other only in brackets after`,
+      detail: style === 'fr'
+        ? `"${match[0].trim()}" is not a French measure — write metric (g, kg, ml, cl, l, cm) or « c. à soupe » / « c. à café », and no US or imperial figure, not even in brackets`
+        : `"${match[0].trim()}" is the wrong system for this site — write ${style === 'us' ? 'US measures (cups, ounces, pounds, inches)' : 'metric measures (grams, millilitres, centimetres)'}, with the other only in brackets after`,
     });
   }
   return problems;
@@ -369,6 +406,7 @@ export function measureProblems(text: string, style: WritingStyle, where: string
 
 /** Ingredient units that belong to the other system. */
 const FOREIGN_UNITS: Record<WritingStyle, Set<string>> = {
+  fr: new Set(['cup', 'cups', 'oz', 'ounce', 'ounces', 'lb', 'lbs', 'pound', 'pounds', 'fl oz', 'stick', 'sticks', 'tbsp', 'tsp', 'tablespoon', 'tablespoons', 'teaspoon', 'teaspoons']),
   us: new Set(['g', 'kg', 'ml', 'l', 'gram', 'grams', 'kilogram', 'kilograms', 'millilitre', 'millilitres', 'milliliter', 'milliliters', 'litre', 'litres', 'liter', 'liters']),
   uk: new Set(['cup', 'cups', 'oz', 'ounce', 'ounces', 'lb', 'lbs', 'pound', 'pounds', 'fl oz', 'stick', 'sticks']),
 };
@@ -387,7 +425,9 @@ export function ingredientUnitProblems(ingredients: unknown, style: WritingStyle
       const item = String((line as Record<string, unknown>).item ?? '').trim();
       problems.push({
         where: `ingredients line ${index + 1}`,
-        detail: `"${unit.trim()}" is not a ${style === 'us' ? 'US' : 'metric'} unit${item ? ` (${item})` : ''} — this site's ingredient list uses ${style === 'us' ? 'cups, tablespoons, teaspoons, ounces and pounds' : 'grams, millilitres, teaspoons and tablespoons'}`,
+        detail: style === 'fr'
+          ? `"${unit.trim()}" is not a French unit${item ? ` (${item})` : ''} — this site's ingredient list uses g, kg, ml, cl, l, « c. à soupe », « c. à café » and « pincée »`
+          : `"${unit.trim()}" is not a ${style === 'us' ? 'US' : 'metric'} unit${item ? ` (${item})` : ''} — this site's ingredient list uses ${style === 'us' ? 'cups, tablespoons, teaspoons, ounces and pounds' : 'grams, millilitres, teaspoons and tablespoons'}`,
       });
     }
   });

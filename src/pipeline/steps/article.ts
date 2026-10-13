@@ -17,7 +17,7 @@ import {
   type PartName, type RuleContext,
 } from '../../core/article-rules.js';
 import { timeBlocks } from '../../core/recipe-times.js';
-import { normaliseStyle, styleBlocks } from '../../core/writing-style.js';
+import { normaliseStyle, styleBlocks, type WritingStyle } from '../../core/writing-style.js';
 
 const log = createLogger('article');
 
@@ -60,8 +60,8 @@ function promptVariables(
     style: styleBlocks(rules.style),
     // The recipe's times, worked out once. Part 1 may repeat them and part 2
     // is given them; neither is asked to add anything up.
-    times: timeBlocks(rules.times),
-    rules: { banned: bannedList() },
+    times: timeBlocks(rules.times, rules.style),
+    rules: { banned: bannedList(rules.style) },
     // Empty on a first attempt. On a retry, the rules the last draft broke.
     feedback,
   };
@@ -166,7 +166,7 @@ export const generateArticle: Step<ArticleInput, Record<string, unknown>> = {
     }
 
     return {
-      value: attachSiteFields(article, input),
+      value: attachSiteFields(article, input, normaliseStyle(ctx.site.writing_style)),
       endpoint: [part1.endpoint, part2.endpoint, part3.endpoint].join(', '),
       model: part1.model,
     };
@@ -190,7 +190,7 @@ export const generateArticle: Step<ArticleInput, Record<string, unknown>> = {
  * the text fields are walked — the numbers, the step images and anything the
  * site keys off are left exactly as they were.
  */
-function capitaliseNames(article: Record<string, unknown>): Record<string, unknown> {
+function capitaliseNames(article: Record<string, unknown>, style: WritingStyle = 'us'): Record<string, unknown> {
   // slug and focus_keyword are deliberately absent: both are lower case by
   // design, and "fixing" them would change the page's address and the phrase
   // the page targets.
@@ -200,10 +200,10 @@ function capitaliseNames(article: Record<string, unknown>): Record<string, unkno
   const out: Record<string, unknown> = { ...article };
 
   for (const key of plain) {
-    if (typeof out[key] === 'string') out[key] = fixProperNouns(out[key]);
+    if (typeof out[key] === 'string') out[key] = fixProperNouns(out[key], style);
   }
   for (const key of markup) {
-    if (typeof out[key] === 'string') out[key] = fixProperNounsInHtml(out[key]);
+    if (typeof out[key] === 'string') out[key] = fixProperNounsInHtml(out[key], style);
   }
 
   // The recipe's own prose: the steps a cook reads and the questions below.
@@ -213,10 +213,10 @@ function capitaliseNames(article: Record<string, unknown>): Record<string, unkno
         ? {
             ...(step as Record<string, unknown>),
             heading: typeof (step as Record<string, unknown>).heading === 'string'
-              ? fixProperNouns(String((step as Record<string, unknown>).heading))
+              ? fixProperNouns(String((step as Record<string, unknown>).heading), style)
               : (step as Record<string, unknown>).heading,
             body: typeof (step as Record<string, unknown>).body === 'string'
-              ? fixProperNouns(String((step as Record<string, unknown>).body))
+              ? fixProperNouns(String((step as Record<string, unknown>).body), style)
               : (step as Record<string, unknown>).body,
           }
         : step,
@@ -228,10 +228,10 @@ function capitaliseNames(article: Record<string, unknown>): Record<string, unkno
         ? {
             ...(faq as Record<string, unknown>),
             question: typeof (faq as Record<string, unknown>).question === 'string'
-              ? fixProperNouns(String((faq as Record<string, unknown>).question))
+              ? fixProperNouns(String((faq as Record<string, unknown>).question), style)
               : (faq as Record<string, unknown>).question,
             answer_html: typeof (faq as Record<string, unknown>).answer_html === 'string'
-              ? fixProperNounsInHtml(String((faq as Record<string, unknown>).answer_html))
+              ? fixProperNounsInHtml(String((faq as Record<string, unknown>).answer_html), style)
               : (faq as Record<string, unknown>).answer_html,
           }
         : faq,
@@ -244,11 +244,12 @@ function capitaliseNames(article: Record<string, unknown>): Record<string, unkno
 export function attachSiteFields(
   article: Record<string, unknown>,
   input: ArticleInput,
+  style: WritingStyle = 'us',
 ): Record<string, unknown> {
   // Named once and used throughout: taking the steps off `article` below
   // instead would hand the site the uncorrected copy, which is what it did
   // until a test caught it.
-  const named = capitaliseNames(article);
+  const named = capitaliseNames(article, style);
 
   const filled: Record<string, unknown> = {
     ...named,

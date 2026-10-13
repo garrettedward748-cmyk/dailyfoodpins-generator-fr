@@ -81,9 +81,39 @@ export const BANNED_OPENINGS: readonly string[] = [
   'there is nothing quite like', 'there\'s nothing quite like',
 ];
 
+/**
+ * The French lists. The same two jobs: what marks a page as machine-written or
+ * as marketing, and the openings that are filler. Matched on straightened,
+ * lower-cased text, so accents must be written as French writes them.
+ */
+export const BANNED_PHRASES_FR: readonly string[] = [
+  'délicieux', 'délicieuse', 'délicieuses', 'délicieusement', 'succulent', 'succulente',
+  'succulents', 'succulentes', 'alléchant', 'alléchante', 'à se damner', 'à tomber par terre',
+  'symphonie de saveurs', 'explosion de saveurs', 'festival de saveurs', 'voyage gustatif',
+  'révolutionnaire', 'incroyable', 'inratable', 'ne cherchez plus', 'dans le monde d\'aujourd\'hui',
+  'vous allez adorer', 'vous allez en raison', 'faites-moi confiance', 'croyez-moi',
+  'franchement', 'oups', 'je veux dire',
+];
+
+export const BANNED_OPENINGS_FR: readonly string[] = [
+  'vous devez décider', 'vous devez choisir', 'vous devez trancher', 'vous avez le choix',
+  'quand il s\'agit de', 'lorsqu\'il s\'agit de', 'que vous soyez', 'si vous cherchez',
+  'vous cherchez', 'bienvenue', 'dans cette recette', 'dans cet article', 'cette recette est',
+  'il n\'y a rien de tel', 'rien de tel que',
+];
+
+/** The banned phrases for a site's style: French for "fr", the English list otherwise. */
+export function bannedPhrases(style: WritingStyle = 'us'): readonly string[] {
+  return style === 'fr' ? BANNED_PHRASES_FR : BANNED_PHRASES;
+}
+
+export function bannedOpenings(style: WritingStyle = 'us'): readonly string[] {
+  return style === 'fr' ? BANNED_OPENINGS_FR : BANNED_OPENINGS;
+}
+
 /** The banned phrases as one list, for a prompt to print. */
-export function bannedList(): string {
-  return BANNED_PHRASES.map((p) => `"${p}"`).join(', ');
+export function bannedList(style: WritingStyle = 'us'): string {
+  return bannedPhrases(style).map((p) => `"${p}"`).join(', ');
 }
 
 /** Markup removed, entities and whitespace tidied: the words a reader sees. */
@@ -110,25 +140,44 @@ const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
 const FIRST_PERSON = /\b(?:I|I'm|I've|I'll|I'd|my|myself)\b/;
 
 /**
+ * French narrator: je, j'ai, moi, me, m'a, mon, ma, mes. "nous" is allowed, as
+ * "we" is. Letters on either side are checked with \\p{L}, because \\b does not
+ * see accents: "ma" inside "maïs" or "mes" inside "mesure" must not match.
+ */
+const FIRST_PERSON_FR = /(?<![\p{L}\p{N}])(?:j['’]|m['’]|(?:je|moi|mon|ma|mes|me)(?![\p{L}\p{N}'’]))/iu;
+
+/**
  * Problems with the voice of one piece of prose.
  *
  * `reader` marks text that is the READER speaking — a question below the recipe
  * ("Can I use boneless thighs?") — where "I" is correct and the narrator rule
  * does not apply. The answer to it is the site speaking, and is checked in full.
  */
-export function proseProblems(text: string, where: string, reader = false): string[] {
+export function proseProblems(
+  text: string,
+  where: string,
+  reader = false,
+  style: WritingStyle = 'us',
+): string[] {
   const problems: string[] = [];
   const clean = straighten(text);
+  const fr = style === 'fr';
 
-  for (const phrase of BANNED_PHRASES) {
-    if (new RegExp(`(?<![\\w-])${escapeRegExp(phrase)}(?![\\w-])`, 'i').test(clean)) {
+  for (const phrase of bannedPhrases(style)) {
+    // Letters, digits and hyphens on either side keep "incroyablement" apart
+    // from "incroyable"; \\p{L} sees accents where \\w does not.
+    if (new RegExp(`(?<![\\p{L}\\p{N}_-])${escapeRegExp(phrase)}(?![\\p{L}\\p{N}_-])`, 'iu').test(clean)) {
       problems.push(`${where}: never write "${phrase}"`);
     }
   }
   if (clean.includes('!')) problems.push(`${where}: no exclamation marks`);
   if (EMOJI.test(clean)) problems.push(`${where}: no emoji`);
-  if (!reader && FIRST_PERSON.test(clean)) {
-    problems.push(`${where}: no first person ("I", "my") — the cook is "you", and there is no narrator`);
+  if (!reader && (fr ? FIRST_PERSON_FR : FIRST_PERSON).test(clean)) {
+    problems.push(
+      fr
+        ? `${where}: no first person ("je", "j'", "mon", "ma", "mes") — the cook is "vous", and there is no narrator`
+        : `${where}: no first person ("I", "my") — the cook is "you", and there is no narrator`,
+    );
   }
   return problems;
 }
@@ -141,9 +190,9 @@ export function firstSentence(html: string): string {
 }
 
 /** Does the introduction open with a banned way in? */
-export function openingProblems(introHtml: string): string[] {
+export function openingProblems(introHtml: string, style: WritingStyle = 'us'): string[] {
   const opening = straighten(firstSentence(introHtml)).toLowerCase();
-  const hit = BANNED_OPENINGS.find((phrase) => opening.startsWith(phrase) || opening.includes(`. ${phrase}`));
+  const hit = bannedOpenings(style).find((phrase) => opening.startsWith(phrase) || opening.includes(`. ${phrase}`));
   return hit
     ? [`intro_html: do not open with "${hit}" — start with the dish or the one fact that decides it`]
     : [];
@@ -213,8 +262,8 @@ const HTML_KEYS = ['intro_html', 'tips_html', 'notes_html'];
  */
 export function fixText(data: Record<string, unknown>, style: WritingStyle): Record<string, unknown> {
   const out: Record<string, unknown> = { ...data };
-  const fix = (s: string): string => fixProperNouns(applySpelling(s, style));
-  const fixHtml = (s: string): string => fixProperNounsInHtml(applySpellingToHtml(s, style));
+  const fix = (s: string): string => fixProperNouns(applySpelling(s, style), style);
+  const fixHtml = (s: string): string => fixProperNounsInHtml(applySpellingToHtml(s, style), style);
 
   for (const key of PLAIN_KEYS) if (typeof out[key] === 'string') out[key] = fix(out[key] as string);
   for (const key of HTML_KEYS) if (typeof out[key] === 'string') out[key] = fixHtml(out[key] as string);
@@ -297,7 +346,9 @@ function part1Problems(data: Record<string, unknown>, rules: RuleContext): strin
   if (title === '') problems.push('title is empty');
   else {
     if (!title.includes(':')) problems.push('title: must be the dish name, a colon, then a plain description');
-    if (/\brecipe\s*$/i.test(title)) problems.push('title: must not end with the word "Recipe"');
+    if (rules.style === 'fr' ? /(?<![\p{L}])recettes?\s*$/iu.test(title) : /\brecipe\s*$/i.test(title)) {
+      problems.push(`title: must not end with the word "${rules.style === 'fr' ? 'Recette' : 'Recipe'}"`);
+    }
     if (title.length > TITLE_MAX) {
       problems.push(`title: ${title.length} characters, the limit is ${TITLE_MAX} — shorten the description after the colon`);
     }
@@ -316,7 +367,7 @@ function part1Problems(data: Record<string, unknown>, rules: RuleContext): strin
   }
 
   if (str(data.intro_html).trim() === '') problems.push('intro_html is empty');
-  else problems.push(...openingProblems(str(data.intro_html)));
+  else problems.push(...openingProblems(str(data.intro_html), rules.style));
 
   // Every duration the reader meets before the card has to be one the recipe gave.
   const timed: [string, string][] = [
@@ -407,7 +458,7 @@ export function checkPart(
 
   for (const { where, text, html } of proseOf(part, fixed)) {
     const plain = html ? plainText(text) : text;
-    problems.push(...proseProblems(plain, where, /^question \d+$/.test(where)));
+    problems.push(...proseProblems(plain, where, /^question \d+$/.test(where), rules.style));
     for (const p of temperatureProblems(plain, rules.style, where)) problems.push(`${p.where}: ${p.detail}`);
     for (const p of measureProblems(plain, rules.style, where)) problems.push(`${p.where}: ${p.detail}`);
   }
@@ -472,7 +523,7 @@ export function checkBlogArticle<T extends BlogFields>(
   article: T,
   style: WritingStyle,
 ): { article: T; problems: string[] } {
-  const fix = (s: string): string => fixProperNouns(applySpelling(s, style));
+  const fix = (s: string): string => fixProperNouns(applySpelling(s, style), style);
   const fixed: T = {
     ...article,
     title: fix(article.title ?? ''),
@@ -481,7 +532,7 @@ export function checkBlogArticle<T extends BlogFields>(
     excerpt: fix(article.excerpt ?? ''),
     cover_alt: fix(article.cover_alt ?? ''),
     slug: applySpelling(article.slug ?? '', style),
-    body_html: fixProperNounsInHtml(applySpellingToHtml(article.body_html ?? '', style)),
+    body_html: fixProperNounsInHtml(applySpellingToHtml(article.body_html ?? '', style), style),
   };
 
   const problems: string[] = [];
@@ -492,14 +543,14 @@ export function checkBlogArticle<T extends BlogFields>(
   ];
 
   for (const [where, text] of prose) {
-    problems.push(...proseProblems(text, where));
+    problems.push(...proseProblems(text, where, false, style));
     for (const p of temperatureProblems(text, style, where)) problems.push(`${p.where}: ${p.detail}`);
     for (const p of measureProblems(text, style, where)) problems.push(`${p.where}: ${p.detail}`);
   }
   for (const [where, text] of [['title', fixed.title], ['title_tag', fixed.title_tag]] as [string, string][]) {
     for (const p of temperatureProblems(text, style, where)) problems.push(`${p.where}: ${p.detail}`);
   }
-  problems.push(...openingProblems(fixed.body_html));
+  problems.push(...openingProblems(fixed.body_html, style));
 
   return { article: fixed, problems: [...new Set(problems)] };
 }

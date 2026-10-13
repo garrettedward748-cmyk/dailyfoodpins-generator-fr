@@ -22,7 +22,7 @@ const seed = (domain: string, id?: number): number =>
 describe('migration 051', () => {
   const migration = MIGRATIONS.find((m) => m.id === '051-site-writing-style')!;
 
-  it('keeps every existing site British, and starts flavorza.com American', () => {
+  it('starts every site in French, with no site singled out', () => {
     const db = new DatabaseSync(':memory:');
     db.exec('CREATE TABLE sites (id INTEGER PRIMARY KEY, domain TEXT)');
     db.prepare('INSERT INTO sites (domain) VALUES (?), (?), (?)').run('arbmom.com', 'flavorza.com', 'dailyfoodpins.com');
@@ -31,9 +31,9 @@ describe('migration 051', () => {
 
     const rows = db.prepare('SELECT domain, writing_style FROM sites ORDER BY id').all() as { domain: string; writing_style: string }[];
     expect(rows).toEqual([
-      { domain: 'arbmom.com', writing_style: 'uk' },
-      { domain: 'flavorza.com', writing_style: 'us' },
-      { domain: 'dailyfoodpins.com', writing_style: 'uk' },
+      { domain: 'arbmom.com', writing_style: 'fr' },
+      { domain: 'flavorza.com', writing_style: 'fr' },
+      { domain: 'dailyfoodpins.com', writing_style: 'fr' },
     ]);
     db.close();
   });
@@ -71,8 +71,8 @@ describe('the site setting', () => {
       headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' },
     });
 
-  it('starts a new site as American', () => {
-    expect(getSite(seed('fresh.com'))!.writing_style).toBe('us');
+  it('starts a new site as French', () => {
+    expect(getSite(seed('fresh.com'))!.writing_style).toBe('fr');
   });
 
   it('keeps the style when the site is saved again', async () => {
@@ -93,11 +93,11 @@ describe('the site setting', () => {
     expect(getSite(id)!.writing_style).toBe('us');
   });
 
-  it('treats anything unrecognised as American, never as a third style', async () => {
+  it('treats anything unrecognised as French, never as a fourth style', async () => {
     const id = seed('bitespoon.com');
     await post(`/sites/${id}/style`, { writing_style: 'uk' });
     await post(`/sites/${id}/style`, { writing_style: 'martian' });
-    expect(getSite(id)!.writing_style).toBe('us');
+    expect(getSite(id)!.writing_style).toBe('fr');
   });
 
   it('does not fail for a site that is not there', async () => {

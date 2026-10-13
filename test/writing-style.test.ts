@@ -12,13 +12,14 @@ import {
  */
 
 describe('the site setting', () => {
-  it('is "us" unless it is exactly "uk"', () => {
+  it('is "fr" (the French edition) unless it is exactly "us" or "uk"', () => {
     expect(normaliseStyle('uk')).toBe('uk');
     expect(normaliseStyle('us')).toBe('us');
-    expect(normaliseStyle(undefined)).toBe('us');
-    expect(normaliseStyle(null)).toBe('us');
-    expect(normaliseStyle('UK')).toBe('us');
-    expect(normaliseStyle('british')).toBe('us');
+    expect(normaliseStyle('fr')).toBe('fr');
+    expect(normaliseStyle(undefined)).toBe('fr');
+    expect(normaliseStyle(null)).toBe('fr');
+    expect(normaliseStyle('UK')).toBe('fr');
+    expect(normaliseStyle('british')).toBe('fr');
   });
 
   it('gives the prompts rules that match the setting, not a fixed country', () => {

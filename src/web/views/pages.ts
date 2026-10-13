@@ -946,7 +946,10 @@ export function siteEditPage(site: SiteRow, bufferAccounts: BufferAccount[] = []
         <form method="post" action="/sites/${site.id}/style">
           <select name="writing_style" onchange="this.form.submit()"
                   title="The spelling and units every article on this site is written in">
-            <option value="us" ${site.writing_style !== 'uk' ? raw('selected') : raw('')}>
+            <option value="fr" ${site.writing_style !== 'uk' && site.writing_style !== 'us' ? raw('selected') : raw('')}>
+              Français — orthographe française, °C et grammes
+            </option>
+            <option value="us" ${site.writing_style === 'us' ? raw('selected') : raw('')}>
               American — US spelling, °F and cups
             </option>
             <option value="uk" ${site.writing_style === 'uk' ? raw('selected') : raw('')}>

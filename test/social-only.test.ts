@@ -187,6 +187,7 @@ describe('social-only accounts: a run end to end', () => {
         domain: siteKey('Arbmom Social', ''),
         status: 'active',
         pin_username: 'testsite',
+        writing_style: 'us' as const,
         project_id: 'p1',
         daily_target: 5,
         interval_minutes: 0,

@@ -66,8 +66,8 @@ describe('the Facebook photo post', () => {
 
   it('carries the recipe under the text and the link last, by default', async () => {
     await facebookPostStep.run(ctx({}), input);
-    expect(sent[0]!.text).toMatch(/^Tangy and bright\.\n\nPrep 15 minutes\n\nINGREDIENTS\n• 2 lemons/);
-    expect(sent[0]!.text).toContain('METHOD\n1. Mix.\n2. Bake.');
+    expect(sent[0]!.text).toMatch(/^Tangy and bright\.\n\nPréparation 15 minutes\n\nINGRÉDIENTS\n• 2 lemons/);
+    expect(sent[0]!.text).toContain('PRÉPARATION\n1. Mix.\n2. Bake.');
     expect(sent[0]!.text.endsWith('Full recipe: https://d.com/r')).toBe(true);
     expect(sent[0]!.firstComment).toBeUndefined();
   });
@@ -78,7 +78,7 @@ describe('the Facebook photo post', () => {
     expect(sent[0]!.firstComment).toBe('Full recipe: https://d.com/r');
     await facebookPostStep.run(ctx({ caption_fb_post_link: 'none', caption_fb_post_recipe: 'ingredients' }), input);
     expect(sent[0]!.text).not.toContain('https://');
-    expect(sent[0]!.text).not.toContain('METHOD');
+    expect(sent[0]!.text).not.toContain('PRÉPARATION');
     expect(sent[0]!.firstComment).toBeUndefined();
   });
 
@@ -103,7 +103,7 @@ describe('the Instagram photo post', () => {
   it('puts the recipe under the caption, the link line after it, the hashtags last', async () => {
     await instagramPostStep.run(ctx({}, written), input);
     expect(sent[0]!.text).toBe(
-      'Zesty and soft.\n\nPrep 15 minutes\n\nINGREDIENTS\n• 2 lemons\n• 1 cup sugar\n\nMETHOD\n1. Mix.\n2. Bake.\n\nFull recipe: link in bio\n\n#lemonbars #baking',
+      'Zesty and soft.\n\nPréparation 15 minutes\n\nINGRÉDIENTS\n• 2 lemons\n• 1 cup sugar\n\nPRÉPARATION\n1. Mix.\n2. Bake.\n\nFull recipe: link in bio\n\n#lemonbars #baking',
     );
   });
 
@@ -117,8 +117,8 @@ describe('the Instagram photo post', () => {
       JSON.stringify({ parsed: { ...RECIPE, step_1: 'Stir. '.repeat(400) } }), RUN);
     await instagramPostStep.run(ctx({}, written), input);
     expect(sent[0]!.text.length).toBeLessThanOrEqual(2200);
-    expect(sent[0]!.text).toContain('INGREDIENTS');
-    expect(sent[0]!.text).not.toContain('METHOD');
+    expect(sent[0]!.text).toContain('INGRÉDIENTS');
+    expect(sent[0]!.text).not.toContain('PRÉPARATION');
   });
 });
 
@@ -138,7 +138,7 @@ describe('the Pinterest description', () => {
 
   it('adds the ingredients when the whole recipe does not fit, and the whole when it does', async () => {
     await publishToBuffer.run(ctx({}), input('Short.'));
-    expect(sent[0]!.text).toContain('METHOD');
+    expect(sent[0]!.text).toContain('PRÉPARATION');
     await publishToBuffer.run(ctx({}), input('x'.repeat(490)));
     expect(sent[0]!.text).toBe('x'.repeat(490)); // nothing fits in the 10 left: the description alone
   });
