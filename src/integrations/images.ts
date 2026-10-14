@@ -1,4 +1,5 @@
 import { createLogger, errorMessage } from '../lib/logger.js';
+import { readLocalMedia } from './media-store.js';
 
 const log = createLogger('images');
 
@@ -235,6 +236,9 @@ export class ImageClient {
 
   /** Download a generated image into memory. */
   async download(imageUrl: string): Promise<{ data: Buffer; contentType: string }> {
+    // A social-only account's pictures are on this platform: read, not fetched.
+    const local = readLocalMedia(imageUrl);
+    if (local) return local;
     const response = await fetch(imageUrl, { signal: AbortSignal.timeout(120_000) });
     if (!response.ok) {
       throw new ImageGenerationError(`Downloading image failed: HTTP ${response.status}`);

@@ -13,7 +13,7 @@ import { executePipeline } from '../src/pipeline/index.js';
 import { PipelineContext } from '../src/pipeline/context.js';
 import { setLogLevel } from '../src/lib/logger.js';
 import { brandName, isSocialOnly, siteAssetUrl, siteKey, sitePostUrl, socialHandle } from '../src/core/social-only.js';
-import { cleanupMedia, configureMediaStore, isMediaName, saveMediaImage } from '../src/integrations/media-store.js';
+import { cleanupMedia, configureMediaStore, isMediaName, readLocalMedia, saveMediaImage } from '../src/integrations/media-store.js';
 import { siteApiFor, SocialOnlySiteApi } from '../src/integrations/site-api-for.js';
 import { SiteApiClient } from '../src/integrations/site-api.js';
 import { reelCta } from '../src/reels/cta.js';
@@ -105,6 +105,21 @@ describe('social-only accounts: media kept on the platform', () => {
     expect(isMediaName(saved.name)).toBe(true);
     expect(saved.url).toBe(`https://platform.test/media/${saved.name}`);
     expect(existsSync(join(dir, saved.name))).toBe(true);
+  });
+
+  it('reads its own pictures from disk instead of fetching its public address', async () => {
+    const saved = await saveMediaImage(Buffer.from([1, 2, 3]), 'image/webp');
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    // Any host: the public address may have changed since the picture was saved.
+    expect(readLocalMedia(`https://old.example/media/${saved.name}`)?.data).toEqual(Buffer.from([1, 2, 3]));
+    const { ImageClient } = await import('../src/integrations/images.js');
+    const got = await new ImageClient({ baseUrl: 'http://flow.test', apiKey: 'k' } as never).download(saved.url);
+    expect(got.contentType).toBe('image/webp');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(readLocalMedia('https://platform.test/media/missing.jpg')).toBeNull();
+    expect(readLocalMedia('https://platform.test/media/../etc/passwd')).toBeNull();
+    vi.unstubAllGlobals();
   });
 
   it('keeps a picture it cannot read exactly as it came', async () => {

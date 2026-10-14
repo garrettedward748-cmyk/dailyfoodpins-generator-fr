@@ -1,3 +1,4 @@
+import { readLocalMedia } from '../integrations/media-store.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -309,6 +310,8 @@ export function defaultDeps(settings: Settings, key: Buffer): ReelDeps {
       settings.get('telegram_chat_id'),
     ),
     async download(url) {
+      const local = readLocalMedia(url);
+      if (local) return local.data;
       const response = await fetch(url, { signal: AbortSignal.timeout(600_000) });
       if (!response.ok) {
         throw new Error(`Downloading the video failed: HTTP ${response.status}`);

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { resolveDataDir } from '../config.js';
@@ -74,6 +74,30 @@ function publicBase(): string {
     );
   }
   return base;
+}
+
+/**
+ * A file this store holds, read from disk when a url points at it.
+ *
+ * The platform fetching its own public address goes out through the server's
+ * public IP and back in through the proxy, which many hosts do not allow
+ * ("fetch failed"). Anything under /media/ that is here is read directly,
+ * whatever host the url names, so a changed public address still finds it.
+ */
+export function readLocalMedia(url: string): { data: Buffer; contentType: string } | null {
+  let name = '';
+  try {
+    const path = new URL(url).pathname;
+    const m = /\/media\/([^/]+)$/.exec(path);
+    name = m ? decodeURIComponent(m[1]!) : '';
+  } catch {
+    return null;
+  }
+  if (!isMediaName(name)) return null;
+  const file = join(config.dir, name);
+  if (!existsSync(file)) return null;
+  const ext = name.slice(name.lastIndexOf('.') + 1);
+  return { data: readFileSync(file), contentType: MEDIA_TYPES[ext] ?? 'application/octet-stream' };
 }
 
 /** The public url of a stored file. */
