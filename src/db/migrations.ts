@@ -1287,6 +1287,15 @@ export const MIGRATIONS: Migration[] = [
       addColumn(db, 'channel_profiles', 'buffer_channel', "TEXT NOT NULL DEFAULT ''");
     },
   },
+  {
+    id: '055-keyword-cook-input',
+    description: "The cook's own recipe and notes for a keyword, so an article can be written from a real kitchen instead of from search results",
+    up(db) {
+      // Both blank: the keyword is written exactly as before.
+      addColumn(db, 'keywords', 'cook_recipe', "TEXT NOT NULL DEFAULT ''");
+      addColumn(db, 'keywords', 'cook_notes', "TEXT NOT NULL DEFAULT ''");
+    },
+  },
 ];
 
 /* -- The runner ----------------------------------------------------------- */

@@ -2551,6 +2551,26 @@ export function keywordDetailPage(
       </form>
     </div>
 
+    <h2>From the cook</h2>
+    <p class="subtitle">
+      What makes this article real. Leave both empty and it is written as before.
+    </p>
+    <div class="card">
+      <form method="post" action="/keywords/${keyword.id}/cook">
+        <label for="cook-recipe"><strong>Her recipe</strong>
+          <span class="muted small">— optional. Ingredients, amounts and steps as she makes it.</span></label>
+        <textarea id="cook-recipe" name="cook_recipe" rows="8"
+                  placeholder="2 cups flour&#10;1 tsp salt&#10;...&#10;&#10;1. Mix the dry ingredients...">${keyword.cook_recipe ?? ''}</textarea>
+        <label for="cook-notes" style="display:block;margin-top:12px"><strong>Her notes</strong>
+          <span class="muted small">— two or three lines: what went wrong, what she swapped, who liked it.</span></label>
+        <textarea id="cook-notes" name="cook_notes" rows="4"
+                  placeholder="The first time it came out dry, so I added an egg. The kids ate it cold the next day.">${keyword.cook_notes ?? ''}</textarea>
+        <div class="row" style="margin-top:12px">
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+
     <h2>Which sites should publish it?</h2>
     <p class="subtitle">
       One row per site, with the reason it can or cannot run right now. This is the same

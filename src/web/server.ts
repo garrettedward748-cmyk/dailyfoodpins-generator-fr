@@ -127,6 +127,7 @@ import {
   getRun,
   setKeywordShareImages,
   setKeywordStatus,
+  setKeywordCook,
   setLink,
   setLinkShareImages,
   upsertSite,
@@ -4255,6 +4256,13 @@ export function buildServer(
     const status = asString(formBody(request).status, 'no');
     if (status === 'go' || status === 'done' || status === 'no') setKeywordStatus(id, status);
     return redirect(reply, `/keywords/${id}`);
+  });
+
+  app.post('/keywords/:id/cook', async (request, reply) => {
+    const id = asNumber((request.params as { id: string }).id, 0);
+    const body = formBody(request);
+    setKeywordCook(id, asString(body.cook_recipe, ''), asString(body.cook_notes, ''));
+    return redirect(reply, `/keywords/${id}`, { kind: 'ok', message: "Saved the cook's recipe and notes." });
   });
 
   app.post('/keywords/:id/link', async (request, reply) => {

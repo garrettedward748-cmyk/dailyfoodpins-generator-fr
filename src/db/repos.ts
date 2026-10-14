@@ -695,6 +695,10 @@ export interface KeywordRow {
   spy_article_url: string;
   spy_pin_image: string;
   annotation: string;
+  /** The cook's own recipe for this dish, pasted as written. Blank: none given. */
+  cook_recipe: string;
+  /** A few lines from the cook: what went wrong, what they swapped, who liked it. */
+  cook_notes: string;
   status: 'go' | 'done' | 'no';
   created_at: string;
   updated_at: string;
@@ -782,6 +786,16 @@ export function addPastedKeywords(
 
 export const setKeywordStatus = (id: number, status: 'go' | 'done' | 'no'): void => {
   run("UPDATE keywords SET status = ?, updated_at = datetime('now') WHERE id = ?", status, id);
+};
+
+/** Save what the cook wrote for a keyword. Imports never touch these two fields. */
+export const setKeywordCook = (id: number, recipe: string, notes: string): void => {
+  run(
+    "UPDATE keywords SET cook_recipe = ?, cook_notes = ?, updated_at = datetime('now') WHERE id = ?",
+    recipe.trim(),
+    notes.trim(),
+    id,
+  );
 };
 
 export const deleteKeyword = (id: number): void => {
