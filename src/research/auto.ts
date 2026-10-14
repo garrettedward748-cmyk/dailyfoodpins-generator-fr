@@ -1,5 +1,5 @@
-import { all, run } from '../db/index.js';
-import { addPastedKeywords, getSite, listSites, siteSecrets, type SiteRow } from '../db/repos.js';
+import { run } from '../db/index.js';
+import { addPastedKeywords, getSite, listSites, researchRepeats, siteSecrets, type SiteRow } from '../db/repos.js';
 import { SiteApiClient } from '../integrations/site-api.js';
 import { siteApiFor } from '../integrations/site-api-for.js';
 import { addBlogQuestions } from '../blog/repo.js';
@@ -54,14 +54,23 @@ export interface AutoReport {
 /** Remove what auto research added to a site that has not been written in time. */
 export function expireAutoAdded(siteId: number, ttlHours: number): { keywords: number; questions: number } {
   const age = `-${Math.max(1, Math.floor(ttlHours))} hours`;
+  // Only this site's link goes: the same keyword may be on another site.
   const keywords = run(
+    `DELETE FROM keyword_sites
+      WHERE site_id = ? AND auto_added_at IS NOT NULL AND auto_added_at <= datetime('now', ?)
+        AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.keyword_id = keyword_sites.keyword_id
+                          AND r.site_id = keyword_sites.site_id AND r.status <> 'failed')`,
+    siteId,
+    age,
+  ).changes;
+  // An automatic keyword left on no site at all is gone with it.
+  run(
     `DELETE FROM keywords
       WHERE auto_added_at IS NOT NULL AND auto_added_at <= datetime('now', ?)
-        AND id IN (SELECT keyword_id FROM keyword_sites WHERE site_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM keyword_sites ks WHERE ks.keyword_id = keywords.id)
         AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.keyword_id = keywords.id AND r.status <> 'failed')`,
     age,
-    siteId,
-  ).changes;
+  );
   const questions = run(
     `DELETE FROM blog_questions
       WHERE site_id = ? AND auto_added_at IS NOT NULL AND auto_added_at <= datetime('now', ?)
@@ -131,7 +140,8 @@ export interface AutoDeps {
   /** Recipes per category on the site; left out, or empty, the topics are not balanced. */
   categoryCounts?(site: SiteRow): Promise<Record<string, number>>;
   topicIdeas(niche: string, siteMix?: string): Promise<TopicIdeas>;
-  research(topic: string): Promise<ResearchResult>;
+  /** Researched for this site: repeats are what it already has, not what other sites have. */
+  research(topic: string, siteId: number): Promise<ResearchResult>;
   notify(text: string): Promise<void>;
 }
 
@@ -163,11 +173,9 @@ export function liveDeps(settings: Settings, key: Buffer): AutoDeps {
       });
       return verifyTopics(parseTopicIdeas(niche, answer.content, notes));
     },
-    async research(topic) {
-      const existingTitles = all<{ t: string }>(
-        "SELECT CASE WHEN trim(spy_title) <> '' THEN spy_title ELSE seed_keyword END AS t FROM keywords",
-      ).map((r) => r.t);
-      return filterWithModel(await researchKeywords(topic, { serperKey, serperState, existingTitles }), async (vars) =>
+    async research(topic, siteId) {
+      const repeats = researchRepeats([siteId]);
+      return filterWithModel(await researchKeywords(topic, { serperKey, serperState, existingTitles: repeats.here, elsewhere: repeats.elsewhere }), async (vars) =>
         (await askPrompt(settings, key, 'research-filter', vars)).content,
       );
     },
@@ -205,13 +213,16 @@ export async function runAutoResearch(site: SiteRow, deps: AutoDeps, today: stri
       topics.push(topic);
       history[topic] = today;
 
-      const result = await deps.research(topic);
+      const result = await deps.research(topic, site.id);
       const recipes = result.recipes
         .filter((r) => !r.existing && !r.broad)
         .slice(0, wantRecipes - report.added)
         .map((r) => titleCase(r.text));
       const questions = result.questions.slice(0, Math.max(0, wantQuestions - report.questions)).map((q) => q.text);
-      if (recipes.length) report.added += addPastedKeywords(recipes, topic, [site.id], { auto: true }).added;
+      if (recipes.length) {
+        const r = addPastedKeywords(recipes, topic, [site.id], { auto: true });
+        report.added += r.added + r.linked;
+      }
       if (questions.length) report.questions += addBlogQuestions(site.id, questions, 'manual', 'queued', true).added;
     }
     if (topics.length === 0) throw new Error(`Google gave no topics for "${niche}"${ideas.notes.length ? ` (${ideas.notes.join('; ')})` : ''}`);

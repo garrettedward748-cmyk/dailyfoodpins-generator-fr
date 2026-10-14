@@ -1,5 +1,5 @@
 import { all, run } from '../../db/index.js';
-import { addPastedKeywords, getSite, listSites, type SiteRow } from '../../db/repos.js';
+import { addPastedKeywords, getSite, listSites, researchRepeats, type SiteRow } from '../../db/repos.js';
 import { addBlogQuestions } from '../../blog/repo.js';
 import { halalOnly, haramWord } from '../../core/halal.js';
 import { localDateKey } from '../../core/selector.js';
@@ -115,7 +115,8 @@ export async function classify(
 /** Titles this site already has, so the radar does not propose yesterday's article again. */
 function existingTitles(siteId: number): DishIndex {
   return new DishIndex([
-    ...all<{ t: string }>("SELECT CASE WHEN trim(spy_title) <> '' THEN spy_title ELSE seed_keyword END AS t FROM keywords").map((r) => r.t),
+    // What this site has; a keyword only another site has is still free here.
+    ...researchRepeats([siteId]).here,
     ...all<{ t: string }>('SELECT question AS t FROM blog_questions WHERE site_id = ?', siteId).map((r) => r.t),
     ...all<{ t: string }>("SELECT title AS t FROM social_posts WHERE site_id = ? AND status <> 'new' AND trim(title) <> ''", siteId).map((r) => r.t),
   ]);
@@ -206,7 +207,10 @@ export function addToQueue(siteId: number, ids: number[]): { recipes: number; qu
     else byTopic.set(r.topic || 'radar', [...(byTopic.get(r.topic || 'radar') ?? []), r.title]);
   }
   let recipes = 0;
-  for (const [topic, lines] of byTopic) recipes += addPastedKeywords(lines, topic, [siteId]).added;
+  for (const [topic, lines] of byTopic) {
+    const r = addPastedKeywords(lines, topic, [siteId]);
+    recipes += r.added + r.linked;
+  }
   const q = questions.length ? addBlogQuestions(siteId, questions).added : 0;
   markStatus(siteId, rows.map((r) => r.id), 'added');
   return { recipes, questions: q };

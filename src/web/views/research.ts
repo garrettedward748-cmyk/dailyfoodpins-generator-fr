@@ -126,9 +126,7 @@ export function researchPage(data: {
                 ? html`already have: ${i.existing}`
                 : i.broad
                   ? 'a list of dishes, not one recipe'
-                  : i.top
-                    ? html`<span class="badge ok">top search</span>`
-                    : ''}</td>
+                  : html`${i.top ? html`<span class="badge ok">top search</span> ` : ''}${i.elsewhere ? html`<span class="badge muted">already on ${i.elsewhere}</span>` : ''}`}</td>
             </tr>`;
           })}</tbody>
         </table></div>`;

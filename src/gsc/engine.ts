@@ -1,5 +1,5 @@
 import { all, get, run } from '../db/index.js';
-import { addPastedKeywords, getSite, listSites, type SiteRow } from '../db/repos.js';
+import { addPastedKeywords, getSite, listSites, researchRepeats, type SiteRow } from '../db/repos.js';
 import { addBlogQuestions } from '../blog/repo.js';
 import { halalOnly, haramWord } from '../core/halal.js';
 import { localDateKey } from '../core/selector.js';
@@ -110,7 +110,8 @@ export function candidates(stats: QueryStat[], site: { id: number; domain: strin
   const brand = site.domain.replace(/^www\./, '').split('.')[0]!.toLowerCase();
   const halal = halalOnly();
   const known = new Set<string>([
-    ...all<{ t: string }>("SELECT CASE WHEN trim(spy_title) <> '' THEN spy_title ELSE seed_keyword END AS t FROM keywords").map((r) => norm(r.t)),
+    // What this site has; a keyword only another site has is still free here.
+    ...researchRepeats([site.id]).here.map((t) => norm(t)),
     ...all<{ t: string }>('SELECT question AS t FROM blog_questions WHERE site_id = ?', site.id).map((r) => norm(r.t)),
     ...all<{ t: string }>("SELECT query AS t FROM gsc_opportunities WHERE site_id = ? AND status <> 'new'", site.id).map((r) => norm(r.t)),
   ]);
@@ -202,7 +203,10 @@ export function addOpportunities(siteId: number, ids: number[]): { recipes: numb
     }
   }
   let recipes = 0;
-  for (const [topic, lines] of byTopic) recipes += addPastedKeywords(lines, topic, [siteId]).added;
+  for (const [topic, lines] of byTopic) {
+    const r = addPastedKeywords(lines, topic, [siteId]);
+    recipes += r.added + r.linked;
+  }
   const q = questions.length ? addBlogQuestions(siteId, questions).added : 0;
   for (const r of rows) run("UPDATE gsc_opportunities SET status = 'added', updated_at = datetime('now') WHERE id = ?", r.id);
   return { recipes, questions: q };

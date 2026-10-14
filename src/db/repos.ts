@@ -737,21 +737,73 @@ export function insertKeyword(k: Partial<KeywordRow> & { seed_keyword: string })
  * chosen sites. A title already present (any case) is skipped, so pasting the
  * same list twice adds nothing.
  */
+/** Every keyword's title and keyword-level status, with the sites it is on (go or done). */
+function keywordTitlesWithSites(): { id: number; title: string; status: string; sites: Set<number> }[] {
+  const rows = all<{ id: number; t: string; status: string }>(
+    "SELECT id, CASE WHEN trim(spy_title) <> '' THEN spy_title ELSE seed_keyword END AS t, status FROM keywords",
+  );
+  const sites = new Map<number, Set<number>>();
+  for (const l of all<{ keyword_id: number; site_id: number }>(
+    "SELECT keyword_id, site_id FROM keyword_sites WHERE status IN ('go', 'done')",
+  )) {
+    const set = sites.get(l.keyword_id) ?? new Set<number>();
+    set.add(l.site_id);
+    sites.set(l.keyword_id, set);
+  }
+  return rows.map((r) => ({ id: r.id, title: r.t, status: r.status, sites: sites.get(r.id) ?? new Set() }));
+}
+
+/**
+ * What keyword research should treat as a repeat for these sites.
+ *
+ * `here`: on every one of the sites already (or turned down for all sites), so
+ * there is nothing left to add. `elsewhere`: on other sites only -- still free
+ * for these, shown with where it already runs. With no sites given, every
+ * keyword counts as here.
+ */
+export function researchRepeats(siteIds: number[]): { here: string[]; elsewhere: { title: string; where: string }[] } {
+  const domains = new Map(all<{ id: number; domain: string }>('SELECT id, domain FROM sites').map((s) => [s.id, s.domain]));
+  const here: string[] = [];
+  const elsewhere: { title: string; where: string }[] = [];
+  for (const k of keywordTitlesWithSites()) {
+    if (siteIds.length === 0 || k.status === 'no' || siteIds.every((s) => k.sites.has(s))) {
+      here.push(k.title);
+      continue;
+    }
+    const where = [...k.sites].filter((s) => !siteIds.includes(s)).map((s) => domains.get(s)).filter(Boolean);
+    if (where.length) elsewhere.push({ title: k.title, where: where.join(', ') });
+  }
+  return { here, elsewhere };
+}
+
+/**
+ * Add keywords one per line to the ticked sites.
+ *
+ * A repeat is judged per site: a keyword (or the same dish) already on other
+ * sites only is linked to the ticked ones that lack it -- one keyword, one
+ * article per site, each with its own images -- instead of being skipped.
+ * It is skipped only when every ticked site has it already.
+ */
 export function addPastedKeywords(
   lines: string[],
   seedKeyword: string,
   siteIds: number[],
   options: { auto?: boolean } = {},
-): { added: number; skipped: number; similar: string[] } {
+): { added: number; linked: number; skipped: number; similar: string[] } {
   const seed = seedKeyword.trim().toLowerCase();
-  const titles = all<{ t: string }>(
-    "SELECT CASE WHEN trim(spy_title) <> '' THEN spy_title ELSE seed_keyword END AS t FROM keywords",
-  ).map((r) => r.t);
-  const existing = new Set(titles.map((t) => t.trim().toLowerCase()));
-  const dishes = new DishIndex(titles);
+  const known = keywordTitlesWithSites();
+  const byTitle = new Map(known.map((k) => [k.title.trim().toLowerCase(), k]));
+  const dishes = new DishIndex(known.map((k) => k.title));
   const similar: string[] = [];
   let added = 0;
+  let linked = 0;
   let skipped = 0;
+  const link = (keywordId: number, siteId: number) => {
+    setLink(keywordId, siteId, 'go');
+    if (options.auto) {
+      run("UPDATE keyword_sites SET auto_added_at = datetime('now') WHERE keyword_id = ? AND site_id = ?", keywordId, siteId);
+    }
+  };
   transaction(() => {
     for (const raw of lines) {
       const title = raw.replace(/^[\s\-*•\d.)]+/, '').replace(/\s+/g, ' ').trim().slice(0, 300);
@@ -759,14 +811,25 @@ export function addPastedKeywords(
         if (raw.trim() !== '') skipped++;
         continue;
       }
-      if (existing.has(title.toLowerCase())) {
-        skipped++;
-        continue;
-      }
-      const twin = dishes.find(title);
-      if (twin) {
-        skipped++;
-        similar.push(`“${title}” ≈ “${twin}”`);
+      const twin = byTitle.has(title.toLowerCase()) ? null : dishes.find(title);
+      const match = byTitle.get(title.toLowerCase()) ?? (twin ? byTitle.get(twin.trim().toLowerCase()) : undefined);
+      if (match) {
+        const missing = match.status === 'no' ? [] : siteIds.filter((s) => !match.sites.has(s));
+        if (missing.length === 0) {
+          skipped++;
+          if (twin) similar.push(`“${title}” ≈ “${twin}”`);
+          continue;
+        }
+        for (const siteId of missing) {
+          link(match.id, siteId);
+          match.sites.add(siteId);
+        }
+        // Finished on its other sites: open it again for the new ones.
+        if (match.status === 'done') {
+          setKeywordStatus(match.id, 'go');
+          match.status = 'go';
+        }
+        linked++;
         continue;
       }
       const haram = halalOnly() ? haramWord(`${title} ${seed}`) : null;
@@ -775,15 +838,16 @@ export function addPastedKeywords(
         similar.push(`“${title}” refused: ${haram} (Halal only)`);
         continue;
       }
-      existing.add(title.toLowerCase());
-      dishes.add(title);
       const id = insertKeyword({ seed_keyword: seed, spy_title: title, status: 'go' });
       if (options.auto) run("UPDATE keywords SET auto_added_at = datetime('now') WHERE id = ?", id);
-      for (const siteId of siteIds) setLink(id, siteId, 'go');
+      for (const siteId of siteIds) link(id, siteId);
+      const entry = { id, title, status: 'go', sites: new Set(siteIds) };
+      byTitle.set(title.toLowerCase(), entry);
+      dishes.add(title);
       added++;
     }
   });
-  return { added, skipped, similar };
+  return { added, linked, skipped, similar };
 }
 
 export const setKeywordStatus = (id: number, status: 'go' | 'done' | 'no'): void => {

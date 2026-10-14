@@ -65,6 +65,7 @@ import {
   countKeywordsMatching,
   keywordIdsMatching,
   addPastedKeywords,
+  researchRepeats,
   keywordViewCounts,
   countRuns,
   deleteKeyword,
@@ -3853,11 +3854,11 @@ export function buildServer(
       if (siteIds.length === 0 && allSites.length > 0) {
         return redirect(reply, `/research${niche ? `?niche=${encodeURIComponent(niche)}` : ''}`, { kind: 'error', message: 'Tick at least one site to send to, then search again.' });
       }
-      const existingTitles = all<{ t: string }>(
-        "SELECT CASE WHEN trim(spy_title) <> '' THEN spy_title ELSE seed_keyword END AS t FROM keywords",
-      ).map((r) => r.t);
+      // Repeats are judged against the ticked sites only; what other sites
+      // have is shown as a note and can still be added.
+      const repeats = researchRepeats(siteIds);
       const job = startResearchJob(topics, perTopic, niche, async (topic) =>
-        filterWithModel(await researchKeywords(topic, { serperKey, serperState, existingTitles }), async (vars) =>
+        filterWithModel(await researchKeywords(topic, { serperKey, serperState, existingTitles: repeats.here, elsewhere: repeats.elsewhere }), async (vars) =>
           (await askPrompt(settings, encryptionKey, 'research-filter', vars)).content,
         ),
       );
@@ -3986,7 +3987,11 @@ export function buildServer(
     const parts: string[] = [];
     for (const [group, lines] of byGroup) {
       const r = addPastedKeywords(lines, group, siteIds);
-      parts.push(`${r.added} recipe keyword(s) added to "${group}"${r.skipped ? ` (${r.skipped} repeat(s) skipped)` : ''}`);
+      parts.push(
+        `${r.added} recipe keyword(s) added to "${group}"` +
+          (r.linked ? `, ${r.linked} already on another site added to the ticked one(s)` : '') +
+          (r.skipped ? ` (${r.skipped} repeat(s) skipped)` : ''),
+      );
     }
     if (questions.length) {
       let added = 0;
@@ -4011,12 +4016,13 @@ export function buildServer(
       .concat(body.site_ids ?? [])
       .map((v) => asNumber(v, 0))
       .filter((id) => known.has(id));
-    const { added, skipped, similar } = addPastedKeywords(asString(body.lines).split(/\r?\n/), seed, siteIds);
+    const { added: fresh, linked, skipped, similar } = addPastedKeywords(asString(body.lines).split(/\r?\n/), seed, siteIds);
+    const added = fresh + linked;
     const where = siteIds.length ? ` They will publish on ${siteIds.length} site(s).` : ' No site was ticked, so none will publish yet.';
     return redirect(reply, added > 0 ? '/keywords' : '/keywords/add', {
       kind: added > 0 && siteIds.length ? 'ok' : 'warn',
       message:
-        `${added} keyword(s) added${skipped ? `, ${skipped} skipped (already there, the same dish, or too short)` : ''}.${added ? where : ''}` +
+        `${added} keyword(s) added${linked ? ` (${linked} already on another site)` : ''}${skipped ? `, ${skipped} skipped (already on the ticked sites, the same dish, or too short)` : ''}.${added ? where : ''}` +
         (similar.length ? ` Same dish as an existing keyword: ${similar.slice(0, 8).join('; ')}${similar.length > 8 ? ` and ${similar.length - 8} more` : ''}.` : ''),
     });
   });

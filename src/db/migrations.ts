@@ -1304,6 +1304,20 @@ export const MIGRATIONS: Migration[] = [
       addColumn(db, 'keywords', 'cook_suggestions', "TEXT NOT NULL DEFAULT ''");
     },
   },
+  {
+    id: '057-keyword-site-auto-added',
+    description: 'Daily research expiry per site: a keyword shared with another site loses only this site',
+    up(db) {
+      addColumn(db, 'keyword_sites', 'auto_added_at', 'TEXT');
+      if (hasTable(db, 'keyword_sites') && columns(db, 'keywords').includes('auto_added_at')) {
+        db.exec(`
+          UPDATE keyword_sites SET auto_added_at =
+            (SELECT k.auto_added_at FROM keywords k WHERE k.id = keyword_sites.keyword_id)
+          WHERE auto_added_at IS NULL;
+        `);
+      }
+    },
+  },
 ];
 
 /* -- The runner ----------------------------------------------------------- */

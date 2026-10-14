@@ -56,6 +56,7 @@ describe('daily auto research', () => {
     addPastedKeywords(['Hand Added'], 'x', [site]);
     addBlogQuestions(site, ['Can you freeze old auto?'], 'manual', 'queued', true);
     run("UPDATE keywords SET auto_added_at = datetime('now', '-30 hours') WHERE auto_added_at IS NOT NULL");
+    run("UPDATE keyword_sites SET auto_added_at = datetime('now', '-30 hours') WHERE auto_added_at IS NOT NULL");
     run("UPDATE blog_questions SET auto_added_at = datetime('now', '-30 hours')");
     const written = get<{ id: number }>("SELECT id FROM keywords WHERE spy_title = 'Old Auto Written'")!.id;
     run("INSERT INTO runs (keyword_id, site_id, status) VALUES (?, ?, 'published')", written, site);

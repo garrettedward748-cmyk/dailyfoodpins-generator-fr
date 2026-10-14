@@ -28,8 +28,10 @@ export interface ResearchItem {
   top?: boolean;
   /** "banana dessert recipes": a list of dishes, not one dish. */
   broad: boolean;
-  /** Same dish as an existing keyword (its title), when one is found. */
+  /** Same dish as a keyword the chosen sites already have (its title), when one is found. */
   existing?: string;
+  /** Not on the chosen sites, but already on these other sites (domains): still free to add. */
+  elsewhere?: string;
 }
 
 export interface ResearchResult {
@@ -170,8 +172,10 @@ export interface ResearchOptions {
   serperKey?: string;
   /** Where the key in use is remembered, so the next search goes on from it. */
   serperState?: { get(): number; set(index: number): void };
-  /** Titles of the keywords already on the platform, to mark repeats. */
+  /** Titles the chosen sites already have, to mark repeats. */
   existingTitles?: string[];
+  /** Titles only other sites have, with their domains: shown as a note, not a repeat. */
+  elsewhere?: { title: string; where: string }[];
   fetchImpl?: typeof fetch;
 }
 
@@ -228,9 +232,12 @@ export async function researchKeywords(seedInput: string, options: ResearchOptio
     notes.push('No Serper key: "People also ask" and related searches are left out. Add one under Setup → General.');
   }
 
-  // Mark the ones that are a dish the platform already has.
+  // Mark the ones that are a dish the chosen sites already have, and note
+  // the ones only other sites have.
   const dishes = new DishIndex(options.existingTitles ?? []);
   const exact = new Set((options.existingTitles ?? []).map((t) => t.trim().toLowerCase()));
+  const otherWhere = new Map((options.elsewhere ?? []).map((e) => [e.title.trim().toLowerCase(), e.where]));
+  const others = new DishIndex((options.elsewhere ?? []).map((e) => e.title));
   const items = [...seen.values()];
   for (const item of items) {
     if (isQuestion(item.text)) continue;
@@ -238,6 +245,10 @@ export async function researchKeywords(seedInput: string, options: ResearchOptio
     else {
       const twin = dishes.find(item.text);
       if (twin) item.existing = twin;
+      else {
+        const other = otherWhere.has(item.text.toLowerCase()) ? item.text : others.find(item.text);
+        if (other) item.elsewhere = otherWhere.get(other.trim().toLowerCase());
+      }
     }
   }
 
