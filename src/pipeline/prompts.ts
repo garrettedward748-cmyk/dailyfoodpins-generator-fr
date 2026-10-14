@@ -148,6 +148,7 @@ export const PROMPT_MODELS: Record<string, { model: string; format: 'json' | nul
   'research-topics': { model: 'gpt-oss:120b', format: 'json' },
   'extra-post': { model: 'gpt-oss:120b', format: 'json' },
   'serp-brief': { model: 'gpt-oss:120b', format: null },
+  'cook-suggestions': { model: 'gpt-oss:120b', format: 'json' },
 };
 
 /* -------------------------------------------------------------------------

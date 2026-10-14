@@ -214,5 +214,11 @@
   "model": "gpt-oss:120b",
   "format": null,
   "hasSystem": false
+ },
+ "cook-suggestions": {
+  "sourceNode": "Cook note suggestions",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
  }
 }

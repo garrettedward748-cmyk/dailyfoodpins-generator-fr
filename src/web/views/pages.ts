@@ -1,3 +1,4 @@
+import { readSuggestions } from '../../cook/suggest.js';
 import {
   emptyState,
   formatCount,
@@ -2551,7 +2552,7 @@ export function keywordDetailPage(
       </form>
     </div>
 
-    <h2>From the cook</h2>
+    <h2 id="cook">From the cook</h2>
     <p class="subtitle">
       What makes this article real. Leave both empty and it is written as before.
     </p>
@@ -2569,6 +2570,7 @@ export function keywordDetailPage(
           <button type="submit">Save</button>
         </div>
       </form>
+      ${cookSuggestions(keyword)}
     </div>
 
     <h2>Which sites should publish it?</h2>
@@ -2672,6 +2674,42 @@ export function keywordDetailPage(
       <form method="post" action="/keywords/${keyword.id}/delete" style="margin-top:14px"
             onsubmit="return confirm('Delete this keyword? Its run history stays but is detached.')">
         <button class="danger small" type="submit">Delete this keyword</button>
+      </form>
+    </div>
+  `;
+}
+
+/**
+ * Readers' tips waiting for the cook, each with Approve and Reject, and the
+ * button that looks for them. Approving adds the tip to her notes as written.
+ */
+function cookSuggestions(keyword: KeywordRow): Html {
+  const list = readSuggestions(keyword.cook_suggestions);
+  return html`
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border, #2a2f3a)">
+      ${list.length
+        ? html`<p class="small"><strong>Tips from readers who made this dish</strong>
+            <span class="muted"> — approve only what is true in your kitchen.</span></p>
+            ${list.map(
+              (s, i) => html`<div class="row wrap" style="gap:8px;align-items:center;margin:8px 0">
+                <span style="flex:1 1 260px">${s.tip}
+                  <span class="badge">${s.sources} sources</span></span>
+                <form method="post" action="/keywords/${keyword.id}/cook/suggest/${i}/accept">
+                  <button class="small" type="submit">Approve</button>
+                </form>
+                <form method="post" action="/keywords/${keyword.id}/cook/suggest/${i}/reject">
+                  <button class="small danger" type="submit">Reject</button>
+                </form>
+              </div>`,
+            )}`
+        : raw('')}
+      <form method="post" action="/keywords/${keyword.id}/cook/suggest"
+            onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Reading reviews…'">
+        <button class="small" type="submit"
+                title="Reads what real readers wrote about this dish and suggests up to 3 tips that two or more of them report and that fit the recipe above">
+          Suggest notes
+        </button>
+        <span class="muted small">Save the recipe first: tips are matched to it.</span>
       </form>
     </div>
   `;

@@ -699,6 +699,8 @@ export interface KeywordRow {
   cook_recipe: string;
   /** A few lines from the cook: what went wrong, what they swapped, who liked it. */
   cook_notes: string;
+  /** Readers' tips waiting for the cook, as JSON; '' when none. */
+  cook_suggestions?: string;
   status: 'go' | 'done' | 'no';
   created_at: string;
   updated_at: string;
@@ -794,6 +796,22 @@ export const setKeywordCook = (id: number, recipe: string, notes: string): void 
     "UPDATE keywords SET cook_recipe = ?, cook_notes = ?, updated_at = datetime('now') WHERE id = ?",
     recipe.trim(),
     notes.trim(),
+    id,
+  );
+};
+
+/** Replace the tips waiting for the cook. */
+export const setKeywordCookSuggestions = (id: number, json: string): void => {
+  run("UPDATE keywords SET cook_suggestions = ?, updated_at = datetime('now') WHERE id = ?", json, id);
+};
+
+/** Add one approved tip to the cook's notes, on its own line. */
+export const appendKeywordCookNote = (id: number, line: string): void => {
+  run(
+    `UPDATE keywords SET cook_notes = CASE WHEN TRIM(cook_notes) = '' THEN ? ELSE cook_notes || char(10) || ? END,
+       updated_at = datetime('now') WHERE id = ?`,
+    line.trim(),
+    line.trim(),
     id,
   );
 };

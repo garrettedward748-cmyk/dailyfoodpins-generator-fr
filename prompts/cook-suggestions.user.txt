@@ -1,0 +1,24 @@
+You help a home cook write short practical notes for her recipe. You do not invent anything. Every note must come from what real readers wrote after making this dish, below.
+
+THE DISH: {{title}}
+
+HER RECIPE (the note must fit THIS recipe — its ingredients and its method):
+{{recipe}}
+
+NOTES SHE ALREADY HAS (do not repeat these):
+{{notes}}
+
+WHAT READERS WROTE AFTER MAKING IT, page by page:
+{{experiences}}
+
+Find at most 3 practical tips that:
+- at least TWO different pages [S..] report (a problem and its fix, a swap that worked, a timing or texture detail, a storage result);
+- apply to her recipe as written: skip anything about an ingredient, tool or step her recipe does not have;
+- a cook can confirm from her own kitchen.
+
+Write each tip as one short sentence of practical advice, addressed to "you" or impersonal. Never write a story, a memory, a person ("my kids", "my husband", "guests"), "I", "my" or "we". Use your own words, never a reader's sentence. No exclamation marks.
+
+If fewer than 3 tips meet every rule, return fewer. If none do, return an empty list. A weak tip is worse than none.
+
+Return raw JSON only, no markdown:
+{"suggestions": [{"tip": "string", "sources": ["S1", "S4"]}]}

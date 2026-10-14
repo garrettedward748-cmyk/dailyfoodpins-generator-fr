@@ -128,6 +128,8 @@ import {
   setKeywordShareImages,
   setKeywordStatus,
   setKeywordCook,
+  setKeywordCookSuggestions,
+  appendKeywordCookNote,
   setLink,
   setLinkShareImages,
   upsertSite,
@@ -255,6 +257,8 @@ import { backupsPage } from './views/backups.js';
 import { BufferClient } from '../integrations/buffer.js';
 import { askPrompt } from '../llm/ask.js';
 import { tryParseJson } from '../pipeline/json.js';
+import { experiencesForPrompt, gatherExperiences, pickSuggestions, readSuggestions } from '../cook/suggest.js';
+import { webSearchKeys } from '../llm/web-search.js';
 import { backupPath, backupsDir, createBackup, listBackups, pruneBackups, requestRestart, stageRestore } from '../backup/index.js';
 import { buildSiteBackup, encodeSiteBackup, parseSiteBackup, restoreSiteBackup, siteBackupName, type RestoreReport } from '../backup/site.js';
 import { createWriteStream, mkdirSync } from 'node:fs';
@@ -4263,6 +4267,62 @@ export function buildServer(
     const body = formBody(request);
     setKeywordCook(id, asString(body.cook_recipe, ''), asString(body.cook_notes, ''));
     return redirect(reply, `/keywords/${id}`, { kind: 'ok', message: "Saved the cook's recipe and notes." });
+  });
+
+  /*
+   * Readers' tips for the cook to approve. Search, read what readers wrote,
+   * let the model point at tips two or more pages report, then hold its answer
+   * to the rules in code. Nothing reaches the notes until the cook approves it.
+   */
+  app.post('/keywords/:id/cook/suggest', async (request, reply) => {
+    const id = asNumber((request.params as { id: string }).id, 0);
+    const keyword = getKeyword(id);
+    if (!keyword) return redirect(reply, '/keywords', { kind: 'error', message: 'Keyword not found' });
+
+    const serperKey = settings.get('serper_api_key');
+    const ollamaKeys = webSearchKeys(encryptionKey, settings.get('llm_base_url'));
+    if (!serperKey.trim() && ollamaKeys.length === 0) {
+      return redirect(reply, `/keywords/${id}`, { kind: 'error', message: 'No Serper or ollama.com key is set, so there is nothing to search with.' });
+    }
+
+    const title = (keyword.spy_title || keyword.seed_keyword).trim();
+    try {
+      const pages = await gatherExperiences(title, { serperKey, serperState: serperStateIn(settings), ollamaKeys });
+      if (pages.length < 2) {
+        setKeywordCookSuggestions(id, '');
+        return redirect(reply, `/keywords/${id}`, { kind: 'warn', message: 'Not enough readers\' experiences were found for this dish to suggest anything reliable.' });
+      }
+      const answer = await askPrompt(settings, encryptionKey, 'cook-suggestions', {
+        title,
+        recipe: (keyword.cook_recipe ?? '').trim() || `${title}${keyword.spy_description ? ` — ${keyword.spy_description}` : ''} (no written recipe yet)`,
+        notes: (keyword.cook_notes ?? '').trim() || '(none yet)',
+        experiences: experiencesForPrompt(pages),
+      });
+      const picked = pickSuggestions(tryParseJson(answer.content)?.value, pages.length, keyword.cook_notes ?? '');
+      setKeywordCookSuggestions(id, picked.length ? JSON.stringify(picked) : '');
+      return redirect(reply, `/keywords/${id}`, picked.length
+        ? { kind: 'ok', message: `${picked.length} tip(s) from ${pages.length} pages of readers' experience. Approve only what is true in your kitchen.` }
+        : { kind: 'warn', message: 'No tip was reported by two or more pages and fits this recipe, so nothing is suggested.' });
+    } catch (err) {
+      return redirect(reply, `/keywords/${id}`, { kind: 'error', message: `Could not suggest tips: ${errorMessage(err)}` });
+    }
+  });
+
+  app.post('/keywords/:id/cook/suggest/:index/:verdict', async (request, reply) => {
+    const params = request.params as { id: string; index: string; verdict: string };
+    const id = asNumber(params.id, 0);
+    const keyword = getKeyword(id);
+    if (!keyword) return redirect(reply, '/keywords', { kind: 'error', message: 'Keyword not found' });
+
+    const list = readSuggestions(keyword.cook_suggestions);
+    const index = asNumber(params.index, -1);
+    const chosen = list[index];
+    if (chosen) {
+      if (params.verdict === 'accept') appendKeywordCookNote(id, chosen.tip);
+      list.splice(index, 1);
+      setKeywordCookSuggestions(id, list.length ? JSON.stringify(list) : '');
+    }
+    return redirect(reply, `/keywords/${id}#cook`);
   });
 
   app.post('/keywords/:id/link', async (request, reply) => {

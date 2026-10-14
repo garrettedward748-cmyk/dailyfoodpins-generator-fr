@@ -1296,6 +1296,14 @@ export const MIGRATIONS: Migration[] = [
       addColumn(db, 'keywords', 'cook_notes', "TEXT NOT NULL DEFAULT ''");
     },
   },
+  {
+    id: '056-keyword-cook-suggestions',
+    description: 'Tips from real readers waiting for the cook to approve or reject',
+    up(db) {
+      // JSON list of { tip, sources }; blank means none waiting.
+      addColumn(db, 'keywords', 'cook_suggestions', "TEXT NOT NULL DEFAULT ''");
+    },
+  },
 ];
 
 /* -- The runner ----------------------------------------------------------- */
