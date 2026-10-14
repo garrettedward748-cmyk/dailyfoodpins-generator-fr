@@ -66,3 +66,13 @@ describe('holding suggestions to the rules', () => {
     expect(readSuggestions('[{"tip":"x","sources":2}]')).toEqual([{ tip: 'x', sources: 2 }]);
   });
 });
+
+describe('saying what happened', () => {
+  it('names why every proposed tip was dropped', async () => {
+    const { describeRun, emptyReport, pickSuggestions } = await import('../src/cook/suggest.js');
+    const report = emptyReport();
+    pickSuggestions({ suggestions: [{ tip: 'Drain frozen strawberries before mixing them in.', sources: ['S1'] }] }, 3, '', report);
+    const pages = [1, 2, 3].map((i) => ({ title: 't', url: `https://a${i}.com`, experiences: ['x', 'y'] }));
+    expect(describeRun(pages, report, 0)).toBe('Read 6 reader comment(s) on 3 page(s). The model proposed 1; kept 0, dropped 1 reported by only one page.');
+  });
+});

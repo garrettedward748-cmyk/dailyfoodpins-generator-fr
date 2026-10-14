@@ -257,7 +257,7 @@ import { backupsPage } from './views/backups.js';
 import { BufferClient } from '../integrations/buffer.js';
 import { askPrompt } from '../llm/ask.js';
 import { tryParseJson } from '../pipeline/json.js';
-import { experiencesForPrompt, gatherExperiences, pickSuggestions, readSuggestions } from '../cook/suggest.js';
+import { describeRun, emptyReport, experiencesForPrompt, gatherExperiences, pickSuggestions, readSuggestions } from '../cook/suggest.js';
 import { webSearchKeys } from '../llm/web-search.js';
 import { backupPath, backupsDir, createBackup, listBackups, pruneBackups, requestRestart, stageRestore } from '../backup/index.js';
 import { buildSiteBackup, encodeSiteBackup, parseSiteBackup, restoreSiteBackup, siteBackupName, type RestoreReport } from '../backup/site.js';
@@ -4290,19 +4290,23 @@ export function buildServer(
       const pages = await gatherExperiences(title, { serperKey, serperState: serperStateIn(settings), ollamaKeys });
       if (pages.length < 2) {
         setKeywordCookSuggestions(id, '');
-        return redirect(reply, `/keywords/${id}`, { kind: 'warn', message: 'Not enough readers\' experiences were found for this dish to suggest anything reliable.' });
+        const comments = pages.reduce((n, p) => n + p.experiences.length, 0);
+        return redirect(reply, `/keywords/${id}`, { kind: 'warn', message: `Found reader comments on only ${pages.length} page(s) (${comments} comment(s)); at least 2 pages are needed to suggest anything. Many recipe sites block automated reading.` });
       }
       const answer = await askPrompt(settings, encryptionKey, 'cook-suggestions', {
         title,
-        recipe: (keyword.cook_recipe ?? '').trim() || `${title}${keyword.spy_description ? ` — ${keyword.spy_description}` : ''} (no written recipe yet)`,
+        recipe: (keyword.cook_recipe ?? '').trim()
+          || `(No written recipe yet. Judge fit against the classic home version of ${title}${keyword.spy_description ? ` — ${keyword.spy_description}` : ''}.)`,
         notes: (keyword.cook_notes ?? '').trim() || '(none yet)',
         experiences: experiencesForPrompt(pages),
       });
-      const picked = pickSuggestions(tryParseJson(answer.content)?.value, pages.length, keyword.cook_notes ?? '');
+      const report = emptyReport();
+      const picked = pickSuggestions(tryParseJson(answer.content)?.value, pages.length, keyword.cook_notes ?? '', report);
       setKeywordCookSuggestions(id, picked.length ? JSON.stringify(picked) : '');
+      const summary = describeRun(pages, report, picked.length);
       return redirect(reply, `/keywords/${id}`, picked.length
-        ? { kind: 'ok', message: `${picked.length} tip(s) from ${pages.length} pages of readers' experience. Approve only what is true in your kitchen.` }
-        : { kind: 'warn', message: 'No tip was reported by two or more pages and fits this recipe, so nothing is suggested.' });
+        ? { kind: 'ok', message: `${summary} Approve only what is true in your kitchen.` }
+        : { kind: 'warn', message: summary });
     } catch (err) {
       return redirect(reply, `/keywords/${id}`, { kind: 'error', message: `Could not suggest tips: ${errorMessage(err)}` });
     }

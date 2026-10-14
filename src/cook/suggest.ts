@@ -182,17 +182,47 @@ const STORY = /\b(?:husband|wife|son|daughter|kids?|children|family|mom|mother|d
  * different real pages, phrased as advice rather than a story. Sorted by how
  * many pages report it; at most MAX_SUGGESTIONS.
  */
-export function pickSuggestions(parsed: unknown, pageCount: number, existingNotes = ''): CookSuggestion[] {
+/** Why the model's tips were kept or dropped, for the message the cook sees. */
+export interface PickReport {
+  proposed: number;
+  unreadable: boolean;
+  oneSource: number;
+  personal: number;
+  repeated: number;
+  badLength: number;
+}
+
+export const emptyReport = (): PickReport => ({ proposed: 0, unreadable: false, oneSource: 0, personal: 0, repeated: 0, badLength: 0 });
+
+export function pickSuggestions(
+  parsed: unknown,
+  pageCount: number,
+  existingNotes = '',
+  report: PickReport = emptyReport(),
+): CookSuggestion[] {
   const list = (parsed as { suggestions?: unknown })?.suggestions;
-  if (!Array.isArray(list)) return [];
+  if (!Array.isArray(list)) {
+    report.unreadable = true;
+    return [];
+  }
+  report.proposed = list.length;
 
   const already = existingNotes.toLowerCase();
   const out: CookSuggestion[] = [];
   for (const item of list) {
     const tip = typeof (item as { tip?: unknown })?.tip === 'string' ? (item as { tip: string }).tip.replace(/\s+/g, ' ').trim() : '';
-    if (tip.length < 15 || tip.length > 240) continue;
-    if (FIRST_PERSON.test(tip) || STORY.test(tip)) continue;
-    if (already.includes(tip.toLowerCase())) continue;
+    if (tip.length < 15 || tip.length > 240) {
+      report.badLength++;
+      continue;
+    }
+    if (FIRST_PERSON.test(tip) || STORY.test(tip)) {
+      report.personal++;
+      continue;
+    }
+    if (already.includes(tip.toLowerCase())) {
+      report.repeated++;
+      continue;
+    }
 
     const raw = (item as { sources?: unknown })?.sources;
     const ids = new Set(
@@ -200,8 +230,14 @@ export function pickSuggestions(parsed: unknown, pageCount: number, existingNote
         .map((s) => Number(String(s).replace(/^S/i, '')))
         .filter((n) => Number.isInteger(n) && n >= 1 && n <= pageCount),
     );
-    if (ids.size < MIN_SOURCES) continue;
-    if (out.some((o) => o.tip.toLowerCase() === tip.toLowerCase())) continue;
+    if (ids.size < MIN_SOURCES) {
+      report.oneSource++;
+      continue;
+    }
+    if (out.some((o) => o.tip.toLowerCase() === tip.toLowerCase())) {
+      report.repeated++;
+      continue;
+    }
     out.push({ tip, sources: ids.size });
   }
   return out.sort((a, b) => b.sources - a.sources).slice(0, MAX_SUGGESTIONS);
@@ -218,4 +254,19 @@ export function readSuggestions(json: string | null | undefined): CookSuggestion
   } catch {
     return [];
   }
+}
+
+/** One line saying what happened, so an empty result is never a mystery. */
+export function describeRun(pages: ExperiencePage[], report: PickReport, kept: number): string {
+  const comments = pages.reduce((n, p) => n + p.experiences.length, 0);
+  const read = `Read ${comments} reader comment(s) on ${pages.length} page(s).`;
+  if (report.unreadable) return `${read} The model's answer could not be read; try again.`;
+  if (report.proposed === 0) return `${read} The model found no tip that two pages share and that fits this recipe.`;
+  const dropped = [
+    report.oneSource && `${report.oneSource} reported by only one page`,
+    report.personal && `${report.personal} written as a personal story`,
+    report.repeated && `${report.repeated} already in the notes`,
+    report.badLength && `${report.badLength} too short or too long`,
+  ].filter(Boolean);
+  return `${read} The model proposed ${report.proposed}; kept ${kept}${dropped.length ? `, dropped ${dropped.join(', ')}` : ''}.`;
 }
