@@ -1,4 +1,4 @@
-import { research as ollamaResearch } from '../llm/web-search.js';
+import { fetchPageText, research as ollamaResearch } from '../llm/web-search.js';
 import { serperRotating, type ResearchOptions } from '../research/keywords.js';
 import { createLogger, errorMessage } from '../lib/logger.js';
 
@@ -108,59 +108,101 @@ export interface GatherOptions extends ResearchOptions {
   maxPages?: number;
 }
 
+/** Lines that belong to a comment form, not to a reader. */
+const FORM_LINE = /^(reply|leave a (reply|comment)|post comment|submit|cancel reply|your email address|required fields|save my name|notify me|rate this recipe|recipe rating|log in|sign up|load more|show more|\d+ (comments?|reviews?|replies))\b/i;
+
+/** Where a page's reader section starts, in the page reader's text. */
+const COMMENTS_START =
+  /(?:^|\n)\s*(?:#{1,4}\s*)?(?:\d+\s+)?(?:comments?|reviews?|responses?|ratings? (?:and|&) reviews?|what (?:readers|people) are saying)\s*(?:\(\d+\))?\s*(?:\n|$)/i;
+
+/**
+ * Readers' comments in a page's plain text, from the page reader.
+ *
+ * Only what comes after the page's comments or reviews heading is taken: the
+ * author's own text above it is not a reader's experience. A page with no
+ * such heading gives nothing rather than risk passing the author off as one.
+ */
+export function experiencesFromText(text: string, max = 15): string[] {
+  const at = text.search(COMMENTS_START);
+  if (at === -1) return [];
+  const section = text.slice(at).split(/\n+/).slice(1);
+  const found = section
+    .map((line) => line.replace(/^[#>*\-\s]+/, '').replace(/\[(.*?)\]\([^)]*\)/g, '$1').replace(/\s+/g, ' ').trim())
+    .filter((line) => usable(line) && !FORM_LINE.test(line));
+  return [...new Set(found)].slice(0, max);
+}
+
 /**
  * Find the top recipe pages for the dish and read what their readers wrote.
- * Pages with no reader experience are dropped. [] when no search answered.
+ *
+ * Two searches (the dish, then the dish with "reviews") so more pages are
+ * tried. Each page is read as HTML first; when its comments are not in the
+ * HTML (blocked, or loaded later by the browser), the page reader gets its
+ * text and the comment section is taken from that. Pages with no reader
+ * experience are dropped. [] when no search answered.
  */
 export async function gatherExperiences(
   query: string,
   options: GatherOptions,
   fetchImpl: typeof fetch = fetch,
 ): Promise<ExperiencePage[]> {
-  const maxPages = options.maxPages ?? 8;
+  const maxPages = options.maxPages ?? 15;
   const skip = (options.skipDomain ?? '').replace(/^www\./, '').toLowerCase();
   const keep = (url: string) => {
     const h = host(url);
     return Boolean(h) && !NOT_A_PAGE.test(h) && !(skip && h.endsWith(skip));
   };
 
-  if (options.serperKey?.trim()) {
+  const readOne = async (url: string, title: string): Promise<ExperiencePage | null> => {
     try {
-      const answer = await serperRotating(`${query} recipe`, options, fetchImpl);
-      const results = answer.organic.filter((o) => keep(o.url)).slice(0, maxPages);
-      const pages = await Promise.all(
-        results.map(async (r): Promise<ExperiencePage | null> => {
-          try {
-            const response = await fetchImpl(r.url, {
-              headers: { 'User-Agent': BROWSER, Accept: 'text/html' },
-              signal: AbortSignal.timeout(12_000),
-            });
-            if (!response.ok) return null;
-            const experiences = experiencesFromHtml(await response.text());
-            return experiences.length ? { title: r.title, url: r.url, experiences } : null;
-          } catch {
-            return null;
-          }
-        }),
-      );
-      const read = pages.filter((p): p is ExperiencePage => p !== null);
-      if (read.length > 0) return read;
-    } catch (err) {
-      log.warn(`Serper failed for "${query}": ${errorMessage(err)}`);
+      const response = await fetchImpl(url, {
+        headers: { 'User-Agent': BROWSER, Accept: 'text/html' },
+        signal: AbortSignal.timeout(12_000),
+      });
+      if (response.ok) {
+        const experiences = experiencesFromHtml(await response.text());
+        if (experiences.length) return { title, url, experiences };
+      }
+    } catch {
+      // Blocked or slow: the page reader below may still get it.
     }
+    if (options.ollamaKeys.length === 0) return null;
+    const page = await fetchPageText(url, options.ollamaKeys).catch(() => null);
+    const experiences = page ? experiencesFromText(page.content) : [];
+    return experiences.length ? { title: page?.title || title, url, experiences } : null;
+  };
+
+  if (options.serperKey?.trim()) {
+    const found = new Map<string, string>();
+    for (const q of [`${query} recipe`, `${query} recipe reviews`]) {
+      try {
+        const answer = await serperRotating(q, options, fetchImpl);
+        for (const o of answer.organic) {
+          const key = o.url.replace(/[#?].*$/, '').replace(/\/$/, '');
+          if (keep(o.url) && !found.has(key)) found.set(key, o.title);
+        }
+      } catch (err) {
+        log.warn(`Serper failed for "${q}": ${errorMessage(err)}`);
+      }
+    }
+    const targets = [...found].slice(0, maxPages);
+    const pages = (await Promise.all(targets.map(([url, title]) => readOne(url, title)))).filter(
+      (p): p is ExperiencePage => p !== null,
+    );
+    log.info(`"${query}": reader comments on ${pages.length} of ${targets.length} page(s)`);
+    if (pages.length > 0) return pages;
   }
 
-  // Without Serper, or when no page could be read: the page reader's text,
-  // which keeps the comments on many sites. The model is told to use only
-  // what readers wrote in it.
+  // Without Serper, or when no page gave comments: Ollama's search and reader.
   if (options.ollamaKeys.length > 0) {
     const sources = await ollamaResearch(`${query} recipe reviews`, options.ollamaKeys, {
       skipDomain: options.skipDomain,
-      maxPages: Math.min(maxPages, 6),
+      maxPages: Math.min(maxPages, 8),
     });
     return sources
       .filter((s) => keep(s.url))
-      .map((s) => ({ title: s.title, url: s.url, experiences: [s.content.slice(0, 3000)] }));
+      .map((s) => ({ title: s.title, url: s.url, experiences: experiencesFromText(s.content) }))
+      .filter((p) => p.experiences.length > 0);
   }
   return [];
 }

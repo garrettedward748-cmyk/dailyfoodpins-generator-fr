@@ -76,3 +76,24 @@ describe('saying what happened', () => {
     expect(describeRun(pages, report, 0)).toBe('Read 6 reader comment(s) on 3 page(s). The model proposed 1; kept 0, dropped 1 reported by only one page.');
   });
 });
+
+describe('reading comments from page text', () => {
+  it('takes only what follows the comments heading', async () => {
+    const { experiencesFromText } = await import('../src/cook/suggest.js');
+    const text = [
+      '# Strawberry Upside Down Cake',
+      'This is the author telling a long story about strawberries in June.',
+      '## 24 Comments',
+      'Sarah says: I used frozen berries and drained them first, it set perfectly.',
+      'Reply',
+      'Leave a Reply',
+      'Your email address will not be published.',
+    ].join('\n');
+    expect(experiencesFromText(text)).toEqual(['Sarah says: I used frozen berries and drained them first, it set perfectly.']);
+  });
+
+  it('gives nothing when the page has no comments heading', async () => {
+    const { experiencesFromText } = await import('../src/cook/suggest.js');
+    expect(experiencesFromText('Just the author writing about the cake for a long while.')).toEqual([]);
+  });
+});
