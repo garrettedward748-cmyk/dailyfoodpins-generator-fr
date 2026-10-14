@@ -829,7 +829,7 @@ export function sitesPage(
                       : html`<span class="badge muted">automatic</span>`}
                   </td>
                   <td>${s.daily_target}</td>
-                  <td class="nowrap">${formatMinutes(s.interval_minutes)}</td>
+                  <td class="nowrap">${formatMinutes(s.interval_minutes)}${(s.interval_max_minutes ?? 0) > s.interval_minutes ? `–${formatMinutes(s.interval_max_minutes!)}` : ''}</td>
                   <td class="nowrap small">
                     ${isSocialOnly(s)
                       ? raw('')
@@ -1238,13 +1238,13 @@ function siteForm(site: SiteRow | null): Html {
 
   // Show the interval in the largest unit that divides evenly, so 1440
   // minutes comes back as "1 day" rather than "1440 minutes".
+  // Both ends of the range share one unit: the largest that divides both.
   const minutes = site?.interval_minutes ?? 480;
-  const [amount, unit] =
-    minutes % 1440 === 0 && minutes >= 1440
-      ? [minutes / 1440, 'days']
-      : minutes % 60 === 0 && minutes >= 60
-        ? [minutes / 60, 'hours']
-        : [minutes, 'minutes'];
+  const maxMinutes = (site?.interval_max_minutes ?? 0) > minutes ? site!.interval_max_minutes! : 0;
+  const fits = (factor: number) => minutes % factor === 0 && maxMinutes % factor === 0 && minutes >= factor;
+  const [factor, unit] = fits(1440) ? [1440, 'days'] : fits(60) ? [60, 'hours'] : [1, 'minutes'];
+  const amount = minutes / factor;
+  const maxAmount = maxMinutes ? maxMinutes / factor : '';
 
   const secretField = (
     name: string,
@@ -1300,17 +1300,20 @@ function siteForm(site: SiteRow | null): Html {
           <div class="help">Articles per day. 0 means never publish.</div>
         </div>
         <div class="field">
-          <label>Minimum gap between posts</label>
-          <div class="row" style="flex-wrap:nowrap">
+          <label>Gap between posts</label>
+          <div class="row" style="flex-wrap:nowrap;align-items:center">
             <input type="number" name="interval_amount" min="0" step="1" value="${amount}"
-                   style="flex:1" />
+                   style="flex:1" aria-label="From" />
+            <span class="muted small">to</span>
+            <input type="number" name="interval_max_amount" min="0" step="1" value="${maxAmount}"
+                   placeholder="same" style="flex:1" aria-label="To" />
             <select name="interval_unit" style="width:auto">
               <option value="minutes" ${unit === 'minutes' ? raw('selected') : raw('')}>minutes</option>
               <option value="hours" ${unit === 'hours' ? raw('selected') : raw('')}>hours</option>
               <option value="days" ${unit === 'days' ? raw('selected') : raw('')}>days</option>
             </select>
           </div>
-          <div class="help">Any cadence: 20 minutes, 90 minutes, 3 days.</div>
+          <div class="help">2 to 4 hours: after each post, a random gap between the two. Leave "to" empty for a fixed gap.</div>
         </div>
       </div>
 

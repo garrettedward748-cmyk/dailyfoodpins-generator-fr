@@ -49,6 +49,8 @@ export interface SiteRow {
   buffer_token_encrypted: string;
   daily_target: number;
   interval_minutes: number;
+  /** Upper end of the gap range; 0 or not above interval_minutes = a fixed gap. */
+  interval_max_minutes?: number;
   created_at: string;
   updated_at: string;
 }
@@ -539,6 +541,8 @@ export interface SiteInput {
   project_id?: string;
   daily_target: number;
   interval_minutes: number;
+  /** Upper end of the gap range. Left undefined, the stored value is kept; 0 = fixed gap. */
+  interval_max_minutes?: number;
   /** Left undefined, the stored value is kept — these are not on every form. */
   paused_reason?: string;
   paused_until?: string | null;
@@ -565,7 +569,7 @@ export function upsertSite(input: SiteInput, key: Buffer, id?: number): number {
   if (existing) {
     run(
       `UPDATE sites SET name = ?, domain = ?, status = ?, pin_username = ?,
-         project_id = ?, daily_target = ?, interval_minutes = ?,
+         project_id = ?, daily_target = ?, interval_minutes = ?, interval_max_minutes = ?,
          paused_reason = ?, paused_until = ?, auto_publish = ?, writing_style = ?,
          api_token_encrypted = ?, buffer_token_encrypted = ?,
          updated_at = datetime('now')
@@ -577,6 +581,7 @@ export function upsertSite(input: SiteInput, key: Buffer, id?: number): number {
       input.project_id ?? existing.project_id,
       input.daily_target,
       input.interval_minutes,
+      input.interval_max_minutes ?? existing.interval_max_minutes ?? 0,
       // An active site holds no pause reason. Leaving one behind means the
       // Sites page explains a pause that is not in effect.
       input.status === 'active' ? '' : (input.paused_reason ?? existing.paused_reason),
@@ -594,9 +599,9 @@ export function upsertSite(input: SiteInput, key: Buffer, id?: number): number {
 
   return run(
     `INSERT INTO sites (name, domain, status, pin_username, project_id,
-       daily_target, interval_minutes, paused_reason, paused_until, auto_publish,
+       daily_target, interval_minutes, interval_max_minutes, paused_reason, paused_until, auto_publish,
        writing_style, api_token_encrypted, buffer_token_encrypted)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     input.name,
     input.domain,
     input.status,
@@ -604,6 +609,7 @@ export function upsertSite(input: SiteInput, key: Buffer, id?: number): number {
     input.project_id ?? '',
     input.daily_target,
     input.interval_minutes,
+    input.interval_max_minutes ?? 0,
     input.status === 'active' ? '' : (input.paused_reason ?? ''),
     input.status === 'active' ? null : (input.paused_until ?? null),
     fromBool(input.auto_publish ?? true),
@@ -660,6 +666,7 @@ export function loadSiteViews(dayKey: string, timezone: string): SiteView[] {
     status: r.status,
     dailyTarget: r.daily_target,
     intervalMinutes: r.interval_minutes,
+    intervalMaxMinutes: r.interval_max_minutes ?? 0,
     publishedToday: Number(r.published_today ?? 0),
     lastPublishAt: r.last_publish_at,
     lastAttemptAt: r.last_attempt_at,

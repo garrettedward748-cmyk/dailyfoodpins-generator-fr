@@ -12,6 +12,12 @@ export interface SiteView {
   dailyTarget: number;
   /** Minimum gap between posts, in minutes. */
   intervalMinutes: number;
+  /**
+   * Upper end of the gap, in minutes. Above intervalMinutes, each gap is a
+   * random length between the two (see gapAfter); 0 or not above it, the gap
+   * is intervalMinutes exactly. Optional so older callers keep a fixed gap.
+   */
+  intervalMaxMinutes?: number;
   /** Derived: COUNT(runs published today). Never stored. */
   publishedToday: number;
   /** Derived: MAX(runs.published_at). Never stored. ISO string or null. */

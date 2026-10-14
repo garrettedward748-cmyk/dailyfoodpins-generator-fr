@@ -110,11 +110,12 @@ export function evaluateSite(site: SiteView, options: SelectorOptions): SiteElig
     return reject(`Unreadable last_publish value: ${JSON.stringify(site.lastPublishAt)}`);
   }
 
-  if (elapsed !== null && elapsed < site.intervalMinutes) {
+  const gap = gapAfter(site);
+  if (elapsed !== null && elapsed < gap) {
     return reject(
       `Minimum interval not elapsed (${formatMinutes(Math.floor(elapsed))} of ` +
-        `${formatMinutes(site.intervalMinutes)}; ` +
-        `${formatMinutes(Math.ceil(site.intervalMinutes - elapsed))} remaining)`,
+        `${formatMinutes(gap)}; ` +
+        `${formatMinutes(Math.ceil(gap - elapsed))} remaining)`,
     );
   }
 
@@ -293,4 +294,25 @@ export function selectTask(
     },
     decisions,
   };
+}
+
+/**
+ * The gap this site waits after its last post.
+ *
+ * With a range (intervalMaxMinutes above intervalMinutes) the gap is a random
+ * length between the two, so posts do not land at clockwork times. It is
+ * drawn from the site and the time of its last post rather than stored: every
+ * tick until the next post gets the same answer, and a new post draws anew.
+ */
+export function gapAfter(site: Pick<SiteView, 'id' | 'intervalMinutes' | 'intervalMaxMinutes' | 'lastPublishAt'>): number {
+  const min = Math.max(0, site.intervalMinutes);
+  const max = site.intervalMaxMinutes ?? 0;
+  if (max <= min || site.lastPublishAt === null) return min;
+  // FNV-1a over "site|last post": spread evenly, the same every time.
+  let h = 0x811c9dc5;
+  for (const ch of `${site.id}|${site.lastPublishAt}`) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return min + (h % (max - min + 1));
 }

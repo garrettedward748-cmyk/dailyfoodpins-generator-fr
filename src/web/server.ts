@@ -1704,6 +1704,17 @@ export function buildServer(
     return Math.round(amount * factor);
   };
 
+  /** The upper end of the range, in the same unit; empty or not above the lower end = fixed gap (0). */
+  const readIntervalMaxMinutes = (body: Record<string, unknown>): number => {
+    const raw = asString(body.interval_max_amount).trim();
+    if (raw === '') return 0;
+    const amount = Math.max(0, asNumber(raw, 0));
+    const unit = asString(body.interval_unit, 'hours');
+    const factor = unit === 'minutes' ? 1 : unit === 'days' ? 1440 : 60;
+    const max = Math.round(amount * factor);
+    return max > readIntervalMinutes(body) ? max : 0;
+  };
+
   const saveSite = (body: Record<string, unknown>, id?: number): number =>
     upsertSite(
       {
@@ -1717,6 +1728,8 @@ export function buildServer(
         project_id: 'project_id' in body ? asString(body.project_id).trim() : undefined,
         daily_target: Math.max(0, asNumber(body.daily_target, 0)),
         interval_minutes: readIntervalMinutes(body),
+        // Only the site form carries it; elsewhere the stored range is kept.
+        interval_max_minutes: 'interval_max_amount' in body ? readIntervalMaxMinutes(body) : undefined,
         // Absent, not blank. The site form no longer carries these — pausing
         // and publishing mode are their own controls on the site page — and
         // upsertSite reads undefined as "keep what is stored". Reading them

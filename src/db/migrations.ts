@@ -1318,6 +1318,14 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    id: '058-site-interval-range',
+    description: 'Gap between posts as a range: a random gap between the two limits after each post',
+    up(db) {
+      // 0: no range, the gap is interval_minutes exactly, as before.
+      addColumn(db, 'sites', 'interval_max_minutes', 'INTEGER NOT NULL DEFAULT 0');
+    },
+  },
 ];
 
 /* -- The runner ----------------------------------------------------------- */
