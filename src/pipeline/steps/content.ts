@@ -33,15 +33,25 @@ const log = createLogger('content');
  * same article with the same pictures.
  */
 function spyContext(ctx: import('../context.js').PipelineContext) {
+  const cookRecipe = (ctx.keyword.cook_recipe ?? '').trim();
+  const cookNotes = (ctx.keyword.cook_notes ?? '').trim();
   return {
     group: ctx.keyword.seed_keyword,
     title: ctx.keyword.spy_title,
     description: ctx.keyword.spy_description,
     annotation: [
       halalOnly() ? HALAL_RULE : '',
+      // The cook's own recipe outranks everything below it: her ingredients,
+      // amounts and steps are the dish. Search results only fill what she left out.
+      cookRecipe
+        ? `THE COOK'S OWN RECIPE — this is how she makes it in her kitchen. Keep her ingredients, amounts, times, temperatures and order of steps exactly; only fill in what she left out, and never contradict her:\n${cookRecipe}`
+        : '',
+      cookNotes ? `THE COOK'S NOTES — true facts from her kitchen; let her tips and variations reflect them:\n${cookNotes}` : '',
       ctx.keyword.annotation,
       ctx.research?.brief
-        ? `WHAT THE TOP GOOGLE RESULTS SAY — use these facts (ingredients, amounts, times, temperatures), cover what they cover, add what they miss; never copy their wording:\n${ctx.research.brief}`
+        ? cookRecipe
+          ? `WHAT THE TOP GOOGLE RESULTS SAY — use only to fill gaps in the cook's recipe and to cover questions people ask; where they disagree with her, she is right; never copy their wording:\n${ctx.research.brief}`
+          : `WHAT THE TOP GOOGLE RESULTS SAY — use these facts (ingredients, amounts, times, temperatures), cover what they cover, add what they miss; never copy their wording:\n${ctx.research.brief}`
         : '',
     ]
       .filter(Boolean)

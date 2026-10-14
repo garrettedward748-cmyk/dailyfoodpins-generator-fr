@@ -31,6 +31,11 @@ export interface RuleContext {
   times: RecipeTimes | null;
   /** Every time the recipe itself mentions, in minutes. */
   sourceMinutes: Set<number>;
+  /**
+   * The cook wrote notes for this keyword, so the article may speak in her
+   * first person where it repeats them. Absent or false: no narrator, as before.
+   */
+  firstPerson?: boolean;
 }
 
 /** Everything the rules need to know about the recipe, from the recipe. */
@@ -158,6 +163,7 @@ export function proseProblems(
   where: string,
   reader = false,
   style: WritingStyle = 'us',
+  firstPerson = false,
 ): string[] {
   const problems: string[] = [];
   const clean = straighten(text);
@@ -172,7 +178,7 @@ export function proseProblems(
   }
   if (clean.includes('!')) problems.push(`${where}: no exclamation marks`);
   if (EMOJI.test(clean)) problems.push(`${where}: no emoji`);
-  if (!reader && (fr ? FIRST_PERSON_FR : FIRST_PERSON).test(clean)) {
+  if (!reader && !firstPerson && (fr ? FIRST_PERSON_FR : FIRST_PERSON).test(clean)) {
     problems.push(
       fr
         ? `${where}: no first person ("je", "j'", "mon", "ma", "mes") — the cook is "vous", and there is no narrator`
@@ -458,7 +464,7 @@ export function checkPart(
 
   for (const { where, text, html } of proseOf(part, fixed)) {
     const plain = html ? plainText(text) : text;
-    problems.push(...proseProblems(plain, where, /^question \d+$/.test(where), rules.style));
+    problems.push(...proseProblems(plain, where, /^question \d+$/.test(where), rules.style, rules.firstPerson === true));
     for (const p of temperatureProblems(plain, rules.style, where)) problems.push(`${p.where}: ${p.detail}`);
     for (const p of measureProblems(plain, rules.style, where)) problems.push(`${p.where}: ${p.detail}`);
   }

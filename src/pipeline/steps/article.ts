@@ -67,6 +67,33 @@ function promptVariables(
   };
 }
 
+/** What the cook wrote for this keyword, trimmed; '' when nothing. */
+function cookNotesOf(ctx: PipelineContext): string {
+  return (ctx.keyword.cook_notes ?? '').trim();
+}
+
+/**
+ * The cook's notes, as the article prompts are told them.
+ *
+ * The one exception to "no anecdotes, no narrator": the article may speak in
+ * her first person, but only to repeat what she wrote. A memory or result the
+ * model makes up is a lie to the reader, which is worse than having none.
+ */
+export function cookBlock(notes: string): string {
+  if (!notes) return '';
+  return (
+    "THE COOK'S OWN NOTES — written by the person who made this dish in her own kitchen.\n"
+    + 'This is the one exception to the rule against first person and anecdotes: where this\n'
+    + 'part has prose (an introduction, a section, a note), include what these notes say, in\n'
+    + 'the first person ("I", "my"), keeping every fact exactly as she wrote it. Use ONLY what\n'
+    + 'is written here. Never invent another memory, mistake, person, place, quantity or result.\n'
+    + 'Everything else keeps the usual voice, addressed to "you".\n'
+    + '---\n'
+    + notes
+    + '\n---'
+  );
+}
+
 type PartResult = { data: Record<string, unknown>; endpoint: string; model: string };
 
 /**
@@ -100,7 +127,10 @@ async function generatePart(
     const promptName = attempts[i]!;
 
     try {
-      const result = await ctx.prompt(promptName, promptVariables(input, structure, rules, feedback));
+      // The cook's notes ride in the same slot as retry feedback, at the end of
+      // every part prompt and its fallback, so an edited prompt still gets them.
+      const note = [cookBlock(cookNotesOf(ctx)), feedback].filter(Boolean).join('\n\n');
+      const result = await ctx.prompt(promptName, promptVariables(input, structure, rules, note));
       const parsed = await parseJsonOrRepair<Record<string, unknown>>(ctx, result.content, `${promptName} output`);
       const checked = checkPart(part, parsed, rules);
 
@@ -149,7 +179,10 @@ export const generateArticle: Step<ArticleInput, Record<string, unknown>> = {
 
     // The site's spelling and units, and the recipe's times, fixed once so all
     // three parts are held to the same ones.
-    const rules = ruleContextFor(normaliseStyle(ctx.site.writing_style), input.recipe);
+    const rules = {
+      ...ruleContextFor(normaliseStyle(ctx.site.writing_style), input.recipe),
+      firstPerson: cookNotesOf(ctx) !== '',
+    };
 
     const part1 = await generatePart(ctx, 'part-1', input, structure, rules);
     const part2 = await generatePart(ctx, 'part-2', input, structure, rules);
