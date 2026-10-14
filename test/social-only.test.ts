@@ -226,6 +226,11 @@ describe('social-only accounts: a run end to end', () => {
     const steps = listSteps(runId).map((s) => s.step);
     expect(steps).toContain('post-article');
     expect(steps).not.toContain('generate-article');
+    // No site steps: straight from the duplicate check to the recipe, titled from the keyword.
+    expect(steps).not.toContain('fetch-categories');
+    expect(steps).not.toContain('fetch-cuisines');
+    expect(world.promptCalls['spy-validation'] ?? 0).toBe(0);
+    expect(steps).toContain('validate-spy');
     expect(steps).toContain('publish-to-buffer');
 
     // The pin went to Buffer with the platform's picture and no link.

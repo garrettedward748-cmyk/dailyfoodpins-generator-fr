@@ -102,9 +102,15 @@ export async function executePipeline(ctx: PipelineContext): Promise<PipelineOut
 
   try {
     await runStep(ctx, checkNotOnSite, undefined);
-    const categories = await runStep(ctx, fetchCategories, undefined);
-    const cuisines = await runStep(ctx, fetchCuisines, undefined);
-    const seo = await runStep(ctx, validateSpy, { categories, cuisines });
+    // A social-only account has no site to file an article under: no
+    // categories, no cuisines, no SEO description. It goes straight to the
+    // recipe, titled from the keyword.
+    const seo = isSocialOnly(ctx.site)
+      ? await runStep(ctx, socialSeoStep, undefined)
+      : await runStep(ctx, validateSpy, {
+          categories: await runStep(ctx, fetchCategories, undefined),
+          cuisines: await runStep(ctx, fetchCuisines, undefined),
+        });
     ctx.research = await runStep(ctx, researchGoogle, seo);
     const recipe = await runStep(ctx, generateRecipe, seo);
     const imagePrompts = await runStep(ctx, generateImagePrompts, { seo, recipe });
@@ -296,6 +302,34 @@ function markPairDone(ctx: PipelineContext): void {
 }
 
 export { PipelineContext };
+
+/**
+ * The SEO step of a social-only account: no model and no site taxonomy. The
+ * keyword's own title is the recipe's title. Recorded under the same name as
+ * the real step, so every later tool that reads a run's SEO (the pin, the
+ * collage, More posts, reels) finds it.
+ */
+export const socialSeoStep: Step<void, SeoData> = {
+  name: 'validate-spy',
+  title: 'No website: title taken from the keyword',
+  async run(ctx) {
+    const title = ctx.keyword.spy_title.trim();
+    if (!title) {
+      throw new SpyRejectedError(
+        'This keyword has no spy title, so there is nothing to say which dish it is. ' +
+          'The seed keyword is a topic group, not a recipe.',
+      );
+    }
+    return {
+      keyword: title.toLowerCase(),
+      title,
+      // What the posts' "About it" line reads; the keyword's own note when it has one.
+      description: (ctx.keyword.spy_description ?? '').trim() || title,
+      category: '',
+      cuisine: '',
+    };
+  },
+};
 
 /**
  * The article step of a social-only account: nothing is published, and what
