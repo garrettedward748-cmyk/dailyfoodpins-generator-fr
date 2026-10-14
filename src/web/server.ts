@@ -196,7 +196,7 @@ import {
   exportSitesWithCredentials,
   type Dataset,
 } from '../db/exports.js';
-import { createReadStream, existsSync } from 'node:fs';
+import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   deleteEndpoint,
@@ -5660,10 +5660,29 @@ export function buildServer(
     const path = join(mediaDir(), name);
     if (!existsSync(path)) return reply.status(404).send('Not found');
     const extension = name.split('.').pop() ?? '';
-    return reply
+    // Facebook and Buffer fetch videos in ranges and want the size up front:
+    // a chunked stream with no length is "media could not be processed".
+    const size = statSync(path).size;
+    reply
       .type(MEDIA_TYPES[extension] ?? 'application/octet-stream')
       .header('Cache-Control', 'public, max-age=86400')
-      .send(createReadStream(path));
+      .header('Accept-Ranges', 'bytes');
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(request.headers.range ?? '').trim());
+    if (range && (range[1] || range[2])) {
+      let start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+      let end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+      if (start >= size || start > end) {
+        return reply.status(416).header('Content-Range', `bytes */${size}`).send();
+      }
+      start = Math.max(0, start);
+      end = Math.max(start, end);
+      return reply
+        .status(206)
+        .header('Content-Range', `bytes ${start}-${end}/${size}`)
+        .header('Content-Length', String(end - start + 1))
+        .send(createReadStream(path, { start, end }));
+    }
+    return reply.header('Content-Length', String(size)).send(createReadStream(path));
   });
 
   app.get('/healthz', async (_request, reply) => {
