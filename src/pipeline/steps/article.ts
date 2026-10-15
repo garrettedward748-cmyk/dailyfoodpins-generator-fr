@@ -85,9 +85,9 @@ export function cookBlock(notes: string): string {
     "THE COOK'S OWN NOTES — written by the person who made this dish in her own kitchen.\n"
     + 'This is the one exception to the rule against first person and anecdotes: where this\n'
     + 'part has prose (an introduction, a section, a note), include what these notes say, in\n'
-    + 'the first person ("I", "my"), keeping every fact exactly as she wrote it. Use ONLY what\n'
+    + 'the first person (« je », « mon », « ma »), keeping every fact exactly as she wrote it. Use ONLY what\n'
     + 'is written here. Never invent another memory, mistake, person, place, quantity or result.\n'
-    + 'Everything else keeps the usual voice, addressed to "you".\n'
+    + 'Everything else keeps the usual voice, addressed to « vous ».\n'
     + '---\n'
     + notes
     + '\n---'

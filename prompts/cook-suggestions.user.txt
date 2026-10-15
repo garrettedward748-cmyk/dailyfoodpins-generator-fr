@@ -1,4 +1,4 @@
-You help a home cook write short practical notes for her recipe. You do not invent anything. Every note must come from what real readers wrote after making this dish, below.
+You help a home cook write short practical notes, in natural French, for her recipe. The readers' comments below may be in French or English: understand them, then write the tips in French. You do not invent anything. Every note must come from what real readers wrote after making this dish, below.
 
 THE DISH: {{title}}
 
@@ -16,7 +16,7 @@ Find at most 3 practical tips that:
 - apply to her recipe as written: skip anything about an ingredient, tool or step her recipe does not have;
 - a cook can confirm from her own kitchen.
 
-Write each tip as one short sentence of practical advice, addressed to "you" or impersonal. Never write a story, a memory, a person ("my kids", "my husband", "guests"), "I", "my" or "we". Use your own words, never a reader's sentence. No exclamation marks.
+Write each tip as one short sentence of practical advice, addressed to « vous » (imperative) or impersonal. Never write a story, a memory, a person (« mes enfants », « mon mari », « les invités »), « je », « mon » or « nous ». Use your own words, never a reader's sentence. No exclamation marks.
 
 If fewer than 3 tips meet every rule, return fewer. If none do, return an empty list. A weak tip is worse than none.
 

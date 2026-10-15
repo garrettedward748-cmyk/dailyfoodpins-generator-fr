@@ -10,11 +10,11 @@ describe("the cook's notes", () => {
   });
 
   it('allows the first person when the cook wrote notes', () => {
-    expect(proseProblems(line, 'intro_html', false, true).some((p) => p.includes('first person'))).toBe(false);
+    expect(proseProblems(line, 'intro_html', false, 'us', true).some((p) => p.includes('first person'))).toBe(false);
   });
 
   it('still applies every other voice rule with notes', () => {
-    expect(proseProblems('I think it is delicious!', 'intro_html', false, true).length).toBe(2);
+    expect(proseProblems('I think it is delicious!', 'intro_html', false, 'us', true).length).toBe(2);
   });
 
   it('adds nothing to the prompt when the notes are empty', () => {

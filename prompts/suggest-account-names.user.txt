@@ -1,4 +1,4 @@
-You name a new Pinterest account for {{site.name}} ({{site.domain}}), a recipe website for home cooks in the United States.
+You name a new Pinterest account for {{site.name}} ({{site.domain}}), a French recipe website for home cooks in France. Names, taglines and bios are in French, the way French Pinterest users search.
 
 The account will pin into these boards:
 {{boards}}
@@ -10,16 +10,16 @@ Pinterest accounts it must NOT copy or look like:
 {{taken}}
 
 The account will pin EVERY recipe of the site, into all the boards above. So each name must cover the whole range, not one part of it:
-- First find what the boards have in common (for example "desserts", or "easy dinners", or "home cooking") and the one or two topics with the most boards (for example "cheesecake").
-- Build every name on that common theme, or on the biggest topic together with it ("Cheesecake & Dessert Recipes").
-- Never build a name on a small part of the boards: one fruit, one season, one holiday, one diet, one ingredient (no "Vegan ...", "Pumpkin ...", "Honey ...", "Halloween ...") unless most of the boards are about it.
+- First find what the boards have in common (for example « desserts », « dîners faciles », « cuisine maison ») and the one or two topics with the most boards (for example « cheesecake »).
+- Build every name on that common theme, or on the biggest topic together with it (« Cheesecakes & desserts »).
+- Never build a name on a small part of the boards: one fruit, one season, one holiday, one diet, one ingredient (no « Végan… », « Potiron… », « Miel… », « Halloween… ») unless most of the boards are about it.
 
 Suggest 8 names for the new account. Each one:
-- "display": the profile name, 2-5 words, Title Case, built on the words people type into Pinterest search for the common theme. Friendly and easy to remember. No emoji.
+- "display": the profile name, 2-5 words, French capitalisation, built on the words people type into Pinterest search for the common theme. Friendly and easy to remember. No emoji.
 - "username": the same idea as one lowercase word, letters and digits only, 6-25 characters, no dots, dashes or underscores.
-- "tagline": a short line to put after the name with " | " (for example "Easy Dessert Recipes"), 2-5 words with search words.
+- "tagline": a short line to put after the name with " | " (for example « Recettes faciles »), 2-5 words with search words.
 - "bio": 120-160 characters, says what someone will find across the boards, uses the main search phrases, natural sentences, no hashtags.
-Make the 8 names clearly different from each other: some keyword-first ("Easy Dessert Recipes"), some brand-like ("The Sweet Slice").
+Make the 8 names clearly different from each other: some keyword-first (« Desserts faciles »), some brand-like (« La Part Sucrée »).
 
 Answer with one valid JSON object and nothing else:
 {"names":[{"display":"...","username":"...","tagline":"...","bio":"..."}]}
