@@ -98,4 +98,27 @@ describe('Suggest boards', () => {
     await app.inject({ method: 'POST', url: `/accounts/profile/${profile.id}/boards/suggest`, headers: { cookie } });
     expect(getProfile(profile.id)!.default_board).toBe('Everyday Home Cooking');
   });
+
+  it('puts a group named like a board on that board', async () => {
+    const { askPrompt } = await import('../src/llm/ask.js');
+    vi.mocked(askPrompt).mockResolvedValueOnce({ content: JSON.stringify({
+      boards: [
+        { group: 'honey recipes', name: 'Honey Recipes', description: 'Honey dishes.' },
+        { group: 'honey', name: 'Chicken Recipes', description: '' },
+      ],
+      general: null,
+    }) } as never);
+    const site = upsertSite({ name: 'Arbmom', domain: 'arbmom.com', status: 'active', daily_target: 1, interval_minutes: 60 }, KEY);
+    upsertBufferAccount({ siteId: site, label: 'b', token: 't', enabled: true, platform: 'pinterest' }, KEY);
+    setLink(insertKeyword({ seed_keyword: 'honey recipes', spy_title: 'Honey Rolls' }), site, 'go');
+    setLink(insertKeyword({ seed_keyword: 'honey', spy_title: 'Honey Quail' }), site, 'go');
+    boards.names = ['Chicken Recipes', 'Everyday Recipes'];
+    const profile = firstProfile(site, 'pinterest');
+    updateProfile(profile.id, { default_board: 'Everyday Recipes' });
+
+    await app.inject({ method: 'POST', url: `/accounts/profile/${profile.id}/boards/suggest`, headers: { cookie } });
+    const map = getProfile(profile.id)!.board_map;
+    expect(map).toContain('honey = Honey Recipes');
+    expect(map).not.toContain('Chicken Recipes');
+  });
 });

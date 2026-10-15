@@ -208,7 +208,7 @@ import { executePipeline, PipelineContext } from '../pipeline/index.js';
 import { evaluateSite, formatMinutes, localDateKey } from '../core/selector.js';
 import { diagnoseKeyword } from '../core/diagnosis.js';
 import { findDuplicate } from '../core/similar-title.js';
-import { findBoard } from '../core/board-match.js';
+import { findBoard, sameBoard } from '../core/board-match.js';
 import { normaliseStyle } from '../core/writing-style.js';
 import { readSupply, supplyWarning } from '../core/supply.js';
 import { listPromptFiles } from '../pipeline/prompt-files.js';
@@ -1651,6 +1651,18 @@ export function buildServer(
       if (twin) { b.name = twin; b.description = boards.find((x) => x.name === twin && x.description)?.description ?? b.description; }
       else fresh.push(b.name);
     }
+    // A group named like a board goes on that board, whatever the model said:
+    // "honey" belongs on "Honey Recipes", not on "Chicken Recipes".
+    const candidates = [...existing, ...fresh];
+    for (const b of boards) {
+      const own = candidates.find((n) => sameBoard(b.group, n));
+      if (!own || own === b.name) continue;
+      const isNew = !existing.includes(own);
+      b.name = own;
+      b.exists = !isNew;
+      b.description = isNew ? boards.find((x) => x.name === own && x.description)?.description ?? '' : '';
+    }
+
     // With the account's boards in hand, links that point to a board it does
     // not have (copied over from the first account, or since deleted) are
     // put right: a near match becomes that board, anything else is dropped.
