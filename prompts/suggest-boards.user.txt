@@ -14,6 +14,7 @@ Give ONE board per topic group, plus ONE general board for recipes that fit no o
 For each NEW board:
 - "name": 2-5 words, the words people type into Pinterest search (e.g. « Recettes de desserts faciles », « Recettes de dîners au poulet »). French capitalisation: only the first word and proper nouns take a capital. No emoji, no site name, no punctuation.
 - "description": 150-300 characters, natural sentences that use the main search phrases for that kind of recipe, and say what someone will find on the board. No hashtags.
+If a group already has a board name it must keep, it is written after it as "(board: Name)": give exactly that name, and write its description.
 Two groups that are really the same topic may share one board (give both groups the same name).
 
 Answer with one valid JSON object and nothing else:

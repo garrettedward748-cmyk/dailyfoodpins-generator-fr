@@ -1721,13 +1721,26 @@ export function buildServer(
       if (known.has(g)) settled.set(g, board);
     }
     const defaultBoard = currentDefault.trim() ? lookup(currentDefault.trim()) : undefined;
-    const open = groups.filter((g) => !settled.has(g.group.toLowerCase()));
+    // A board still to create needs a description to copy: a group linked to
+    // one that has none (copied from the first account) keeps its board name
+    // but is asked about, for the description.
+    const needsText = (b: Board | undefined) => Boolean(b && !b.exists && !b.description);
+    const open = groups.filter((g) => {
+      const s = settled.get(g.group.toLowerCase());
+      return !s || needsText(s);
+    });
 
     let parsed: BoardPlan | undefined;
-    if (open.length || !defaultBoard) {
+    if (open.length || !defaultBoard || needsText(defaultBoard)) {
       const answer = await askPrompt(settings, encryptionKey, 'suggest-boards', {
         site: { name: site.name, domain: site.domain },
-        groups: open.map((g) => `- ${g.group}${g.examples.length ? `: ${g.examples.join('; ')}` : ''}`).join('\n') || '(none: only the general board is needed)',
+        groups: [
+          ...open.map((g) => {
+            const keep = settled.get(g.group.toLowerCase());
+            return `- ${g.group}${g.examples.length ? `: ${g.examples.join('; ')}` : ''}${keep ? ` (board: ${keep.name})` : ''}`;
+          }),
+          ...(needsText(defaultBoard) ? [`(the general board must be named exactly "${defaultBoard!.name}": write its description)`] : []),
+        ].join('\n') || '(none: only the general board is needed)',
         existing: [...existing, ...pendingNames()].map((n) => `- ${n}`).join('\n') || '(none yet)',
       });
       parsed = tryParseJson<BoardPlan>(answer.content)?.value;
@@ -1737,8 +1750,8 @@ export function buildServer(
     const boards: ({ group: string } & Board)[] = groups.map((g) => {
       const key = g.group.toLowerCase();
       const s = settled.get(key);
-      if (s) return { group: g.group, ...s };
       const said = (parsed?.boards ?? []).find((b) => b && typeof b.name === 'string' && b.name.trim() && String(b.group ?? '').toLowerCase() === key);
+      if (s) return { group: g.group, ...s, description: needsText(s) ? String(said?.description ?? '').trim() : s.description };
       return said ? { group: g.group, ...settle(said.name.trim(), String(said.description ?? '').trim()) } : null;
     }).filter((b): b is { group: string } & Board => b !== null);
 
@@ -1763,7 +1776,7 @@ export function buildServer(
     }
 
     const general: Board | null = defaultBoard
-      ? (defaultBoard.exists ? null : defaultBoard)
+      ? (defaultBoard.exists ? null : { ...defaultBoard, description: defaultBoard.description || String(parsed?.general?.description ?? '').trim() })
       : parsed?.general && typeof parsed.general.name === 'string' && parsed.general.name.trim()
         ? settle(parsed.general.name.trim(), String(parsed.general.description ?? '').trim())
         : null;

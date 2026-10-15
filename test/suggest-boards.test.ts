@@ -148,4 +148,26 @@ describe('Suggest boards', () => {
     expect(second.default_board).toBe('Recipe Inspiration');
     expect(second.board_suggestions).toContain('Shakes.');
   });
+
+  it('a new account with boards copied from the first gets descriptions to copy, names kept', async () => {
+    const { askPrompt } = await import('../src/llm/ask.js');
+    vi.mocked(askPrompt).mockResolvedValueOnce({ content: JSON.stringify({
+      boards: [{ group: 'dessert', name: 'Some Other Name', description: 'Sweet things to bake.' }],
+      general: { name: 'Another General', description: 'Every recipe.' },
+    }) } as never);
+    const site = upsertSite({ name: 'Arbmom', domain: 'arbmom.com', status: 'active', daily_target: 1, interval_minutes: 60 }, KEY);
+    upsertBufferAccount({ siteId: site, label: 'b', token: 't', enabled: true, platform: 'pinterest' }, KEY);
+    setLink(insertKeyword({ seed_keyword: 'dessert', spy_title: 'Lemon Bars' }), site, 'go');
+    boards.names = []; // a fresh account: no boards yet
+    const profile = firstProfile(site, 'pinterest');
+    updateProfile(profile.id, { default_board: 'Everyday Home Cooking', board_map: 'dessert = Desserts', board_suggestions: '' });
+
+    await app.inject({ method: 'POST', url: `/accounts/profile/${profile.id}/boards/suggest`, headers: { cookie } });
+    const row = getProfile(profile.id)!;
+    expect(row.board_map).toContain('dessert = Desserts');
+    expect(row.default_board).toBe('Everyday Home Cooking');
+    const plan = JSON.parse(row.board_suggestions);
+    expect(plan.boards[0]).toMatchObject({ name: 'Desserts', description: 'Sweet things to bake.', exists: false });
+    expect(plan.general).toMatchObject({ name: 'Everyday Home Cooking', description: 'Every recipe.' });
+  });
 });
