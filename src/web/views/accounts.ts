@@ -136,8 +136,13 @@ function nameSuggestions(site: AccountsSiteView): Html {
 function suggestions(profile: ChannelProfile): Html {
   type Row = { group: string; name: string; description: string; exists?: boolean };
   let plan: { boards: Row[]; general: Omit<Row, 'group'> | null } | null = null;
-  try { plan = profile.board_suggestions ? JSON.parse(profile.board_suggestions) : null; } catch { plan = null; }
-  if (!plan) return raw('');
+  let hidden = false;
+  try {
+    plan = profile.board_suggestions ? JSON.parse(profile.board_suggestions) : null;
+    hidden = Boolean((plan as { hidden?: boolean } | null)?.hidden);
+  } catch { plan = null; }
+  // Hidden, not lost: the table comes back with Show suggestions (next to Suggest boards).
+  if (!plan || hidden) return raw('');
   const rows: Row[] = [...plan.boards, ...(plan.general ? [{ group: '(general)', ...plan.general }] : [])];
   const copy = (text: string) =>
     html`<button type="button" class="small" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.dataset.t);this.textContent='Copied'" data-t="${text}">Copy</button>`;
@@ -232,6 +237,10 @@ function profileCard(site: AccountsSiteView, profile: ChannelProfile, only: bool
               <button type="submit" class="small">Save boards</button>
               <button type="submit" class="small primary" formaction="/accounts/profile/${profile.id}/boards/suggest"
                       title="AI suggests a board for each topic group, and fills the links">Suggest boards</button>
+              ${/"hidden":true/.test(profile.board_suggestions ?? '')
+                ? html`<button type="submit" class="small" formaction="/accounts/profile/${profile.id}/boards/suggest/show"
+                          title="Show the last suggested boards again">Show suggestions</button>`
+                : raw('')}
             </div>
           </form>
           ${suggestions(profile)}`

@@ -170,4 +170,22 @@ describe('Suggest boards', () => {
     expect(plan.boards[0]).toMatchObject({ name: 'Desserts', description: 'Sweet things to bake.', exists: false });
     expect(plan.general).toMatchObject({ name: 'Everyday Home Cooking', description: 'Every recipe.' });
   });
+
+  it('Hide keeps the suggestions, and Show suggestions brings them back', async () => {
+    const site = upsertSite({ name: 'Arbmom', domain: 'arbmom.com', status: 'active', daily_target: 1, interval_minutes: 60 }, KEY);
+    setLink(insertKeyword({ seed_keyword: 'dessert', spy_title: 'Lemon Bars' }), site, 'go');
+    const profile = firstProfile(site, 'pinterest');
+    await app.inject({ method: 'POST', url: `/accounts/profile/${profile.id}/boards/suggest`, headers: { cookie } });
+
+    await app.inject({ method: 'POST', url: `/accounts/profile/${profile.id}/boards/suggest/clear`, headers: { cookie } });
+    let page = await app.inject({ method: 'GET', url: '/accounts', headers: { cookie } });
+    expect(page.body).not.toContain('new board(s) on Pinterest');
+    expect(page.body).toContain('Show suggestions');
+    expect(getProfile(profile.id)!.board_suggestions).toContain('Easy Dessert Recipes');
+
+    await app.inject({ method: 'POST', url: `/accounts/profile/${profile.id}/boards/suggest/show`, headers: { cookie } });
+    page = await app.inject({ method: 'GET', url: '/accounts', headers: { cookie } });
+    expect(page.body).toContain('new board(s) on Pinterest');
+    expect(page.body).not.toContain('Show suggestions');
+  });
 });

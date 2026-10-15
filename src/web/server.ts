@@ -1668,10 +1668,29 @@ export function buildServer(
     return redirect(reply, `/accounts/${siteId}#net-pinterest`, { kind: 'ok', message: 'Suggestions hidden.' });
   });
 
+  /** Hide or show the last board suggestions: kept either way, so pressing Suggest again still builds on them. */
+  const showSuggestions = (id: number, show: boolean): boolean => {
+    const profile = getProfile(id);
+    if (!profile?.board_suggestions) return false;
+    try {
+      const plan = JSON.parse(profile.board_suggestions) as Record<string, unknown>;
+      if (show) delete plan.hidden; else plan.hidden = true;
+      updateProfile(id, { board_suggestions: JSON.stringify(plan) });
+      return true;
+    } catch { return false; }
+  };
+
   app.post('/accounts/profile/:id/boards/suggest/clear', async (request, reply) => {
     const id = asNumber((request.params as { id: string }).id, 0);
-    updateProfile(id, { board_suggestions: '' });
-    return redirect(reply, `/accounts#profile-${id}`, { kind: 'ok', message: 'Suggestions hidden.' });
+    showSuggestions(id, false);
+    return redirect(reply, `/accounts#profile-${id}`, { kind: 'ok', message: 'Suggestions hidden. Show suggestions brings them back.' });
+  });
+
+  app.post('/accounts/profile/:id/boards/suggest/show', async (request, reply) => {
+    const id = asNumber((request.params as { id: string }).id, 0);
+    return redirect(reply, `/accounts#profile-${id}`, showSuggestions(id, true)
+      ? { kind: 'ok', message: 'Suggestions shown.' }
+      : { kind: 'warn', message: 'No suggestions to show: press Suggest boards.' });
   });
 
   /**
