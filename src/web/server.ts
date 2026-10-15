@@ -1634,17 +1634,27 @@ export function buildServer(
       if (twin) { b.name = twin; b.description = boards.find((x) => x.name === twin && x.description)?.description ?? b.description; }
       else fresh.push(b.name);
     }
-    const general = currentDefault.trim()
+    // With the account's boards in hand, links that point to a board it does
+    // not have (copied over from the first account, or since deleted) are
+    // put right: a near match becomes that board, anything else is dropped.
+    const resolve = (name: string): string | undefined => (existing.length ? findBoard(name, existing) : name);
+    const keptDefault = currentDefault.trim() ? resolve(currentDefault.trim()) ?? '' : '';
+    const general = keptDefault
       ? null
       : parsed?.general && typeof parsed.general.name === 'string' && parsed.general.name.trim()
         ? settle(parsed.general.name.trim(), String(parsed.general.description ?? '').trim())
         : null;
     if (boards.length === 0 && !general) throw new Error('the model gave no usable boards');
     const map = parseBoardMap(currentMap);
+    for (const [g, n] of [...map]) {
+      const board = resolve(n);
+      if (board) map.set(g, board);
+      else map.delete(g);
+    }
     for (const b of boards) map.set(b.group.toLowerCase(), b.name);
     const mapText = [...map].map(([g, n]) => `${known.get(g) ?? g} = ${n}`).join('\n');
     const toCreate = new Set([...boards, ...(general ? [general] : [])].filter((b) => !b.exists).map((b) => b.name)).size;
-    return { boards, general, mapText, defaultBoard: general?.name || currentDefault || '', toCreate };
+    return { boards, general, mapText, defaultBoard: general?.name || keptDefault || '', toCreate };
   }
 
   // Pinterest and Instagram live on Channels -> Accounts now, site by site.

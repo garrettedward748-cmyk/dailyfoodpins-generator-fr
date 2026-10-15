@@ -70,17 +70,32 @@ describe('Suggest boards', () => {
     setLink(insertKeyword({ seed_keyword: 'chicken', spy_title: 'Honey Garlic Chicken' }), site, 'go');
     boards.names = ['Desserts', 'Everyday Recipes'];
     const profile = firstProfile(site, 'pinterest');
-    updateProfile(profile.id, { default_board: 'My Other Recipes' });
+    // Copied from the first account: none of these is on this account.
+    updateProfile(profile.id, { default_board: 'My Other Recipes', board_map: 'apple crumble = Apple Crumble Recipes\ncake = Easy Desserts' });
 
     const r = await app.inject({ method: 'POST', url: `/accounts/profile/${profile.id}/boards/suggest`, headers: { cookie } });
     expect(r.statusCode).toBe(303);
     const row = getProfile(profile.id)!;
     expect(row.board_map).toContain('dessert = Desserts'); // "Easy Dessert Recipes" is the board already there
     expect(row.board_map).toContain('chicken = Chicken Dinner Recipes');
-    expect(row.default_board).toBe('My Other Recipes'); // the one you chose stays
+    expect(row.default_board).toBe('Everyday Recipes'); // "My Other Recipes" is not on this account
+    expect(row.board_map).not.toContain('Apple Crumble Recipes'); // a board it does not have: dropped
+    expect(row.board_map).toContain('cake = Desserts'); // near match: set to the real board
 
     const page = await app.inject({ method: 'GET', url: '/accounts', headers: { cookie } });
     expect(page.body).toContain('Create the 1 new board(s) on Pinterest');
     expect(page.body).toContain('Exists');
+  });
+
+  it('keeps a chosen general board that the account has', async () => {
+    const site = upsertSite({ name: 'Arbmom', domain: 'arbmom.com', status: 'active', daily_target: 1, interval_minutes: 60 }, KEY);
+    upsertBufferAccount({ siteId: site, label: 'b', token: 't', enabled: true, platform: 'pinterest' }, KEY);
+    setLink(insertKeyword({ seed_keyword: 'dessert', spy_title: 'Lemon Bars' }), site, 'go');
+    boards.names = ['Desserts', 'Everyday Home Cooking'];
+    const profile = firstProfile(site, 'pinterest');
+    updateProfile(profile.id, { default_board: 'Everyday Home Cooking' });
+
+    await app.inject({ method: 'POST', url: `/accounts/profile/${profile.id}/boards/suggest`, headers: { cookie } });
+    expect(getProfile(profile.id)!.default_board).toBe('Everyday Home Cooking');
   });
 });

@@ -8,6 +8,7 @@ Boards the Pinterest account ALREADY has:
 
 Give ONE board per topic group, plus ONE general board for recipes that fit no other board.
 - If an existing board fits a group (same topic, even if worded differently), use that board's name EXACTLY as written above. Do not invent a new name for a topic that already has a board.
+- An existing board fits only if it is about the same kind of recipe. Never put a group on a board about a different main ingredient or meal (honey desserts do not go on a chicken board): suggest a new board instead.
 - Only when no existing board fits, suggest a new board.
 
 For each NEW board:
