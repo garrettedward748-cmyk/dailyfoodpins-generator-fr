@@ -1595,7 +1595,7 @@ export function buildServer(
       } catch (err) {
         return redirect(reply, to, { kind: 'error', message: `Could not read the boards from Buffer, so nothing was suggested: ${errorMessage(err)}` });
       }
-      const result = await suggestBoardPlan(site, groups, existing, profile.default_board, profile.board_map);
+      const result = await suggestBoardPlan(site, groups, existing, profile.default_board, profile.board_map, profile.board_suggestions);
       updateProfile(id, {
         board_suggestions: JSON.stringify({ boards: result.boards, general: result.general }),
         default_board: result.defaultBoard,
@@ -1629,21 +1629,64 @@ export function buildServer(
     existing: string[],
     currentDefault: string,
     currentMap: string,
+    lastSuggestions = '',
   ) {
-    const answer = await askPrompt(settings, encryptionKey, 'suggest-boards', {
-      site: { name: site.name, domain: site.domain },
-      groups: groups.map((g) => `- ${g.group}${g.examples.length ? `: ${g.examples.join('; ')}` : ''}`).join('\n'),
-      existing: existing.length ? existing.map((n) => `- ${n}`).join('\n') : '(none yet)',
-    });
-    const parsed = tryParseJson<BoardPlan>(answer.content)?.value;
+    type Board = { name: string; description: string; exists: boolean };
     const known = new Map(groups.map((g) => [g.group.toLowerCase(), g.group]));
-    const settle = (name: string, description: string) => {
-      const match = findBoard(name, existing);
-      return match ? { name: match, description: '', exists: true } : { name, description, exists: false };
+
+    // New boards the last press proposed that are still not on Pinterest:
+    // pressing again keeps them, name and description, rather than renaming.
+    const pending = new Map<string, { name: string; description: string }>();
+    try {
+      const last = lastSuggestions ? (JSON.parse(lastSuggestions) as BoardPlan) : null;
+      for (const b of [...(last?.boards ?? []), ...(last?.general ? [last.general] : [])]) {
+        const key = String(b?.name ?? '').trim().toLowerCase();
+        if (key && !findBoard(b.name, existing) && !pending.has(key)) pending.set(key, { name: b.name.trim(), description: b.description ?? '' });
+      }
+    } catch { /* an unreadable old plan: nothing to keep */ }
+    const pendingNames = () => [...pending.values()].map((p) => p.name);
+    /** An account board, a board still to create from last time, or undefined. */
+    const lookup = (name: string): Board | undefined => {
+      const real = existing.length ? findBoard(name, existing) : undefined;
+      if (real) return { name: real, description: '', exists: true };
+      const was = findBoard(name, pendingNames());
+      if (was) return { name: was, description: pending.get(was.toLowerCase())?.description ?? '', exists: false };
+      return existing.length ? undefined : { name, description: '', exists: false };
     };
-    const boards = (parsed?.boards ?? [])
-      .filter((b) => b && typeof b.name === 'string' && b.name.trim() && known.has(String(b.group ?? '').toLowerCase()))
-      .map((b) => ({ group: known.get(String(b.group).toLowerCase())!, ...settle(b.name.trim(), String(b.description ?? '').trim()) }));
+
+    // A group already linked to a board the account has (or one proposed last
+    // time) keeps it: pressing again only decides the groups still open.
+    const map = parseBoardMap(currentMap);
+    const settled = new Map<string, Board>();
+    for (const [g, n] of [...map]) {
+      const board = lookup(n);
+      if (!board) { map.delete(g); continue; }
+      map.set(g, board.name);
+      if (known.has(g)) settled.set(g, board);
+    }
+    const defaultBoard = currentDefault.trim() ? lookup(currentDefault.trim()) : undefined;
+    const open = groups.filter((g) => !settled.has(g.group.toLowerCase()));
+
+    let parsed: BoardPlan | undefined;
+    if (open.length || !defaultBoard) {
+      const answer = await askPrompt(settings, encryptionKey, 'suggest-boards', {
+        site: { name: site.name, domain: site.domain },
+        groups: open.map((g) => `- ${g.group}${g.examples.length ? `: ${g.examples.join('; ')}` : ''}`).join('\n') || '(none: only the general board is needed)',
+        existing: [...existing, ...pendingNames()].map((n) => `- ${n}`).join('\n') || '(none yet)',
+      });
+      parsed = tryParseJson<BoardPlan>(answer.content)?.value;
+    }
+    const settle = (name: string, description: string): Board => lookup(name) ?? { name, description, exists: false };
+
+    const boards: ({ group: string } & Board)[] = groups.map((g) => {
+      const key = g.group.toLowerCase();
+      const s = settled.get(key);
+      if (s) return { group: g.group, ...s };
+      const said = (parsed?.boards ?? []).find((b) => b && typeof b.name === 'string' && b.name.trim() && String(b.group ?? '').toLowerCase() === key);
+      return said ? { group: g.group, ...settle(said.name.trim(), String(said.description ?? '').trim()) } : null;
+    }).filter((b): b is { group: string } & Board => b !== null);
+
+    // Two new names for one topic in the same answer become one board.
     const fresh: string[] = [];
     for (const b of boards) {
       if (b.exists) continue;
@@ -1663,27 +1706,16 @@ export function buildServer(
       b.description = isNew ? boards.find((x) => x.name === own && x.description)?.description ?? '' : '';
     }
 
-    // With the account's boards in hand, links that point to a board it does
-    // not have (copied over from the first account, or since deleted) are
-    // put right: a near match becomes that board, anything else is dropped.
-    const resolve = (name: string): string | undefined => (existing.length ? findBoard(name, existing) : name);
-    const keptDefault = currentDefault.trim() ? resolve(currentDefault.trim()) ?? '' : '';
-    const general = keptDefault
-      ? null
+    const general: Board | null = defaultBoard
+      ? (defaultBoard.exists ? null : defaultBoard)
       : parsed?.general && typeof parsed.general.name === 'string' && parsed.general.name.trim()
         ? settle(parsed.general.name.trim(), String(parsed.general.description ?? '').trim())
         : null;
-    if (boards.length === 0 && !general) throw new Error('the model gave no usable boards');
-    const map = parseBoardMap(currentMap);
-    for (const [g, n] of [...map]) {
-      const board = resolve(n);
-      if (board) map.set(g, board);
-      else map.delete(g);
-    }
+    if (boards.length === 0 && !general && !defaultBoard) throw new Error('the model gave no usable boards');
     for (const b of boards) map.set(b.group.toLowerCase(), b.name);
     const mapText = [...map].map(([g, n]) => `${known.get(g) ?? g} = ${n}`).join('\n');
     const toCreate = new Set([...boards, ...(general ? [general] : [])].filter((b) => !b.exists).map((b) => b.name)).size;
-    return { boards, general, mapText, defaultBoard: general?.name || keptDefault || '', toCreate };
+    return { boards, general, mapText, defaultBoard: general?.name || defaultBoard?.name || '', toCreate };
   }
 
   // Pinterest and Instagram live on Channels -> Accounts now, site by site.

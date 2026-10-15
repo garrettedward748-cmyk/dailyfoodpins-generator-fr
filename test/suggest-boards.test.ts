@@ -121,4 +121,31 @@ describe('Suggest boards', () => {
     expect(map).toContain('honey = Honey Recipes');
     expect(map).not.toContain('Chicken Recipes');
   });
+
+  it('pressing again keeps what was decided, even when the model answers differently', async () => {
+    const { askPrompt } = await import('../src/llm/ask.js');
+    const site = upsertSite({ name: 'Arbmom', domain: 'arbmom.com', status: 'active', daily_target: 1, interval_minutes: 60 }, KEY);
+    upsertBufferAccount({ siteId: site, label: 'b', token: 't', enabled: true, platform: 'pinterest' }, KEY);
+    setLink(insertKeyword({ seed_keyword: 'dessert', spy_title: 'Lemon Bars' }), site, 'go');
+    setLink(insertKeyword({ seed_keyword: 'milkshake', spy_title: 'Oreo Shake' }), site, 'go');
+    boards.names = ['Desserts'];
+    const profile = firstProfile(site, 'pinterest');
+    updateProfile(profile.id, { default_board: '', board_map: '' });
+
+    vi.mocked(askPrompt).mockResolvedValueOnce({ content: JSON.stringify({
+      boards: [{ group: 'dessert', name: 'Desserts', description: '' }, { group: 'milkshake', name: 'Milkshake Recipes', description: 'Shakes.' }],
+      general: { name: 'Recipe Inspiration', description: 'All sorts.' },
+    }) } as never);
+    await app.inject({ method: 'POST', url: `/accounts/profile/${profile.id}/boards/suggest`, headers: { cookie } });
+    const first = getProfile(profile.id)!;
+
+    vi.mocked(askPrompt).mockClear(); // a second answer would differ, but none should be asked for
+    await app.inject({ method: 'POST', url: `/accounts/profile/${profile.id}/boards/suggest`, headers: { cookie } });
+    const second = getProfile(profile.id)!;
+    expect(askPrompt).not.toHaveBeenCalled(); // nothing left to decide
+    expect(second.board_map).toBe(first.board_map);
+    expect(second.board_map).toContain('milkshake = Milkshake Recipes');
+    expect(second.default_board).toBe('Recipe Inspiration');
+    expect(second.board_suggestions).toContain('Shakes.');
+  });
 });

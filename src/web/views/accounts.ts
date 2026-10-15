@@ -122,12 +122,16 @@ function suggestions(profile: ChannelProfile): Html {
       <form method="post" action="/accounts/profile/${profile.id}/boards/suggest/clear"><button type="submit" class="small">Hide</button></form></div>
     <div class="table-wrap"><table>
       <thead><tr><th>Group</th><th>Board</th><th>Status</th><th>Description</th></tr></thead>
-      <tbody>${rows.map((r) => html`<tr>
+      <tbody>${rows.map((r, i) => {
+        // A new board shared by several groups is created once: later rows point back to it.
+        const again = !r.exists && rows.slice(0, i).some((x) => !x.exists && x.name.toLowerCase() === r.name.toLowerCase());
+        return html`<tr>
         <td class="muted small">${r.group}</td>
-        <td class="nowrap">${r.name} ${r.exists ? raw('') : copy(r.name)}</td>
-        <td class="nowrap small">${r.exists ? html`<span class="muted">✅ Exists</span>` : html`<strong>➕ Create</strong>`}</td>
-        <td class="small">${r.exists ? raw('') : html`${r.description} ${r.description ? copy(r.description) : raw('')}`}</td>
-      </tr>`)}</tbody>
+        <td class="nowrap">${r.name} ${r.exists || again ? raw('') : copy(r.name)}</td>
+        <td class="nowrap small">${r.exists ? html`<span class="muted">✅ Exists</span>` : again ? html`<span class="muted">↑ Same board as above</span>` : html`<strong>➕ Create</strong>`}</td>
+        <td class="small">${r.exists || again ? raw('') : html`${r.description} ${r.description ? copy(r.description) : raw('')}`}</td>
+      </tr>`;
+      })}</tbody>
     </table></div>
   </div>`;
 }
