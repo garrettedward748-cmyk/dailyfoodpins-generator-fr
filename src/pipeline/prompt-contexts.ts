@@ -57,6 +57,8 @@ const SPY = {
  */
 const ARTICLE_CONTEXT = {
   seo: SEO,
+  // The site the article is for, by name: the prompts no longer carry one site's brand.
+  site: { name: 'n', domain: 'example.com' },
   recipe: { raw: '{}' },
   // The site's spelling and units, the recipe's times, the words no article
   // may use, and — on a retry only — what the last draft got wrong.

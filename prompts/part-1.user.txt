@@ -1,4 +1,4 @@
-Write Part 1 of a DailyFoodPins recipe article: the metadata and the introduction. Everything you write is in French; only the JSON keys stay English.
+Write Part 1 of a {{site.name}} recipe article: the metadata and the introduction. Everything you write is in French; only the JSON keys stay English.
 
 ═══════════════════════════════════════════════════════════════
 SOURCE — USE EXACTLY, DO NOT DEVIATE

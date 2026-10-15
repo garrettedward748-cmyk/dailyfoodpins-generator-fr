@@ -1,4 +1,4 @@
-Write Part 2 of a DailyFoodPins recipe article: the recipe card. Everything you write is in French; only the JSON keys stay English. "difficulty" keeps the English value easy, medium or hard.
+Write Part 2 of a {{site.name}} recipe article: the recipe card. Everything you write is in French; only the JSON keys stay English. "difficulty" keeps the English value easy, medium or hard.
 
 ═══════════════════════════════════════════════════════════════
 SOURCE — USE EXACTLY, DO NOT DEVIATE

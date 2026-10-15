@@ -46,6 +46,7 @@ export interface ArticleInput {
  * attached in code below instead, where copying cannot go wrong.
  */
 function promptVariables(
+  site: { name: string; domain: string },
   input: ArticleInput,
   structure: ArticleStructure | null,
   rules: RuleContext,
@@ -53,6 +54,8 @@ function promptVariables(
 ): Record<string, unknown> {
   return {
     seo: input.seo,
+    // The site the article is for: its name stands where one site's brand used to be written into the prompts.
+    site,
     recipe: { raw: input.recipe.raw },
     ...structureBlocks(structure),
     // The site's own spelling and units, so a prompt cannot hard-code a
@@ -130,7 +133,7 @@ async function generatePart(
       // The cook's notes ride in the same slot as retry feedback, at the end of
       // every part prompt and its fallback, so an edited prompt still gets them.
       const note = [cookBlock(cookNotesOf(ctx)), feedback].filter(Boolean).join('\n\n');
-      const result = await ctx.prompt(promptName, promptVariables(input, structure, rules, note));
+      const result = await ctx.prompt(promptName, promptVariables({ name: ctx.site.name, domain: ctx.site.domain }, input, structure, rules, note));
       const parsed = await parseJsonOrRepair<Record<string, unknown>>(ctx, result.content, `${promptName} output`);
       const checked = checkPart(part, parsed, rules);
 

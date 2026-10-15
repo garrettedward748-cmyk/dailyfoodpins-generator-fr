@@ -1,4 +1,4 @@
-Write the recipe card for a DailyFoodPins article. Everything you write is in French; only the JSON keys stay English.
+Write the recipe card for a {{site.name}} article. Everything you write is in French; only the JSON keys stay English.
 
 SEO keyword: {{seo.keyword}}
 Working title: {{seo.title}}

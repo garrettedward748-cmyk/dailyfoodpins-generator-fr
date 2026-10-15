@@ -1,4 +1,4 @@
-Write the closing sections of a DailyFoodPins recipe article. Everything you write is in French; only the JSON keys stay English.
+Write the closing sections of a {{site.name}} recipe article. Everything you write is in French; only the JSON keys stay English.
 
 SEO keyword: {{seo.keyword}}
 Working title: {{seo.title}}

@@ -1,4 +1,4 @@
-Write Part 3 of a DailyFoodPins recipe article: the sections after the recipe
+Write Part 3 of a {{site.name}} recipe article: the sections after the recipe
 card, the questions, the nutrition and the tags. Everything you write is in French; only the JSON keys stay English.
 
 ═══════════════════════════════════════════════════════════════
