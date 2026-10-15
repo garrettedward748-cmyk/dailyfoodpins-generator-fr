@@ -139,6 +139,7 @@ export const PROMPT_MODELS: Record<string, { model: string; format: 'json' | nul
   'collage-caption': { model: 'gpt-oss:120b', format: null },
   'instagram-post': { model: 'gpt-oss:120b', format: null },
   'suggest-boards': { model: 'gpt-oss:120b', format: 'json' },
+  'suggest-account-names': { model: 'gpt-oss:120b', format: 'json' },
   'research-filter': { model: 'gpt-oss:120b', format: 'json' },
   'queue-check': { model: 'gpt-oss:120b', format: 'json' },
   'recipe-tools': { model: 'gpt-oss:120b', format: 'json' },

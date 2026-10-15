@@ -1,0 +1,20 @@
+You name a new Pinterest account for {{site.name}} ({{site.domain}}), a recipe website for home cooks in the United States.
+
+The account will pin into these boards:
+{{boards}}
+
+Its recipes come from these topic groups:
+{{groups}}
+
+Pinterest accounts it must NOT copy or look like:
+{{taken}}
+
+Suggest 8 names for the new account. Each one:
+- "display": the profile name, 2-5 words, Title Case, built on the words people type into Pinterest search for what these boards hold (the main dessert or dish types above). Friendly and easy to remember. No emoji.
+- "username": the same idea as one lowercase word, letters and digits only, 6-25 characters, no dots, dashes or underscores.
+- "tagline": a short line to put after the name with " | " (for example "Easy Dessert Recipes"), 2-5 words with search words.
+- "bio": 120-160 characters, says what someone will find, uses the main search phrases, natural sentences, no hashtags.
+Make the 8 names clearly different from each other: some keyword-first ("Easy Cheesecake Recipes"), some brand-like ("The Sweet Slice").
+
+Answer with one valid JSON object and nothing else:
+{"names":[{"display":"...","username":"...","tagline":"...","bio":"..."}]}

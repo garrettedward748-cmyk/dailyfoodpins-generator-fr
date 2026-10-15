@@ -118,6 +118,9 @@ import {
   setPinterestPublishing,
   setInstagramPublishing,
   siteTopicGroups,
+  getAccountNameSuggestions,
+  setAccountNameSuggestions,
+  type AccountName,
   type BoardPlan,
   parseBoardMap,
   type BufferPlatform,
@@ -1405,6 +1408,7 @@ export function buildServer(
         fbPages,
         postToAll: (['pinterest', 'facebook', 'instagram', 'youtube', 'tiktok'] as const).filter((p) => postsToAll(x.id, p)),
         effective: channelStates(x.id, site),
+        nameSuggestions: getAccountNameSuggestions(x.id),
       };
     });
     const current = views.find((v) => v.id === siteId) ?? views[0] ?? null;
@@ -1610,6 +1614,58 @@ export function buildServer(
     } catch (err) {
       return redirect(reply, to, { kind: 'error', message: `Could not suggest boards: ${errorMessage(err)}` });
     }
+  });
+
+  /**
+   * Names for a new Pinterest account, built on the boards the site's
+   * Pinterest accounts pin into and its topic groups.
+   */
+  app.post('/accounts/:siteId/pinterest/names', async (request, reply) => {
+    const siteId = asNumber((request.params as { siteId: string }).siteId, 0);
+    const site = getSite(siteId);
+    const to = `/accounts/${siteId}#net-pinterest`;
+    if (!site) return redirect(reply, '/accounts', { kind: 'error', message: 'Site not found' });
+    const profiles = listProfiles(siteId, 'pinterest');
+    const boards = new Map<string, string>();
+    for (const p of profiles) {
+      for (const n of [p.default_board, ...parseBoardMap(p.board_map).values()]) {
+        if (n?.trim() && !boards.has(n.trim().toLowerCase())) boards.set(n.trim().toLowerCase(), n.trim());
+      }
+    }
+    const groups = siteTopicGroups(siteId, 25);
+    if (boards.size === 0 && groups.length === 0) {
+      return redirect(reply, to, { kind: 'warn', message: 'No boards or keywords yet: set the boards (or add keywords) first, then suggest names.' });
+    }
+    const taken = profiles.map((p) => p.channel_name.trim()).filter(Boolean);
+    try {
+      const answer = await askPrompt(settings, encryptionKey, 'suggest-account-names', {
+        site: { name: site.name, domain: site.domain },
+        boards: [...boards.values()].map((n) => `- ${n}`).join('\n') || '(none yet)',
+        groups: groups.map((g) => `- ${g.group}`).join('\n') || '(none yet)',
+        taken: taken.map((n) => `- ${n}`).join('\n') || '(none)',
+      });
+      const parsed = tryParseJson<{ names?: Partial<AccountName>[] }>(answer.content)?.value;
+      const seen = new Set(taken.map((n) => n.toLowerCase()));
+      const names: AccountName[] = [];
+      for (const n of parsed?.names ?? []) {
+        const display = String(n?.display ?? '').trim();
+        const username = String(n?.username ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 30);
+        if (!display || username.length < 3 || seen.has(username)) continue;
+        seen.add(username);
+        names.push({ display, username, tagline: String(n?.tagline ?? '').trim(), bio: String(n?.bio ?? '').trim() });
+      }
+      if (names.length === 0) throw new Error('the model gave no usable names');
+      setAccountNameSuggestions(siteId, names);
+      return redirect(reply, to, { kind: 'ok', message: `${names.length} names suggested below. Check the username is free on Pinterest before you pick one.` });
+    } catch (err) {
+      return redirect(reply, to, { kind: 'error', message: `Could not suggest names: ${errorMessage(err)}` });
+    }
+  });
+
+  app.post('/accounts/:siteId/pinterest/names/clear', async (request, reply) => {
+    const siteId = asNumber((request.params as { siteId: string }).siteId, 0);
+    setAccountNameSuggestions(siteId, []);
+    return redirect(reply, `/accounts/${siteId}#net-pinterest`, { kind: 'ok', message: 'Suggestions hidden.' });
   });
 
   app.post('/accounts/profile/:id/boards/suggest/clear', async (request, reply) => {

@@ -29,6 +29,8 @@ export interface AccountsSiteView {
    * why a ticked switch does nothing when that is the case.
    */
   effective: Record<ProfilePlatform, { on: string[]; notes: string[] }>;
+  /** Names last suggested for a new Pinterest account (empty: none shown). */
+  nameSuggestions?: { display: string; username: string; tagline: string; bio: string }[];
 }
 
 const NETWORK: Record<ProfilePlatform, string> = { pinterest: 'Pinterest', facebook: 'Facebook', instagram: 'Instagram', youtube: 'YouTube', tiktok: 'TikTok' };
@@ -105,6 +107,29 @@ function tokens(site: AccountsSiteView, profile: ChannelProfile): Html {
         <button class="primary small" type="submit">Add</button>
       </form>
     </details>`;
+}
+
+/** The names last suggested for a new Pinterest account, with Copy buttons. */
+function nameSuggestions(site: AccountsSiteView): Html {
+  const names = site.nameSuggestions ?? [];
+  if (!names.length) return raw('');
+  const copy = (text: string) =>
+    html`<button type="button" class="small" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.dataset.t);this.textContent='Copied'" data-t="${text}">Copy</button>`;
+  return html`<div class="card" style="margin:10px 0">
+    <div class="spread"><strong>Names for a new Pinterest account</strong>
+      <form method="post" action="/accounts/${site.id}/pinterest/names/clear"><button type="submit" class="small">Hide</button></form></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Username</th><th>Bio</th></tr></thead>
+      <tbody>${names.map((n) => {
+        const full = n.tagline ? `${n.display} | ${n.tagline}` : n.display;
+        return html`<tr>
+          <td>${full} ${copy(full)}</td>
+          <td class="nowrap">${n.username} ${copy(n.username)}</td>
+          <td class="small">${n.bio} ${n.bio ? copy(n.bio) : raw('')}</td>
+        </tr>`;
+      })}</tbody>
+    </table></div>
+  </div>`;
 }
 
 /** The last Suggest boards answer for a Pinterest account. */
@@ -351,10 +376,18 @@ export function accountsPage(data: AccountsPageData): Html {
               <div style="margin-top:14px">
                 <div class="spread" style="gap:10px">
                   ${switches(site, platform)}
-                  <form method="post" action="/accounts/${site.id}/${platform}/add" style="margin:0">
-                    <button type="submit" class="small primary">+ ${NETWORK[platform]}</button>
-                  </form>
+                  <div class="row" style="gap:8px">
+                    ${platform === 'pinterest'
+                      ? html`<form method="post" action="/accounts/${site.id}/pinterest/names" style="margin:0">
+                          <button type="submit" class="small" title="AI suggests names for a new Pinterest account, from this site's boards and keywords">Suggest account names</button>
+                        </form>`
+                      : raw('')}
+                    <form method="post" action="/accounts/${site.id}/${platform}/add" style="margin:0">
+                      <button type="submit" class="small primary">+ ${NETWORK[platform]}</button>
+                    </form>
+                  </div>
                 </div>
+                ${platform === 'pinterest' ? nameSuggestions(site) : raw('')}
                 ${modeSwitch(site, platform, list.length)}
                 ${list.map((p) => profileCard(site, p, list.length <= 1, data.groups))}
                 ${platform === 'instagram' ? data.igLink : raw('')}

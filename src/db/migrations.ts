@@ -1326,6 +1326,13 @@ export const MIGRATIONS: Migration[] = [
       addColumn(db, 'sites', 'interval_max_minutes', 'INTEGER NOT NULL DEFAULT 0');
     },
   },
+  {
+    id: '059-pinterest-account-names',
+    description: 'The last names suggested for a new Pinterest account, shown until dismissed',
+    up(db) {
+      addColumn(db, 'sites', 'pin_name_suggestions', "TEXT NOT NULL DEFAULT ''");
+    },
+  },
 ];
 
 /* -- The runner ----------------------------------------------------------- */

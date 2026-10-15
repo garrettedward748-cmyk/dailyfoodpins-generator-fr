@@ -220,5 +220,11 @@
   "model": "gpt-oss:120b",
   "format": "json",
   "hasSystem": false
+ },
+ "suggest-account-names": {
+  "sourceNode": "Suggest Pinterest account names",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
  }
 }

@@ -453,6 +453,18 @@ export const siteTopicGroups = (siteId: number, limit = 15): { group: string; ex
     limit,
   ).map((r) => ({ group: r.seed_keyword, examples: (r.examples ?? '').split(' | ').filter(Boolean).slice(0, 4) }));
 
+export interface AccountName { display: string; username: string; tagline: string; bio: string }
+
+/** The names last suggested for a new Pinterest account of a site ('' = none shown). */
+export const getAccountNameSuggestions = (siteId: number): AccountName[] => {
+  const row = get<{ pin_name_suggestions: string }>('SELECT pin_name_suggestions FROM sites WHERE id = ?', siteId);
+  try { return row?.pin_name_suggestions ? (JSON.parse(row.pin_name_suggestions) as AccountName[]) : []; } catch { return []; }
+};
+
+export const setAccountNameSuggestions = (siteId: number, names: AccountName[]): void => {
+  run('UPDATE sites SET pin_name_suggestions = ? WHERE id = ?', names.length ? JSON.stringify(names) : '', siteId);
+};
+
 export const setBoardSuggestions = (siteId: number, plan: BoardPlan | null): void => {
   run('UPDATE sites SET pin_board_suggestions = ? WHERE id = ?', plan ? JSON.stringify(plan) : '', siteId);
 };
