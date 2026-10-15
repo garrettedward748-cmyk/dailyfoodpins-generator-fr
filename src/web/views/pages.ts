@@ -308,7 +308,7 @@ function runTable(runs: RunListRow[], selectable = false): Html {
           <td>${runBadge(r)}</td>
           <td class="small">
             ${r.status === 'published'
-              ? html`<a href="${r.post_url ?? '#'}" target="_blank" rel="noopener">view article</a>`
+              ? html`<a href="${r.post_url ?? '#'}" target="_blank" rel="noopener">view article</a>${r.pinned_on ? html`<span class="muted"> · pinned on ${r.pinned_on}</span>` : raw('')}`
               : r.hold
                 ? html`<span class="muted">${r.title || 'written, not published'}</span>`
                 : html`<span class="muted"

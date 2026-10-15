@@ -1369,6 +1369,26 @@ export const markRunFailed = (id: number, error: string, failedStep: string): vo
 export interface RunListRow extends RunRow {
   site_domain: string | null;
   seed_keyword: string | null;
+  /** The Pinterest account(s) the pin really went to, by name ('' = no pin recorded). */
+  pinned_on?: string;
+}
+
+/**
+ * The Pinterest accounts a run's pin was posted on, as their usernames (or
+ * "Pinterest 2" when one has none), read from what the run recorded as sent.
+ */
+export function pinnedOn(fanoutJson: string | null | undefined): string {
+  let ids: string[] = [];
+  try {
+    ids = Object.keys((JSON.parse(fanoutJson || '{}') as Record<string, Record<string, string>>).pinterest ?? {});
+  } catch {
+    return '';
+  }
+  return ids
+    .map((id) => getProfile(Number(id)))
+    .filter((p): p is ChannelProfile => Boolean(p))
+    .map((p) => p.channel_name.trim() || p.label)
+    .join(', ');
 }
 
 /** Newest first; `siteId` keeps one site's runs only (Content -> Articles' site filter). */
@@ -1384,7 +1404,7 @@ export const listRuns = (limit = 50, offset = 0, siteId = 0): RunListRow[] =>
     ...(siteId ? [siteId] : []),
     limit,
     offset,
-  );
+  ).map((row) => ({ ...row, pinned_on: pinnedOn((row as { fanout_json?: string | null }).fanout_json) }));
 
 export const countRuns = (siteId = 0): number =>
   (siteId

@@ -195,7 +195,9 @@ export function mergeRecent(runs: RunListRow[], reels: ReelView[], limit = 12): 
             ? r.hold === 'awaiting'
               ? 'waiting for approval'
               : 'dry run'
-            : '',
+            : r.pinned_on
+              ? `pinned on ${r.pinned_on}`
+              : '',
     });
   }
 
