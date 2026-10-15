@@ -1508,14 +1508,28 @@ export function buildServer(
 
   /** The boards on a Pinterest account's profile, read through its first Buffer token; null without one. */
   async function profileBoardNames(profile: ChannelProfile): Promise<string[] | null> {
+    return (await profileBoards(profile))?.names ?? null;
+  }
+
+  /**
+   * The Pinterest profile an account posts to on its Buffer token, and its boards.
+   * A name that matches no profile there is an error, not "the first one": that
+   * would read another account's boards and call them this one's.
+   */
+  async function profileBoards(profile: ChannelProfile): Promise<{ channel: string; token: string; names: string[] } | null> {
     const token = listBufferAccounts(profile.site_id, encryptionKey).find((a) => a.profileId === profile.id && a.enabled && a.token);
     if (!token) return null;
     const client = new BufferClient(token.token);
     const channels = (await client.getChannels(await client.getOrganizationId()))
       .filter((c) => c.service === '' || c.service === 'pinterest');
     const username = bufferChannelName(profile).trim().toLowerCase();
-    const channel = (username ? channels.find((c) => c.name.toLowerCase() === username) : undefined) ?? channels[0];
-    return (channel?.boards ?? []).map((b) => b.name);
+    const channel = username ? channels.find((c) => c.name.toLowerCase() === username) : channels[0];
+    if (!channel) {
+      throw new Error(username
+        ? `no Pinterest profile named "${bufferChannelName(profile).trim()}" on the Buffer token ${token.label || ''}; it has: ${channels.map((c) => c.name).join(', ') || '(none)'}`
+        : `the Buffer token ${token.label || ''} has no Pinterest profile`);
+    }
+    return { channel: channel.name, token: token.label || '', names: (channel.boards ?? []).map((b) => b.name) };
   }
 
   /**
@@ -1573,8 +1587,11 @@ export function buildServer(
     }
     try {
       let existing: string[] = [];
+      let readFrom = '';
       try {
-        existing = (await profileBoardNames(profile)) ?? [];
+        const read = await profileBoards(profile);
+        existing = read?.names ?? [];
+        if (read) readFrom = ` Read from ${read.channel} (Buffer ${read.token}), its boards: ${existing.join(', ') || '(none)'}.`;
       } catch (err) {
         return redirect(reply, to, { kind: 'error', message: `Could not read the boards from Buffer, so nothing was suggested: ${errorMessage(err)}` });
       }
@@ -1587,8 +1604,8 @@ export function buildServer(
       return redirect(reply, to, {
         kind: 'ok',
         message: result.toCreate
-          ? `Boards linked. ${result.toCreate} new board(s) to create on Pinterest (marked Create below), then press Save boards to check.`
-          : 'Every group is linked to a board you already have. Nothing to create.',
+          ? `Boards linked. ${result.toCreate} new board(s) to create on Pinterest (marked Create below), then press Save boards to check.${readFrom}`
+          : `Every group is linked to a board you already have. Nothing to create.${readFrom}`,
       });
     } catch (err) {
       return redirect(reply, to, { kind: 'error', message: `Could not suggest boards: ${errorMessage(err)}` });
