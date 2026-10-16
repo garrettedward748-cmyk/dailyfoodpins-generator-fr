@@ -36,3 +36,5 @@ src/web/public/style.css
 *.db-shm
 *.db
 test.txt
+services/imagegen/accounts.json
+services/imagegen/active-profile-dir
