@@ -7,6 +7,7 @@ Use ultra-realistic professional food video, cinematic macro close-ups, warm inv
 STEAM: none, by default. Heavy steam is the clearest sign a food video was generated rather than filmed. It is allowed only for a dish eaten piping hot straight from the stove — a soup, a stew, pasta, a stir-fry, a pot as its lid comes off — and even then only a few thin, faint wisps that fade within a second, the way a real camera barely catches it in a kitchen. Never thick clouds, never curls or swirls, never steam rising through the whole shot. Baked goods — muffins, cakes, cookies, bread, pies, bars, brownies — have NO steam at all, however freshly baked. A cold or chilled dish — cheesecake, no-bake dessert, salad, frosted cake, frozen treat — has no steam, no bubbling and no oven; show it cool, set and creamy instead.
 
 THE SCENES — 0 to 8 seconds, then the final shot
+The names in capitals after "SCENE n" (HOOK, THE MISTAKE, THE FIX, THE RESULT…) are notes for you only. They are NEVER written on screen: no title card, no heading, no label. The only words on screen are the French subtitles and the final title.
 {{reelShape}}
 
 CLOSING — 8–10 sec, whatever the scenes above say
@@ -21,7 +22,7 @@ THE OPENING LINE
 The first spoken line is ONE complete French sentence of at most ten words, written about this dish. You may call it by a plain everyday name (« ces muffins », « cette tarte »), but do NOT copy, splice or rearrange words from the recipe title: a title cut into pieces reads as nonsense.
 
 SUBTITLES
-Every subtitle is a complete, grammatical French sentence that ends where a sentence ends, except where the scenes above ask for something else on purpose (three words joined with "+", a numbered "1." list). Never a fragment, never trailing off in a comma or a dangling preposition, and never words lifted out of the recipe title and pushed together. These are the first words the viewer reads: a broken one is read as a broken video.
+Every subtitle is a complete, grammatical French sentence that ends where a sentence ends, except where the scenes above ask for something else on purpose (three words joined with "+", a numbered "1." list). Never a fragment, never trailing off in a comma or a dangling preposition, and never words lifted out of the recipe title and pushed together. Keep each subtitle short (at most ten words) and spell every French word correctly, with its accents: a garbled or misspelled word is worse than a shorter sentence. These are the first words the viewer reads: a broken one is read as a broken video.
 
 VOICE & AUDIO
 The voiceover is {{presenter.name}}.
