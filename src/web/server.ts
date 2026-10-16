@@ -75,6 +75,7 @@ import {
   getSiteByDomain,
   listDecisions,
   listEvents,
+  clearEvents,
   listRecentCycles,
   listHeldRuns,
   listPromptVersions,
@@ -330,6 +331,7 @@ import { cleanTopics, DEFAULT_PER_TOPIC, getResearchJob, recallIdeas, rememberId
 import { liveDeps as liveResearchDeps, runAutoResearch, serperStateIn } from '../research/auto.js';
 import { filterWithModel, parseTopicIdeas, researchKeywords, titleCase, topicCandidates, verifyTopics } from '../research/keywords.js';
 import { googleAccountsPage, type GoogleAccountView } from './views/google-accounts.js';
+import { parseSnapshot, restorableCount, serviceIsBehind, takeSnapshot } from './google-snapshot.js';
 import {
   addBlogQuestions,
   blogPublishedToday,
@@ -2989,6 +2991,16 @@ export function buildServer(
         if (saved.ok) data = (await saved.json()) as typeof data;
       }
       view = { reachable: true, accounts: data.accounts, pending: data.pending, clipCost: data.clip_cost };
+      // Keep a copy in the platform's database, so a backup carries the list. A
+      // service that holds less than the copy (a new server) is offered the
+      // copy back instead of being allowed to overwrite it.
+      const saved = parseSnapshot(settings.get('google_accounts_snapshot'));
+      if (saved && serviceIsBehind(saved, data.accounts)) {
+        view.restore = { count: restorableCount(saved, data.accounts) };
+      } else {
+        const now = JSON.stringify(takeSnapshot(data.accounts, data.clip_cost));
+        if (now !== settings.get('google_accounts_snapshot')) settings.set('google_accounts_snapshot', now);
+      }
       const loginId = asNumber((request.query as { login?: string }).login, 0);
       if (loginId) {
         const st = await imageService(`/flow/accounts/${loginId}/login`);
@@ -2998,6 +3010,42 @@ export function buildServer(
       view = { reachable: false, error: errorMessage(err), accounts: [], pending: null };
     }
     return page(reply, 'Google accounts', '/settings/google', googleAccountsPage(view), readFlash(request.query));
+  });
+
+  app.post('/settings/google/restore', async (_request, reply) => {
+    const saved = parseSnapshot(settings.get('google_accounts_snapshot'));
+    if (!saved) return redirect(reply, '/settings/google', { kind: 'error', message: 'No saved copy of the accounts.' });
+    const put = async (path: string, body: unknown): Promise<void> => {
+      const response = await imageService(path, { method: 'PUT', body: JSON.stringify(body) });
+      if (!response.ok) throw new Error(await imageServiceError(response));
+    };
+    try {
+      const listed = await imageService('/flow/accounts');
+      if (!listed.ok) throw new Error(await imageServiceError(listed));
+      const have = new Set(((await listed.json()) as { accounts: { id: number }[] }).accounts.map((a) => a.id));
+      let done = 0;
+      for (const acc of saved.accounts) {
+        let id = acc.id;
+        if (!have.has(id)) {
+          const added = await imageService('/flow/accounts', { method: 'POST', body: JSON.stringify({ label: acc.label }) });
+          if (!added.ok) throw new Error(await imageServiceError(added));
+          id = ((await added.json()) as { id: number }).id;
+        }
+        if (acc.project_id) await put(`/flow/accounts/${id}/project`, { project_id: acc.project_id });
+        await put(`/flow/accounts/${id}/limits`, { daily_limit: acc.daily_limit, monthly_limit: acc.monthly_limit });
+        await put(`/flow/accounts/${id}/capabilities`, { images: acc.images, video: acc.video });
+        done += 1;
+      }
+      if (saved.clip_cost) await put('/flow/accounts-clip-cost', { clip_cost: saved.clip_cost });
+      // What the service holds now is the truth; the next visit saves it afresh.
+      settings.set('google_accounts_snapshot', '');
+      return redirect(reply, '/settings/google', {
+        kind: 'ok',
+        message: `${done} account${done === 1 ? '' : 's'} restored (names, projects, limits). Sign each one in again: the sign-ins stay on the old server.`,
+      });
+    } catch (err) {
+      return redirect(reply, '/settings/google', { kind: 'error', message: errorMessage(err) });
+    }
   });
 
   app.post('/settings/google/add', async (request, reply) => {
@@ -3144,6 +3192,9 @@ export function buildServer(
     try {
       const response = await imageService(`/flow/accounts/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error(await imageServiceError(response));
+      // A removal is deliberate: drop it from the saved copy too, or the page would offer it back.
+      const saved = parseSnapshot(settings.get('google_accounts_snapshot'));
+      if (saved) settings.set('google_accounts_snapshot', JSON.stringify({ ...saved, accounts: saved.accounts.filter((a) => a.id !== id) }));
       return redirect(reply, '/settings/google', { kind: 'ok', message: `Account #${id} removed.` });
     } catch (err) {
       return redirect(reply, '/settings/google', { kind: 'error', message: errorMessage(err) });
@@ -5122,6 +5173,12 @@ export function buildServer(
   app.get('/events', async (request, reply) =>
     page(reply, 'Events', '/events', eventsPage(listEvents(200)), readFlash(request.query)),
   );
+
+  app.post('/events/clear', async (request, reply) => {
+    const only = asString(formBody(request).level);
+    const removed = only === 'problems' ? clearEvents('warn') + clearEvents('error') : clearEvents();
+    return redirect(reply, '/events', { kind: 'ok', message: `${removed} event${removed === 1 ? '' : 's'} deleted from the log.` });
+  });
 
   /* -- Settings ---------------------------------------------------------- */
 

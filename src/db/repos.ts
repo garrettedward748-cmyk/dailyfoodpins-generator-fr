@@ -1631,6 +1631,10 @@ export const listEvents = (limit = 200, level?: string): EventRow[] =>
       )
     : all<EventRow>('SELECT * FROM events ORDER BY id DESC LIMIT ?', limit);
 
+/** Empty the log: every event, or only those of one level. Returns how many went. */
+export const clearEvents = (level?: string): number =>
+  (level ? run('DELETE FROM events WHERE level = ?', level) : run('DELETE FROM events')).changes;
+
 export const pruneEvents = (keepDays: number): number =>
   run("DELETE FROM events WHERE created_at < datetime('now', ?)", `-${keepDays} days`).changes;
 

@@ -33,6 +33,8 @@ export function googleAccountsPage(data: {
   clipCost?: number;
   /** The sign-in running or just finished, when the page was opened for one. */
   login?: { id: number; state: string; message: string; running: boolean } | null;
+  /** A saved copy holds accounts the service has lost, e.g. after a restore on a new server. */
+  restore?: { count: number } | null;
 }): Html {
   const many = data.accounts.length > 1;
   return html`
@@ -50,6 +52,15 @@ export function googleAccountsPage(data: {
       : html`
           ${data.pending
             ? html`<div class="flash warn">Switching to account #${data.pending} as soon as the current image is finished.</div>`
+            : raw('')}
+          ${data.restore
+            ? html`<div class="flash warn">
+                A saved copy of the accounts (from a backup) has ${data.restore.count} that this image service does not have yet.
+                <form method="post" action="/settings/google/restore" style="display:inline;margin-left:8px">
+                  <button type="submit" class="small primary">Restore the accounts</button>
+                </form>
+                <div class="small muted">Names, Flow projects, limits and what each may make come back. The Google sign-ins do not: sign each account in again.</div>
+              </div>`
             : raw('')}
           <div class="card">
             ${data.accounts.length === 0

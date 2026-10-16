@@ -2214,6 +2214,19 @@ export function eventsPage(events: EventRow[]): Html {
       A log of technical problems and what the scheduler did. If an article failed
       and its page did not say enough, the reason is usually here.
     </p>
+    ${events.length > 0
+      ? html`<div class="row" style="gap:8px;margin-bottom:12px">
+          <form method="post" action="/events/clear" style="margin:0"
+                onsubmit="return confirm('Delete every event from the log?')">
+            <button type="submit">Clear the log</button>
+          </form>
+          <form method="post" action="/events/clear" style="margin:0"
+                onsubmit="return confirm('Delete the warnings and errors from the log?')">
+            <input type="hidden" name="level" value="problems" />
+            <button type="submit" class="small">Clear only problems</button>
+          </form>
+        </div>`
+      : raw('')}
     <div class="card table-wrap">
       ${events.length === 0
         ? emptyState('Nothing logged yet.')

@@ -407,6 +407,16 @@ export const SETTING_SPECS: SettingSpec[] = [
       'an instance running somewhere else.',
   },
   {
+    // A copy of the image service's Google accounts, so a backup carries them.
+    key: 'google_accounts_snapshot',
+    label: 'Google accounts (copy)',
+    group: 'images',
+    secret: false,
+    hidden: true,
+    default: '',
+    help: 'Kept automatically from Setup -> Google accounts and restored from there.',
+  },
+  {
     key: 'flow_project_id',
     label: 'Flow project ID',
     group: 'images',

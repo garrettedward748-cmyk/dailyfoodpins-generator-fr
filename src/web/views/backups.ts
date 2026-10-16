@@ -42,7 +42,7 @@ export function backupsPage(data: { backups: BackupFile[]; restarting?: boolean 
       <p class="small muted" style="margin-bottom:0">
         Kept on this server. <strong>Download one from time to time</strong> and keep it somewhere safe and
         private (it can unlock your saved tokens): if the server is lost, so are the copies on it.
-        Signed-in Google accounts are not included — sign in again after moving to a new server.
+        The list of Google accounts (names, Flow projects, limits) is included and can be restored from Setup → Google accounts. Their sign-ins are not: sign in again after moving to a new server.
       </p>
     </div>
 
