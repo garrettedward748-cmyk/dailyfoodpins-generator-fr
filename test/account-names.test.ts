@@ -9,7 +9,7 @@ vi.mock('../src/llm/ask.js', () => ({
     return {
       content: JSON.stringify({
         names: [
-          { display: 'Cheesecake & Caramel Kitchen', username: 'Cheesecake_Caramel', tagline: 'Easy Dessert Recipes', bio: 'Creamy cheesecakes and caramel desserts.' },
+          { display: 'Cheesecake & Caramel Kitchen', username: 'Cheesecake_Caramel', tagline: '| Easy Dessert Recipes', bio: 'Creamy cheesecakes and caramel desserts.' },
           { display: 'Taken One', username: 'arbmomrecipes', tagline: '', bio: '' },
           { display: '', username: 'nameless', tagline: '', bio: '' },
         ],
@@ -50,10 +50,14 @@ describe('Suggest account names', () => {
 
     const names = getAccountNameSuggestions(site);
     expect(names.map((n) => n.username)).toEqual(['cheesecakecaramel']);
+    // The view adds the separator: one the model put in too showed twice.
+    expect(names[0]!.tagline).toBe('Easy Dessert Recipes');
 
     const page = await app.inject({ method: 'GET', url: `/accounts/${site}`, headers: { cookie } });
     expect(page.body).toContain('Names for a new Pinterest account');
     expect(page.body).toContain('Cheesecake &amp; Caramel Kitchen | Easy Dessert Recipes');
+
+    expect(page.body).not.toContain('| |');
 
     await app.inject({ method: 'POST', url: `/accounts/${site}/pinterest/names/clear`, headers: { cookie } });
     expect(getAccountNameSuggestions(site)).toEqual([]);

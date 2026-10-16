@@ -9,17 +9,16 @@ Its recipes come from these topic groups:
 Pinterest accounts it must NOT copy or look like:
 {{taken}}
 
-The account will pin EVERY recipe of the site, into all the boards above. So each name must cover the whole range, not one part of it:
-- First find what the boards have in common (for example « desserts », « dîners faciles », « cuisine maison ») and the one or two topics with the most boards (for example « cheesecake »).
-- Build every name on that common theme, or on the biggest topic together with it (« Cheesecakes & desserts »).
-- Never build a name on a small part of the boards: one fruit, one season, one holiday, one diet, one ingredient (no « Végan… », « Potiron… », « Miel… », « Halloween… ») unless most of the boards are about it.
+The name and username must last. The site may add other kinds of recipes later, and a Pinterest username is hard to change, so the name must NOT lock the account into today's topics:
+- "display" and "username": a general food or home cooking name that fits ANY recipe the site could publish (for example « La Cuillère Gourmande », « Histoires de Cuisine », « Recettes de Tous les Jours », « Le Coin des Recettes »). Never put a diet, an ingredient, a dish, a meal, a season or a holiday in them (no « Protéines… », « Végan… », « Cheesecake… », « Petit-déjeuner… », « Potiron… »).
+- "tagline" and "bio": these CAN be changed any time, so they say what the account pins today, using the main search words of the boards above. Build them on what the boards have in common, never on a small part of them (one fruit, one ingredient) unless most of the boards are about it.
 
 Suggest 8 names for the new account. Each one:
-- "display": the profile name, 2-5 words, French capitalisation, built on the words people type into Pinterest search for the common theme. Friendly and easy to remember. No emoji.
-- "username": the same idea as one lowercase word, letters and digits only, 6-25 characters, no dots, dashes or underscores.
-- "tagline": a short line to put after the name with " | " (for example « Recettes faciles »), 2-5 words with search words.
-- "bio": 120-160 characters, says what someone will find across the boards, uses the main search phrases, natural sentences, no hashtags.
-Make the 8 names clearly different from each other: some keyword-first (« Desserts faciles »), some brand-like (« La Part Sucrée »).
+- "display": the profile name, 2-4 words, French capitalisation, general as said above. Friendly and easy to remember. No emoji.
+- "username": the same idea as one lowercase word, letters and digits only, 6-25 characters, no dots, dashes or underscores. General as said above.
+- "tagline": a short line of 2-5 words with today's search words (for example « Recettes faciles »). Only the words: no "|" or other separator, it is added for you.
+- "bio": 120-160 characters, says what someone will find across the boards today, uses the main search phrases, natural sentences, no hashtags.
+Make the 8 names clearly different from each other: some keyword-first but still general (« Recettes maison faciles »), some brand-like (style « La Part Sucrée », without naming a dish).
 
 Answer with one valid JSON object and nothing else:
 {"names":[{"display":"...","username":"...","tagline":"...","bio":"..."}]}

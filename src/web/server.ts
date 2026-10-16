@@ -1652,7 +1652,8 @@ export function buildServer(
         const username = String(n?.username ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 30);
         if (!display || username.length < 3 || seen.has(username)) continue;
         seen.add(username);
-        names.push({ display, username, tagline: String(n?.tagline ?? '').trim(), bio: String(n?.bio ?? '').trim() });
+        // The view adds the " | " itself: one the model put in too showed as "Name | | Tagline".
+        names.push({ display: display.replace(/[\s|]+$/, ''), username, tagline: String(n?.tagline ?? '').replace(/^[\s|]+|[\s|]+$/g, ''), bio: String(n?.bio ?? '').trim() });
       }
       if (names.length === 0) throw new Error('the model gave no usable names');
       setAccountNameSuggestions(siteId, names);

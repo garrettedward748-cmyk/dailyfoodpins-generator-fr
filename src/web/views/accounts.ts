@@ -121,7 +121,9 @@ function nameSuggestions(site: AccountsSiteView): Html {
     <div class="table-wrap"><table>
       <thead><tr><th>Name</th><th>Username</th><th>Bio</th></tr></thead>
       <tbody>${names.map((n) => {
-        const full = n.tagline ? `${n.display} | ${n.tagline}` : n.display;
+        // Suggestions saved before the separator was trimmed carried their own "|".
+        const tagline = n.tagline.replace(/^[\s|]+|[\s|]+$/g, '');
+        const full = tagline ? `${n.display.replace(/[\s|]+$/, '')} | ${tagline}` : n.display;
         return html`<tr>
           <td>${full} ${copy(full)}</td>
           <td class="nowrap">${n.username} ${copy(n.username)}</td>
