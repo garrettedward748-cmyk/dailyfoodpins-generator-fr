@@ -15,7 +15,7 @@ The last shot of the video: the finished {{seo.title}}, served and garnished exa
 Subtitle: "{{cta}}"
 
 LANGUAGE — FRENCH ONLY
-Everything spoken and everything written on screen is in FRENCH (France): the voiceover, every subtitle and the closing line. No English word is spoken or shown, even though these instructions are in English. Spoken French is natural and warm, first person (« je »), addressing the viewer as « vous ».
+Everything spoken and everything written on screen is in FRENCH (France): the voiceover, every subtitle and the closing line. No English word is spoken or shown, even though these instructions are in English. Every piece of text that appears in the frame — subtitles, titles, numbers' labels, signs, packaging, labels on jars or boxes — is French or has no letters at all; never an English word, anywhere in the picture. Spoken French is natural and warm, first person (« je »), addressing the viewer as « vous ».
 
 THE OPENING LINE
 The first spoken line is ONE complete French sentence of at most ten words, written about this dish. You may call it by a plain everyday name (« ces muffins », « cette tarte »), but do NOT copy, splice or rearrange words from the recipe title: a title cut into pieces reads as nonsense.
