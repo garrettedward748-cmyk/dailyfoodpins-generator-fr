@@ -108,6 +108,7 @@ import {
   getPromptOverride,
   loadLinkGrid,
   bulkActivate,
+  bulkDeleteSites,
   bulkPause,
   bulkSetAutoPublish,
   bulkSetDailyTarget,
@@ -1183,6 +1184,9 @@ export function buildServer(
         // is a deliberate stop, and one that expired on its own would be a
         // surprise later.
         return done(bulkPause(ids, 'Paused from the sites list'), 'paused');
+
+      case 'delete':
+        return done(bulkDeleteSites(ids), 'deleted');
 
       case 'auto':
         return done(bulkSetAutoPublish(ids, true), 'set to publish automatically');

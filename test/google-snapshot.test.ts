@@ -51,3 +51,18 @@ describe('clearing the history', () => {
     closeDatabase();
   });
 });
+
+describe('deleting several sites at once', () => {
+  it('removes the ticked ones only', async () => {
+    const { upsertSite, bulkDeleteSites, listSites } = await import('../src/db/repos.js');
+    const { randomBytes } = await import('node:crypto');
+    openDatabase(':memory:');
+    const key = randomBytes(32);
+    const mk = (d: string) => upsertSite({ name: d, domain: d, status: 'active', pin_username: '', project_id: '', daily_target: 1, interval_minutes: 60 }, key);
+    const a = mk('a.com'); mk('b.com'); const c = mk('c.com');
+    expect(bulkDeleteSites([a, c])).toBe(2);
+    expect(listSites().map((s) => s.domain)).toEqual(['b.com']);
+    expect(bulkDeleteSites([])).toBe(0);
+    closeDatabase();
+  });
+});

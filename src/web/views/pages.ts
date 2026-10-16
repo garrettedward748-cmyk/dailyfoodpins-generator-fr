@@ -779,6 +779,13 @@ export function sitesPage(
                 </select>
                 <button type="submit" name="action" value="interval" formnovalidate>Set</button>
               </div>
+
+              <div class="bulk-group">
+                <button type="submit" name="action" value="delete" class="danger" formnovalidate
+                        onclick="var n=document.getElementById('pick-count').textContent;return confirm('Delete '+n+' site(s) and their settings? This cannot be undone.')">
+                  Delete
+                </button>
+              </div>
             </div>
           </form>
         `}

@@ -633,6 +633,19 @@ export function upsertSite(input: SiteInput, key: Buffer, id?: number): number {
   ).lastInsertRowid;
 }
 
+/** Delete several sites at once; returns how many were removed. */
+export const bulkDeleteSites = (ids: number[]): number => {
+  if (ids.length === 0) return 0;
+  return transaction(() => {
+    let removed = 0;
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500);
+      removed += run(`DELETE FROM sites WHERE id IN (${placeholders(chunk)})`, ...chunk).changes;
+    }
+    return removed;
+  });
+};
+
 export const deleteSite = (id: number): void => {
   run('DELETE FROM sites WHERE id = ?', id);
 };
