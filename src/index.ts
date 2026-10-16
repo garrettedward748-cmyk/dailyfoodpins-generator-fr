@@ -4,7 +4,8 @@ import { cleanupMedia, configureMediaStore } from './integrations/media-store.js
 import { autoResearchTick } from './research/auto.js';
 import { gscTick, liveGscDeps, minImpressionsFrom } from './gsc/engine.js';
 import { liveRadarDeps, radarOptionsFrom, radarTick } from './research/social/radar.js';
-import { applyPendingRestore, configureBackups, dailyBackupIfDue, restartExitCode } from './backup/index.js';
+import { applyPendingRestore, configureBackups, configureSignins, dailyBackupIfDue, restartExitCode } from './backup/index.js';
+import { imageServiceLink, pushPendingSignins } from './backup/signins.js';
 import { openDatabase, closeDatabase } from './db/index.js';
 import { insertEvent } from './db/repos.js';
 import { configurePromptFiles } from './pipeline/prompt-files.js';
@@ -56,6 +57,22 @@ async function main(): Promise<void> {
   });
 
   const settings = new Settings(config.encryptionKey);
+
+  // The Google sign-ins ride inside every backup; after a restore they are
+  // handed to the image service as soon as it answers.
+  const signinsLink = imageServiceLink((key) => settings.get(key));
+  configureSignins(signinsLink);
+  let signinsTries = 0;
+  const signinsTimer = setInterval(() => {
+    void pushPendingSignins(config.dataDir, signinsLink).then((done) => {
+      if (done || ++signinsTries >= 60) {
+        clearInterval(signinsTimer);
+        if (done) settings.set('google_accounts_snapshot', '');
+        else log.warn('the Google sign-ins from the restored backup could not be handed to the image service');
+      }
+    });
+  }, 30_000);
+  signinsTimer.unref();
 
   const server = buildServer(settings, config.encryptionKey, {
     password: config.authPassword,

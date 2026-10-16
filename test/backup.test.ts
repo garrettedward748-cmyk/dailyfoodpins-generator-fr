@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -7,8 +7,9 @@ import { all, closeDatabase, openDatabase, run } from '../src/db/index.js';
 import { upsertSite } from '../src/db/repos.js';
 import { setLogLevel } from '../src/lib/logger.js';
 import {
-  applyPendingRestore, backupPath, configureBackups, createBackup, dailyBackupIfDue, listBackups, stageRestore,
+  applyPendingRestore, backupPath, configureBackups, configureSignins, createBackup, dailyBackupIfDue, listBackups, stageRestore,
 } from '../src/backup/index.js';
+import { pushPendingSignins, signinsPendingPath } from '../src/backup/signins.js';
 
 /** A backup round trip on a real database file: make, change, restore, restart. */
 
@@ -87,5 +88,35 @@ describe('Setup -> Backups page', () => {
     expect(file.statusCode).toBe(200);
     expect(file.rawPayload.subarray(0, 2)).toEqual(Buffer.from([0x1f, 0x8b])); // gzip
     await app.close();
+  });
+
+  it('carries the Google sign-ins in the backup and hands them over after a restore', async () => {
+    configureSignins({
+      fetchTo: async (dest) => { writeFileSync(dest, 'SIGNINS-DATA'); return true; },
+      push: async () => true,
+    });
+    const name = await createBackup('manual');
+    configureSignins(null);
+    await stageRestore(name);
+    closeDatabase();
+    applyPendingRestore(db, dir);
+    openDatabase(db);
+    expect(readFileSync(signinsPendingPath(dir), 'utf8')).toBe('SIGNINS-DATA');
+
+    let got = '';
+    const down = { fetchTo: async () => false, push: async () => false };
+    expect(await pushPendingSignins(dir, down)).toBe(false);
+    expect(existsSync(signinsPendingPath(dir))).toBe(true);
+    const up = { fetchTo: async () => false, push: async (f: string) => { got = readFileSync(f, 'utf8'); return true; } };
+    expect(await pushPendingSignins(dir, up)).toBe(true);
+    expect(got).toBe('SIGNINS-DATA');
+    expect(existsSync(signinsPendingPath(dir))).toBe(false);
+  });
+
+  it('still makes the backup when the image service is down', async () => {
+    configureSignins({ fetchTo: async () => { throw new Error('down'); }, push: async () => false });
+    const name = await createBackup('manual');
+    configureSignins(null);
+    expect(backupPath(name)).not.toBeNull();
   });
 });

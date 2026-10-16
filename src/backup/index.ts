@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { getDb } from '../db/index.js';
 import { createLogger, errorMessage } from '../lib/logger.js';
+import { SIGNINS_IN_BACKUP, signinsPendingPath, type SigninsLink } from './signins.js';
 
 const run = promisify(execFile);
 const log = createLogger('backup');
@@ -34,6 +35,12 @@ export interface BackupFile {
 
 let dataDir = resolve('./data');
 let keyHex = '';
+let signinsLink: SigninsLink | null = null;
+
+/** Where the Google sign-ins come from, so every backup carries them; set once at start-up. */
+export function configureSignins(link: SigninsLink | null): void {
+  signinsLink = link;
+}
 
 /** Where backups go and the key they carry; set once at start-up. */
 export function configureBackups(dir: string, encryptionKey: Buffer): void {
@@ -75,8 +82,18 @@ export async function createBackup(kind: BackupKind = 'manual'): Promise<string>
   try {
     getDb().exec(`VACUUM INTO '${join(work, 'platform.db').replace(/'/g, "''")}'`);
     writeFileSync(join(work, 'encryption-key'), keyHex, { mode: 0o600 });
-    writeFileSync(join(work, 'backup.json'), JSON.stringify({ created: new Date().toISOString(), kind, format: 1 }));
-    await run('tar', ['-czf', `${final}.part`, '-C', work, 'platform.db', 'encryption-key', 'backup.json']);
+    // The Google sign-ins ride along when the image service answers. A service
+    // that is down must not stop the backup of everything else.
+    let signins = false;
+    if (signinsLink) {
+      try {
+        signins = await signinsLink.fetchTo(join(work, SIGNINS_IN_BACKUP));
+      } catch (err) {
+        log.warn(`backup made without the Google sign-ins: ${errorMessage(err)}`);
+      }
+    }
+    writeFileSync(join(work, 'backup.json'), JSON.stringify({ created: new Date().toISOString(), kind, format: 1, signins }));
+    await run('tar', ['-czf', `${final}.part`, '-C', work, 'platform.db', 'encryption-key', 'backup.json', ...(signins ? [SIGNINS_IN_BACKUP] : [])]);
     renameSync(`${final}.part`, final);
   } finally {
     rmSync(`${final}.part`, { force: true });
@@ -156,6 +173,12 @@ export function applyPendingRestore(dbPath: string, dir: string): string | null 
       writeFileSync(join(dir, '.encryption-key'), hex, { mode: 0o600 });
       note += ' (with its encryption key)';
     }
+  }
+  // The Google sign-ins wait for the image service, which may not be up yet.
+  const signins = join(pending, SIGNINS_IN_BACKUP);
+  if (existsSync(signins)) {
+    copyFileSync(signins, signinsPendingPath(dir));
+    note += '; Google sign-ins will go to the image service';
   }
   rmSync(pending, { recursive: true, force: true });
   return note;

@@ -63,23 +63,6 @@ export function googleAccountsPage(data: {
               </div>`
             : raw('')}
           <div class="card">
-            <h3 style="margin-top:0">Move the accounts to another server</h3>
-            <p class="small muted">
-              Platform backups keep the list of accounts but not the Google sign-ins. To bring the accounts
-              <strong>with their sign-ins</strong> to a new server, download this file here and upload it
-              there. It holds private Google logins: keep it somewhere safe and do not share it.
-              Google may still ask an account to sign in again on a new server.
-            </p>
-            <div class="row" style="gap:12px;align-items:center;flex-wrap:wrap">
-              <a class="button" href="/settings/google/export">Download accounts + sign-ins</a>
-              <form method="post" action="/settings/google/import" enctype="multipart/form-data" class="row" style="gap:8px;margin:0"
-                    onsubmit="return confirm('Replace the accounts on this server with the ones in the file?')">
-                <input type="file" name="file" accept=".gz,.tgz" required />
-                <button type="submit">Upload and replace</button>
-              </form>
-            </div>
-          </div>
-          <div class="card">
             ${data.accounts.length === 0
               ? emptyState('No accounts.')
               : html`<div class="table-wrap">

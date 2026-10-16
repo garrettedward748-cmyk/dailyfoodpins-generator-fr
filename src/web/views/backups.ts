@@ -42,7 +42,7 @@ export function backupsPage(data: { backups: BackupFile[]; restarting?: boolean 
       <p class="small muted" style="margin-bottom:0">
         Kept on this server. <strong>Download one from time to time</strong> and keep it somewhere safe and
         private (it can unlock your saved tokens): if the server is lost, so are the copies on it.
-        The list of Google accounts (names, Flow projects, limits) is included and can be restored from Setup → Google accounts. Their sign-ins are not: to move them too, use Setup → Google accounts → Download accounts + sign-ins.
+        The list of Google accounts (names, Flow projects, limits) is included and can be restored from Setup → Google accounts. Their Google sign-ins are included too (private logins: keep the file safe). This makes each backup large, often 100 MB or more, and the kept backups add up on the disk. After a restore, the sign-ins go to the image service on their own; Google may still ask an account to sign in again on a new server.
       </p>
     </div>
 
