@@ -61,6 +61,12 @@ describe('Suggest boards', () => {
     const page = await app.inject({ method: 'GET', url: '/accounts', headers: { cookie } });
     expect(page.body).toContain('Create the 3 new board(s) on Pinterest');
     expect(page.body).toContain('Chicken Dinner Recipes');
+    // An account with no Buffer token yet has no boards to read: the
+    // descriptions to copy were thrown away with them.
+    const plan = JSON.parse(row.board_suggestions);
+    expect(plan.boards.find((b: { group: string }) => b.group === 'dessert').description).toBe('Simple desserts for every day.');
+    expect(plan.general.description).toBe('Everyday recipes.');
+    expect(page.body).toContain('Quick chicken dinners.');
   });
 
   it('links groups to boards the account already has and proposes only the missing ones', async () => {

@@ -1764,7 +1764,14 @@ export function buildServer(
       });
       parsed = tryParseJson<BoardPlan>(answer.content)?.value;
     }
-    const settle = (name: string, description: string): Board => lookup(name) ?? { name, description, exists: false };
+    // A board still to create keeps the description just written for it: with
+    // no boards to read (no Buffer token yet), lookup hands every name back
+    // bare, and the text to copy into Pinterest was lost.
+    const settle = (name: string, description: string): Board => {
+      const found = lookup(name);
+      if (!found) return { name, description, exists: false };
+      return found.exists ? found : { ...found, description: found.description || description };
+    };
 
     const boards: ({ group: string } & Board)[] = groups.map((g) => {
       const key = g.group.toLowerCase();
