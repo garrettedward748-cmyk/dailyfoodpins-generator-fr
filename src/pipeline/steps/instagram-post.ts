@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { recipeFileName } from '../../lib/file-name.js';
 import type { Step } from '../engine.js';
 import type { SeoData } from './content.js';
 import { getCompletedStep } from '../../db/repos.js';
@@ -50,7 +50,7 @@ export const instagramPostStep: Step<InstagramPostInput, InstagramPostOutput> = 
     if (!imageUrl) {
       const host = ctx.site.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
       const source = await ctx.images.download(/^https?:\/\//.test(input.heroImageUrl) ? input.heroImageUrl : `https://${host}${input.heroImageUrl}`);
-      const uploaded = await ctx.siteApi.uploadImage(await cropForFacebookFeed(source.data, 'center'), `${randomUUID()}.jpg`, 'image/jpeg', 'recipes');
+      const uploaded = await ctx.siteApi.uploadImage(await cropForFacebookFeed(source.data, 'center'), recipeFileName(ctx.keyword?.seed_keyword ?? '', 'instagram', 'jpg'), 'image/jpeg', 'recipes');
       imageUrl = ctx.siteApi.absoluteUrl(uploaded.url);
     }
 

@@ -1,5 +1,5 @@
 import { brandName } from '../../core/social-only.js';
-import { randomUUID } from 'node:crypto';
+import { recipeFileName } from '../../lib/file-name.js';
 import type { Step } from '../engine.js';
 import type { SeoData } from './content.js';
 import { getFbPageByProfile, pageForSite, recordFbFeedPost, recordFbFeedPostResolved, resolveFbGraphTarget } from '../../db/repos.js';
@@ -125,7 +125,7 @@ export const collagePostStep: Step<CollagePostInput, CollagePostOutput> = {
         : undefined;
       const composed = await composeCollage(buffers, { watermark });
 
-      const uploaded = await ctx.siteApi.uploadImage(composed, `${randomUUID()}.jpg`, 'image/jpeg', 'recipes');
+      const uploaded = await ctx.siteApi.uploadImage(composed, recipeFileName(ctx.keyword?.seed_keyword ?? '', 'collage', 'jpg'), 'image/jpeg', 'recipes');
       const imageUrl = ctx.siteApi.absoluteUrl(uploaded.url);
 
       let text = '';

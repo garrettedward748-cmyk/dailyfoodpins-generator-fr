@@ -67,8 +67,8 @@ export class SocialOnlySiteApi extends SiteApiClient {
 
   override async uploadImage(data: Buffer, filename: string, contentType = 'image/webp', category = 'recipes'): Promise<UploadResult> {
     // A name made from the recipe ("cookies-aux-pepites-hero-a1b2c3.webp") keeps its words.
-    const stem = filename.replace(/\.[a-z0-9]+$/i, '').replace(/-[0-9a-f]{6}$/, '');
-    const prefix = filename.startsWith('reel-') ? 'reel' : /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(filename) || !stem ? 'img' : stem;
+    const stem = filename.replace(/\.[a-z0-9]+$/i, '');
+    const prefix = stem || 'img';
     const saved = await saveMediaImage(data, contentType, prefix);
     return {
       success: true,
@@ -83,8 +83,8 @@ export class SocialOnlySiteApi extends SiteApiClient {
     };
   }
 
-  override async uploadVideo(data: Buffer): Promise<{ url: string; size: number }> {
-    const saved = saveMediaVideo(data, 'reel');
+  override async uploadVideo(data: Buffer, filename = ''): Promise<{ url: string; size: number }> {
+    const saved = saveMediaVideo(data, filename.replace(/\.[a-z0-9]+$/i, '') || 'reel');
     return { url: saved.url, size: saved.size };
   }
 

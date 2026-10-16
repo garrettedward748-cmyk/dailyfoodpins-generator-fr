@@ -30,7 +30,7 @@ export interface FilmDeps {
   /** Where clips land: one folder per reel under it. */
   clipsDir: string;
   /** Process reels: put a frame on the site so any Google account can fetch it. */
-  uploadImage?(siteId: number, data: Buffer, contentType: string): Promise<string>;
+  uploadImage?(siteId: number, data: Buffer, contentType: string, name?: string): Promise<string>;
   /** Process reels: the last frame of a clip. ffmpeg, in production. */
   lastFrame?(clipPath: string): Promise<Buffer>;
 }
@@ -78,7 +78,7 @@ export async function filmPending(
       if (!scene.image_url && deps.uploadImage && reel.site_id) {
         try {
           const frame = await (deps.lastFrame ?? ffmpegLastFrame)(before.clip_path);
-          const url = await deps.uploadImage(reel.site_id, frame, 'image/jpeg');
+          const url = await deps.uploadImage(reel.site_id, frame, 'image/jpeg', reel.run_title || reel.seed_keyword || '');
           updateScene(scene.id, { imageUrl: url });
           scene.image_url = url;
         } catch (err) {

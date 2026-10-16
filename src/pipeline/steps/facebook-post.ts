@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { recipeFileName } from '../../lib/file-name.js';
 import type { Step } from '../engine.js';
 import type { SeoData } from './content.js';
 import { getFbPageByProfile, pageForSite, recordFbFeedPost, recordFbFeedPostResolved, resolveFbGraphTarget } from '../../db/repos.js';
@@ -57,7 +57,7 @@ export const facebookPostStep: Step<FacebookPostInput, FacebookPostOutput> = {
     const absolute = /^https?:\/\//.test(picture) ? picture : `https://${host}${picture}`;
     const file = await ctx.images.download(absolute);
     const cropped = source === 'pin' ? await fitForFacebookFeed(file.data) : await cropForFacebookFeed(file.data, 'center');
-    const uploaded = await ctx.siteApi.uploadImage(cropped, `${randomUUID()}.jpg`, 'image/jpeg', 'recipes');
+    const uploaded = await ctx.siteApi.uploadImage(cropped, recipeFileName(ctx.keyword?.seed_keyword ?? '', 'facebook', 'jpg'), 'image/jpeg', 'recipes');
     const imageUrl = ctx.siteApi.absoluteUrl(uploaded.url);
 
     let text = (input.text ?? '').trim();

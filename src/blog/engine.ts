@@ -1,5 +1,5 @@
 import { HALAL_RULE, halalOnly, haramIn } from '../core/halal.js';
-import { randomUUID } from 'node:crypto';
+import { recipeFileName } from '../lib/file-name.js';
 import { formatResearch, webSearchKeys, type Source } from '../llm/web-search.js';
 import { findOnGoogle } from '../research/serp.js';
 import { askPrompt } from '../llm/ask.js';
@@ -383,7 +383,7 @@ export async function writeBlogArticle(
   const generated = await images.generate(article.image_prompt, 'HORIZONTAL');
   heartbeat();
   const extension = generated.contentType.includes('png') ? 'png' : generated.contentType.includes('jpeg') ? 'jpg' : 'webp';
-  const uploaded = await api.uploadImage(generated.data, `${randomUUID()}.${extension}`, generated.contentType, 'covers');
+  const uploaded = await api.uploadImage(generated.data, recipeFileName(article.title, 'cover', extension), generated.contentType, 'covers');
   heartbeat();
 
   const posted = await api.publishPost({

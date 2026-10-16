@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { recipeFileName } from '../lib/file-name.js';
 import { all, get, run } from '../db/index.js';
 import { getSite, insertEvent, listSites, siteSecrets, type SiteRow } from '../db/repos.js';
 import { HALAL_RULE, halalOnly } from '../core/halal.js';
@@ -155,7 +155,7 @@ export async function fillTerm(site: { name: string; domain: string }, item: Tax
       const prompt = render(deps.imagePrompt || DEFAULT_IMAGE_PROMPT, { name: displayName(item.name), kind: KIND[item.table] });
       const made = await deps.image(prompt);
       const extension = made.contentType.includes('png') ? 'png' : made.contentType.includes('jpeg') ? 'jpg' : 'webp';
-      const uploaded = await deps.api.uploadImage(made.data, `${randomUUID()}.${extension}`, made.contentType, 'taxonomy');
+      const uploaded = await deps.api.uploadImage(made.data, recipeFileName(displayName(item.name), '', extension), made.contentType, 'taxonomy');
       newImage = uploaded.url;
       update.image = uploaded.url;
     } catch (err) {

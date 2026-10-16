@@ -1,5 +1,5 @@
 import { readLocalMedia } from '../integrations/media-store.js';
-import { randomUUID } from 'node:crypto';
+import { recipeFileName } from '../lib/file-name.js';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -123,13 +123,13 @@ export interface ReelDeps {
    * its public url. Flow's own urls expire; the site's do not, and the clip
    * is filmed from this one.
    */
-  uploadImage(siteId: number, data: Buffer, contentType: string): Promise<string>;
+  uploadImage(siteId: number, data: Buffer, contentType: string, name?: string): Promise<string>;
   /**
    * Put a finished reel on its site and give back its public url, and
    * schedule it on that site's Buffer account. Only the Buffer route uses
    * these; publishing straight to the Page sends the bytes itself.
    */
-  uploadVideo(siteId: number, data: Buffer): Promise<string>;
+  uploadVideo(siteId: number, data: Buffer, name?: string): Promise<string>;
   /** Which route a finished reel takes to Facebook. Setup -> Reels picks it. */
   reelPublisher: 'facebook' | 'buffer';
   scheduleReel(input: {
@@ -367,12 +367,12 @@ export function defaultDeps(settings: Settings, key: Buffer): ReelDeps {
     assemble: (clips, out, cta) => assembleReel(clips, out, { ctaText: cta }),
     assembleProcess: (clips, out, music) => assembleProcessReel(clips, out, { music }),
     lastFrame: (clip) => lastFrame(clip),
-    async uploadImage(siteId, data, contentType) {
+    async uploadImage(siteId, data, contentType, name) {
       const site = getSite(siteId);
       if (!site) throw new Error('The site this reel belongs to no longer exists.');
       const api = siteApiFor(site, siteSecrets(site, key).apiToken);
       const extension = contentType.includes('png') ? 'png' : contentType.includes('jpeg') ? 'jpg' : 'webp';
-      const uploaded = await api.uploadImage(data, `reel-${randomUUID()}.${extension}`, contentType, 'recipes');
+      const uploaded = await api.uploadImage(data, recipeFileName(name ?? '', 'reel-scene', extension), contentType, 'recipes');
       return api.absoluteUrl(uploaded.url);
     },
     pause: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -400,11 +400,11 @@ export function defaultDeps(settings: Settings, key: Buffer): ReelDeps {
     youtubeRecipe: parseRecipeInPost(settings.get('caption_yt_recipe')),
     instagramRecipe: parseRecipeInPost(settings.get('caption_ig_recipe')),
     tiktokRecipe: parseRecipeInPost(settings.get('caption_tt_recipe')),
-    async uploadVideo(siteId, data) {
+    async uploadVideo(siteId, data, name) {
       const site = getSite(siteId);
       if (!site) throw new Error('The site this reel belongs to no longer exists.');
       const api = siteApiFor(site, siteSecrets(site, key).apiToken);
-      const uploaded = await api.uploadVideo(data, `reel-${randomUUID()}.mp4`);
+      const uploaded = await api.uploadVideo(data, recipeFileName(name ?? '', 'reel', 'mp4'));
       return uploaded.url;
     },
     async scheduleReel(input) {
@@ -840,7 +840,7 @@ async function imagingStage(reel: ReelView, settings: Settings, deps: ReelDeps):
     const image = await deps.images.generate(scene.image_prompt, 'VERTICAL', {
       referenceUrls: feature ? [feature] : [],
     });
-    const url = await deps.uploadImage(reel.site_id, image.data, image.contentType);
+    const url = await deps.uploadImage(reel.site_id, image.data, image.contentType, reel.run_title || reel.seed_keyword || '');
     updateScene(scene.id, { imageUrl: url });
     made += 1;
     log.info(`reel ${reel.id}: fresh image for scene ${scene.position}`);
@@ -1299,7 +1299,7 @@ async function publishThroughBuffer(
   // Once on the site, then reused: a retry of one channel does not upload it again.
   let videoUrl = channels.siteVideo ?? '';
   if (!videoUrl) {
-    videoUrl = await deps.uploadVideo(siteId, video);
+    videoUrl = await deps.uploadVideo(siteId, video, reel.run_title || reel.seed_keyword || '');
     channels.siteVideo = videoUrl;
     save();
     log.info(`reel ${reel.id}: video published at ${videoUrl}`);

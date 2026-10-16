@@ -161,7 +161,7 @@ describe('publishing a reel through Buffer', () => {
 
     await publishReel(reelOf(reelId), deps);
 
-    expect(deps.uploadVideo).toHaveBeenCalledWith(siteId, expect.any(Buffer));
+    expect(deps.uploadVideo).toHaveBeenCalledWith(siteId, expect.any(Buffer), expect.any(String));
     expect(deps.scheduleReel).toHaveBeenCalledWith({
       siteId,
       runId: expect.anything(),

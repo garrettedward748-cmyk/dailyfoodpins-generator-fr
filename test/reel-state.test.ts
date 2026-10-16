@@ -451,7 +451,7 @@ describe('a reel filmed from fresh images', () => {
     expect(generate.mock.calls[0]).toEqual([
       'the stew from above', 'VERTICAL', { referenceUrls: ['https://bitespoon.com/a.webp'] },
     ]);
-    expect(deps.uploadImage).toHaveBeenCalledWith(expect.any(Number), Buffer.from('img'), 'image/webp');
+    expect(deps.uploadImage).toHaveBeenCalledWith(expect.any(Number), Buffer.from('img'), 'image/webp', expect.any(String));
     expect(listScenes(reelId).map((s) => s.image_url)).toEqual(['https://bitespoon.com/fresh.webp', null]);
     expect(getReel(reelId)).toMatchObject({ status: 'generating', stage: 'filming' });
   });
