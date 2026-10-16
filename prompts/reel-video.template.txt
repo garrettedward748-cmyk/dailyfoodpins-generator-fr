@@ -14,16 +14,19 @@ The last shot of the video: the finished {{seo.title}}, served and garnished exa
 {{presenter.name}} voiceover, word for word: "{{cta}}"
 Subtitle: "{{cta}}"
 
+LANGUAGE — FRENCH ONLY
+Everything spoken and everything written on screen is in FRENCH (France): the voiceover, every subtitle and the closing line. No English word is spoken or shown, even though these instructions are in English. Spoken French is natural and warm, first person (« je »), addressing the viewer as « vous ».
+
 THE OPENING LINE
-The first spoken line is ONE complete English sentence of at most ten words, written about this dish. You may call it by a plain everyday name ("these muffins", "this tart"), but do NOT copy, splice or rearrange words from the recipe title: a title cut into pieces reads as nonsense ("Craving the ultimate taste of Mini autumn?").
+The first spoken line is ONE complete French sentence of at most ten words, written about this dish. You may call it by a plain everyday name (« ces muffins », « cette tarte »), but do NOT copy, splice or rearrange words from the recipe title: a title cut into pieces reads as nonsense.
 
 SUBTITLES
-Every subtitle is a complete, grammatical English sentence that ends where a sentence ends, except where the scenes above ask for something else on purpose (three words joined with "+", a numbered "1." list). Never a fragment, never trailing off in a comma or a dangling preposition, and never words lifted out of the recipe title and pushed together. These are the first words the viewer reads: a broken one is read as a broken video.
+Every subtitle is a complete, grammatical French sentence that ends where a sentence ends, except where the scenes above ask for something else on purpose (three words joined with "+", a numbered "1." list). Never a fragment, never trailing off in a comma or a dangling preposition, and never words lifted out of the recipe title and pushed together. These are the first words the viewer reads: a broken one is read as a broken video.
 
 VOICE & AUDIO
 The voiceover is {{presenter.name}}.
 {{presenter.voice}}
-Warm, friendly female chef voice, natural American English, clear, energetic and inviting delivery.
+Warm, friendly female chef voice speaking natural, native French (France), clear, energetic and inviting delivery, with no English accent.
 Voice perfectly synchronized with subtitles.
 Subtle, realistic cooking and serving sounds that fit this recipe.
 Light, cozy background music.
