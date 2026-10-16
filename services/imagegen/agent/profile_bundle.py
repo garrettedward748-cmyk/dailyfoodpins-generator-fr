@@ -29,6 +29,13 @@ _SKIP_NAMES = {
     "Cache", "Code Cache", "GPUCache", "GrShaderCache", "ShaderCache", "DawnCache",
     "DawnGraphiteCache", "DawnWebGPUCache", "Crashpad", "CacheStorage", "component_crx_cache",
     "BrowserMetrics", "Safe Browsing", "optimization_guide_model_store", "extensions_crx_cache",
+    # Also rebuilt by Chrome, and big in a profile that has been used for weeks:
+    "Service Worker", "Media Cache", "Application Cache", "blob_storage", "VideoDecodeStats",
+    "OptGuideOnDeviceModel", "OnDeviceHeadSuggestModel", "screen_ai", "WidevineCdm",
+    "MediaFoundationWidevineCdm", "ZxcvbnData", "Download Service", "segmentation_platform",
+    "shared_proto_db", "Subresource Filter", "AutofillStates", "BudgetDatabase", "Feature Engagement Tracker",
+    "History", "History-journal", "Favicons", "Favicons-journal", "Top Sites", "Visited Links",
+    "Network Action Predictor", "Shortcuts", "Thumbnails", "DownloadMetadata",
 }
 # Lock files of a running Chrome: carrying them would make the new one think
 # another Chrome still owns the profile.
