@@ -243,3 +243,23 @@ def test_video_when_the_only_video_account_is_resting_waits_rather_than_failing(
     accounts.set_capabilities(1, images=True, video=False)    # active #1: images only
     assert accounts.ensure_active_can("video") == "all_busy"
     assert accounts.switch_pending() is None
+
+
+def test_a_limit_rest_ends_when_the_limit_is_raised_or_the_count_is_under_it(isolated):
+    import time as _t
+    new = accounts.add("")
+    accounts.mark_ok(new["id"])
+    accounts.set_project(new["id"], "p")
+    accounts.set_limits(new["id"], 60, None)
+    data = accounts._load()
+    acct = next(a for a in data["accounts"] if a["id"] == new["id"])
+    acct["spend"] = [[_t.time(), 60]]
+    acct.update(status="cooldown", until=_t.time() + 4 * 3600, reason="Reached the credit limit set for it")
+    accounts._save(data)
+    # Still at the limit: the rest stands.
+    assert next(a for a in accounts.list_accounts()["accounts"] if a["id"] == new["id"])["status"] == "cooldown"
+    # Written behind the page's back (a raised limit in the file): it ends on the next read.
+    data = accounts._load()
+    next(a for a in data["accounts"] if a["id"] == new["id"])["daily_limit"] = 90
+    accounts._save(data)
+    assert next(a for a in accounts.list_accounts()["accounts"] if a["id"] == new["id"])["status"] == "ok"

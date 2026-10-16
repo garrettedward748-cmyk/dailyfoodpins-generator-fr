@@ -83,11 +83,29 @@ def _default_state() -> dict:
     }
 
 
+LIMIT_REST_PREFIX = "Reached the credit limit"
+
+
+def _end_stale_limit_rests(data: dict) -> dict:
+    """A rest for a credit limit ends as soon as the account can afford a clip again.
+
+    The rest used to wait out its clock even after the limit was raised or the
+    count was reset, which showed "resting, reached the limit" beside a count
+    under it. The limit is the truth, not the clock.
+    """
+    cost = int(data.get("clip_cost") or DEFAULT_CLIP_COST)
+    for account in data.get("accounts", []):
+        if account.get("status") == "cooldown" and str(account.get("reason") or "").startswith(LIMIT_REST_PREFIX) \
+                and _affords(account, cost):
+            account.update(status="ok", until=None, reason=None)
+    return data
+
+
 def _load() -> dict:
     try:
         data = json.loads(STATE_FILE.read_text())
         if isinstance(data, dict) and data.get("accounts"):
-            return data
+            return _end_stale_limit_rests(data)
     except (OSError, ValueError):
         pass
     return _default_state()
