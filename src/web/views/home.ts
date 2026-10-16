@@ -118,7 +118,11 @@ export function homePage(data: HomeData): Html {
     </div>
 
     <h2>Recent <a class="button small" href="/runs">All articles</a>
-      <a class="button small" href="/reels">All reels</a></h2>
+      <a class="button small" href="/reels">All reels</a>
+      <form method="post" action="/history/clear" style="display:inline;margin:0"
+            onsubmit="return confirm('Delete the finished articles and reels from the history? Published pages on your sites are not touched.')">
+        <button type="submit" class="small">Clear history</button>
+      </form></h2>
     <div class="card table-wrap">
       ${data.recent.length === 0
         ? html`<div class="muted">Nothing yet. The first article appears here.</div>`

@@ -3292,6 +3292,16 @@ export function updateReel(
   run(`UPDATE reels SET ${sets.join(', ')} WHERE id = ?`, ...values, id);
 }
 
+/**
+ * Empty the history Home shows: every finished article run and reel. What is
+ * running or being published stays, so nothing in flight loses its row.
+ */
+export function clearHistory(): { runs: number; reels: number } {
+  const reels = run("DELETE FROM reels WHERE status IN ('draft', 'ready', 'published', 'failed')").changes;
+  const runs = run("DELETE FROM runs WHERE status <> 'running'").changes;
+  return { runs: Number(runs), reels: Number(reels) };
+}
+
 export const deleteReel = (id: number): void => {
   run('DELETE FROM reels WHERE id = ?', id);
 };

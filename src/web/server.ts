@@ -76,6 +76,7 @@ import {
   listDecisions,
   listEvents,
   clearEvents,
+  clearHistory,
   listRecentCycles,
   listHeldRuns,
   listPromptVersions,
@@ -5173,6 +5174,11 @@ export function buildServer(
   app.get('/events', async (request, reply) =>
     page(reply, 'Events', '/events', eventsPage(listEvents(200)), readFlash(request.query)),
   );
+
+  app.post('/history/clear', async (_request, reply) => {
+    const { runs, reels } = clearHistory();
+    return redirect(reply, '/', { kind: 'ok', message: `History cleared: ${runs} article run${runs === 1 ? '' : 's'} and ${reels} reel${reels === 1 ? '' : 's'}.` });
+  });
 
   app.post('/events/clear', async (request, reply) => {
     const only = asString(formBody(request).level);

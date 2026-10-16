@@ -35,3 +35,19 @@ describe('clearing the event log', () => {
     closeDatabase();
   });
 });
+
+describe('clearing the history', () => {
+  it('removes finished runs and reels and keeps what is running', async () => {
+    const { upsertSite, createRun, insertKeyword, clearHistory, get } = await import('../src/db/repos.js').then(async (m) => ({ ...m, get: (await import('../src/db/index.js')).get }));
+    const { randomBytes } = await import('node:crypto');
+    openDatabase(':memory:');
+    const site = upsertSite({ name: 's', domain: 's.com', status: 'active', pin_username: '', project_id: '', daily_target: 1, interval_minutes: 60 }, randomBytes(32));
+    const a = createRun(insertKeyword({ seed_keyword: 'a', spy_title: 'A' }), site);
+    createRun(insertKeyword({ seed_keyword: 'b', spy_title: 'B' }), site);
+    const { run } = await import('../src/db/index.js');
+    run("UPDATE runs SET status = 'published' WHERE id = ?", a);
+    expect(clearHistory().runs).toBe(1);
+    expect(get<{ n: number }>('SELECT COUNT(*) AS n FROM runs')?.n).toBe(1);
+    closeDatabase();
+  });
+});
