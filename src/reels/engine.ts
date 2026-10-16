@@ -48,6 +48,8 @@ import {
   type SiteRow,
   getRun,
   bufferChannelName,
+  listBufferAccounts,
+  listProfiles,
 } from '../db/repos.js';
 import { pickFormat } from './formats.js';
 import { instagramLink } from '../core/instagram-link.js';
@@ -141,21 +143,23 @@ export interface ReelDeps {
     firstComment?: string;
     /** The reel's name on Facebook. */
     title?: string;
+    /** Told the name of the page Buffer really posted to, for the reel's record. */
+    onPage?: (page: string) => void;
     /** null: this account is switched off, nothing was sent. */
   }): Promise<string | null>;
   /**
    * Pin the reel on Pinterest as a video pin, when the site has
    * Channels -> Pinterest -> Reels ticked. Optional: never the reason a reel fails.
    */
-  pinReel?(input: { siteId: number; runId: number | null; title: string; linkUrl: string; videoUrl: string; profileId?: number }): Promise<string | null>;
+  pinReel?(input: { siteId: number; runId: number | null; title: string; linkUrl: string; videoUrl: string; profileId?: number; onPage?: (page: string) => void }): Promise<string | null>;
   /**
    * The same reel on the site's Instagram, when Channels -> Instagram -> Reels
    * is ticked. Optional: never the reason a reel fails. Null when it is off.
    */
-  instagramReel?(input: { siteId: number; runId?: number | null; title: string; caption: string; recipes?: string[]; postUrl: string; videoUrl: string; profileId?: number }): Promise<string | null>;
-  youtubeShort?(input: { siteId: number; runId?: number | null; title: string; caption: string; recipes?: string[]; postUrl: string; videoUrl: string; profileId?: number }): Promise<string | null>;
+  instagramReel?(input: { siteId: number; runId?: number | null; title: string; caption: string; recipes?: string[]; postUrl: string; videoUrl: string; profileId?: number; onPage?: (page: string) => void; pageProfileId?: number }): Promise<string | null>;
+  youtubeShort?(input: { siteId: number; runId?: number | null; title: string; caption: string; recipes?: string[]; postUrl: string; videoUrl: string; profileId?: number; onPage?: (page: string) => void; pageProfileId?: number }): Promise<string | null>;
   /** The same reel on the site's TikTok, when Channels -> TikTok -> Videos is ticked. Optional: never the reason a reel fails. */
-  tiktokReel?(input: { siteId: number; runId?: number | null; title: string; caption: string; recipes?: string[]; postUrl: string; videoUrl: string; profileId?: number }): Promise<string | null>;
+  tiktokReel?(input: { siteId: number; runId?: number | null; title: string; caption: string; recipes?: string[]; postUrl: string; videoUrl: string; profileId?: number; onPage?: (page: string) => void; pageProfileId?: number }): Promise<string | null>;
   /**
    * The accounts a reel goes to on a network, by profile id, the run's own
    * first: one in rotation, all of the site's when it posts to all (Channels ->
@@ -258,6 +262,19 @@ export async function reelPinDetails(
 }
 
 /**
+ * The account of another network that lives in the same Buffer as a reel's
+ * Facebook page: one of the site's accounts on that network holding one of the
+ * page account's Buffer tokens. The first such, by its place in the list.
+ */
+export function linkedProfile(siteId: number, platform: ProfilePlatform, pageProfileId: number, key: Buffer) {
+  const accounts = listBufferAccounts(siteId, key).filter((a) => a.enabled && a.token.trim() !== '');
+  const tokens = new Set(accounts.filter((a) => a.profileId === pageProfileId).map((a) => a.token.trim()));
+  if (tokens.size === 0) return undefined;
+  const holders = new Set(accounts.filter((a) => tokens.has(a.token.trim())).map((a) => a.profileId));
+  return listProfiles(siteId, platform).find((p) => holders.has(p.id));
+}
+
+/**
  * A Buffer pool on the account of a network the reel's article used (or the
  * next in turn), and whether that account is switched off (the toggle on its
  * card). The account is resolved once, here: asking again would pick another,
@@ -271,8 +288,35 @@ function profilePool(
   platform: ProfilePlatform,
   key: Buffer,
   profileId?: number,
+  pageProfileId?: number,
 ): { pool: BufferPool; off: boolean } {
   const given = profileId ? getProfile(profileId) : undefined;
+  // A reel's copy on another network, in rotation: it goes where the reel's
+  // page is rather than to whichever account of that network had the turn.
+  if (!given && pageProfileId && platform !== 'facebook' && platform !== 'pinterest') {
+    const page = getProfile(pageProfileId);
+    if (page && page.site_id === site.id) {
+      const linked = linkedProfile(site.id, platform, page.id, key);
+      if (linked) {
+        return {
+          pool: new BufferPool(
+            { id: site.id, domain: site.domain, pinUsername: bufferChannelName(linked), platform, profileId: linked.id },
+            key,
+          ),
+          off: !linked.enabled,
+        };
+      }
+      // No account of this network shares the page's Buffer token: the page's
+      // own Buffer account, and its one channel of the network.
+      return {
+        pool: new BufferPool(
+          { id: site.id, domain: site.domain, pinUsername: bufferChannelName(page), platform, profileId: page.id, otherNetworkName: true },
+          key,
+        ),
+        off: false,
+      };
+    }
+  }
   const profile = given && given.site_id === site.id ? given : runProfile(runId ?? null, site.id, platform);
   const pool = new BufferPool(
     {
@@ -370,13 +414,14 @@ export function defaultDeps(settings: Settings, key: Buffer): ReelDeps {
       const { pool, off } = profilePool(site, input.runId, 'facebook', key, input.profileId);
       if (off) return null;
       const scheduled = await pool.createReel(input);
+      input.onPage?.(scheduled.page);
 
       return scheduled.postId;
     },
     async instagramReel(input) {
       const site = getSite(input.siteId);
       if (!site || !(site as { ig_reels?: number }).ig_reels) return null;
-      const { pool, off } = profilePool(site, input.runId, 'instagram', key, input.profileId);
+      const { pool, off } = profilePool(site, input.runId, 'instagram', key, input.profileId, input.pageProfileId);
       if (off) return null;
       const link = instagramLink(settings, input.postUrl);
       const posted = await pool.createInstagramPost({
@@ -392,12 +437,13 @@ export function defaultDeps(settings: Settings, key: Buffer): ReelDeps {
         videoUrl: input.videoUrl,
         firstComment: link.firstComment,
       });
+      input.onPage?.(posted.page);
       return posted.postId;
     },
     async youtubeShort(input) {
       const site = getSite(input.siteId);
       if (!site || !(site as { yt_reels?: number }).yt_reels) return null;
-      const { pool, off } = profilePool(site, input.runId, 'youtube', key, input.profileId);
+      const { pool, off } = profilePool(site, input.runId, 'youtube', key, input.profileId, input.pageProfileId);
       if (off) return null;
       const posted = await pool.createYouTubeShort({
         title: input.title,
@@ -408,12 +454,13 @@ export function defaultDeps(settings: Settings, key: Buffer): ReelDeps {
         videoUrl: input.videoUrl,
         category: settings.get('youtube_category'),
       });
+      input.onPage?.(posted.page);
       return posted.postId;
     },
     async tiktokReel(input) {
       const site = getSite(input.siteId);
       if (!site || !(site as { tt_reels?: number }).tt_reels) return null;
-      const { pool, off } = profilePool(site, input.runId, 'tiktok', key, input.profileId);
+      const { pool, off } = profilePool(site, input.runId, 'tiktok', key, input.profileId, input.pageProfileId);
       if (off) return null;
       const posted = await pool.createTikTokVideo({
         // TikTok's caption has no clickable link, same as Instagram's, so the
@@ -427,6 +474,7 @@ export function defaultDeps(settings: Settings, key: Buffer): ReelDeps {
         videoUrl: input.videoUrl,
         privacyLevel: settings.get('tiktok_privacy'),
       });
+      input.onPage?.(posted.page);
       return posted.postId;
     },
     async attachVideo(input) {
@@ -452,6 +500,7 @@ export function defaultDeps(settings: Settings, key: Buffer): ReelDeps {
         { text: description, title: input.title.slice(0, 100), linkUrl: input.linkUrl, videoUrl: input.videoUrl },
         other ? [board, other.default_board] : board,
       );
+      if (pinned.destination.channelName) input.onPage?.(pinned.destination.channelName);
       return pinned.postId;
     },
   };
@@ -1319,12 +1368,13 @@ async function publishThroughBuffer(
 
   // Each channel on its own: one refusing (a full Buffer queue, say) does not
   // keep the reel off the others, and a retry only tries the ones that failed.
-  const attempt = async (name: ChannelKey, send: () => Promise<string | null>): Promise<void> => {
+  const attempt = async (name: ChannelKey, send: (onPage: (page: string) => void) => Promise<string | null>): Promise<void> => {
     if (channels[name]?.status === 'ok') return;
+    let page = '';
     try {
-      const id = await send();
-      channels[name] = id ? { status: 'ok', id } : { status: 'off' };
-      if (id) log.info(`reel ${reel.id}: ${name} scheduled as ${id}`);
+      const id = await send((p) => { page = p.trim(); });
+      channels[name] = id ? { status: 'ok', id, ...(page ? { page } : {}) } : { status: 'off' };
+      if (id) log.info(`reel ${reel.id}: ${name} scheduled as ${id}${page ? ` on "${page}"` : ''}`);
     } catch (err) {
       channels[name] = { status: 'failed', error: errorMessage(err).slice(0, 400) };
       log.warn(`reel ${reel.id}: ${name} failed — ${errorMessage(err)}`);
@@ -1344,7 +1394,10 @@ async function publishThroughBuffer(
   // moves the turn each time it asks, so the account that was first comes
   // back under another key and is posted to twice — and a network switched
   // back to rotation would never retry the account that failed.
-  const network = async (platform: ChannelName, send: (profileId: number | undefined) => Promise<string | null>) => {
+  const network = async (
+    platform: ChannelName,
+    send: (profileId: number | undefined, onPage: (page: string) => void) => Promise<string | null>,
+  ) => {
     let ids = channels.targets?.[platform];
     if (!ids) {
       const asked = deps.targets?.({ siteId, runId, platform }) ?? [0];
@@ -1354,42 +1407,42 @@ async function publishThroughBuffer(
     }
     for (const [i, id] of ids.entries()) {
       const key = channelKey(platform, i === 0 ? null : id);
-      await attempt(key, () => send(id > 0 ? id : undefined));
+      await attempt(key, (onPage) => send(id > 0 ? id : undefined, onPage));
       if (i === 0 && channels[key]?.status === 'off') return;
     }
   };
 
-  await network('facebook', async (profileId) => {
-    const id = await deps.scheduleReel({ siteId, runId, text, videoUrl, profileId: profileId ?? pageProfile, firstComment: facebook.firstComment, title });
+  await network('facebook', async (profileId, onPage) => {
+    const id = await deps.scheduleReel({ siteId, runId, text, videoUrl, profileId: profileId ?? pageProfile, firstComment: facebook.firstComment, title, onPage });
     if (id) markFbPageUsed(page.id); // null: the account is switched off, nothing was sent
     return id;
   });
-  await network('pinterest', async (profileId) =>
+  await network('pinterest', async (profileId, onPage) =>
     // A run with no link is a social-only account's: its video pin goes out without one.
     deps.pinReel && (reel.post_url || isSocialOnly({ domain: getSite(siteId)?.domain ?? 'x.x' }))
-      ? deps.pinReel({ siteId, runId, title, linkUrl: reel.post_url ?? '', videoUrl, profileId })
+      ? deps.pinReel({ siteId, runId, title, linkUrl: reel.post_url ?? '', videoUrl, profileId, onPage })
       : null,
   );
   // Instagram captions cannot carry a link: Channels -> Instagram says where it goes.
-  await network('instagram', async (profileId) =>
+  await network('instagram', async (profileId, onPage) =>
     deps.instagramReel
-      ? deps.instagramReel({ siteId, runId, title, caption: captionFor('instagram'), recipes: recipeCandidates(runId, cfg.instagramRecipe ?? 'none'), postUrl: reel.post_url ?? '', videoUrl, profileId })
+      ? deps.instagramReel({ siteId, runId, title, caption: captionFor('instagram'), recipes: recipeCandidates(runId, cfg.instagramRecipe ?? 'none'), postUrl: reel.post_url ?? '', videoUrl, profileId, onPage, pageProfileId: pageProfile })
       : null,
   );
 
   // The same caption, plus the site's own address: YouTube's description is
   // indexed and takes as many links as it is given, which none of the others
   // do.
-  await network('youtube', async (profileId) =>
+  await network('youtube', async (profileId, onPage) =>
     deps.youtubeShort
-      ? deps.youtubeShort({ siteId, runId, title, caption: captionFor('youtube'), recipes: recipeCandidates(runId, cfg.youtubeRecipe ?? 'none'), postUrl: reel.post_url ?? '', videoUrl, profileId })
+      ? deps.youtubeShort({ siteId, runId, title, caption: captionFor('youtube'), recipes: recipeCandidates(runId, cfg.youtubeRecipe ?? 'none'), postUrl: reel.post_url ?? '', videoUrl, profileId, onPage, pageProfileId: pageProfile })
       : null,
   );
 
   // TikTok captions have no clickable link, same as Instagram's.
-  await network('tiktok', async (profileId) =>
+  await network('tiktok', async (profileId, onPage) =>
     deps.tiktokReel
-      ? deps.tiktokReel({ siteId, runId, title, caption: captionFor('tiktok'), recipes: recipeCandidates(runId, cfg.tiktokRecipe ?? 'none'), postUrl: reel.post_url ?? '', videoUrl, profileId })
+      ? deps.tiktokReel({ siteId, runId, title, caption: captionFor('tiktok'), recipes: recipeCandidates(runId, cfg.tiktokRecipe ?? 'none'), postUrl: reel.post_url ?? '', videoUrl, profileId, onPage, pageProfileId: pageProfile })
       : null,
   );
 
@@ -1422,7 +1475,7 @@ async function publishThroughBuffer(
     deps,
     `<b>Reel scheduled</b>\n${escapeHtml(reel.run_title ?? '')}\n\n` +
       `Page: ${escapeHtml(page.name || page.page_id)}\n` +
-      `On: ${ok.map((n) => `${n} (${escapeHtml(channels[n]!.id ?? '')})`).join(', ') || 'nothing'}` +
+      `On: ${ok.map((n) => `${n}${channels[n]!.page ? ` → ${escapeHtml(channels[n]!.page!)}` : ''} (${escapeHtml(channels[n]!.id ?? '')})`).join(', ') || 'nothing'}` +
       (failed.length ? `\n<b>Not on:</b> ${failed.join(', ')} — press Retry on the reel.` : '') +
       `\nBuffer publishes on its own schedule, so check the Buffer queue for the result.`,
   );
@@ -1459,7 +1512,13 @@ export const CHANNEL_NAMES = ['facebook', 'pinterest', 'instagram', 'youtube', '
 export type ChannelName = (typeof CHANNEL_NAMES)[number];
 /** A network, or one more account on it: "youtube" is the run's own account, "youtube:12" profile 12. */
 export type ChannelKey = ChannelName | `${ChannelName}:${number}`;
-export type ChannelState = { status: 'ok' | 'failed' | 'off'; id?: string; error?: string };
+export type ChannelState = {
+  status: 'ok' | 'failed' | 'off';
+  id?: string;
+  error?: string;
+  /** The page or channel Buffer really posted to, by its name on Buffer. */
+  page?: string;
+};
 export type ReelChannels = Partial<Record<ChannelKey, ChannelState>> & {
   siteVideo?: string;
   recipePage?: boolean;
@@ -1478,6 +1537,14 @@ export function channelKeys(channels: ReelChannels): ChannelKey[] {
   const keys = Object.keys(channels).filter((k) => CHANNEL_NAMES.includes(k.split(':')[0] as ChannelName)) as ChannelKey[];
   return keys.sort((a, b) =>
     CHANNEL_NAMES.indexOf(channelOf(a)) - CHANNEL_NAMES.indexOf(channelOf(b)) || (a.includes(':') ? 1 : 0) - (b.includes(':') ? 1 : 0) || a.localeCompare(b));
+}
+
+/** Where a reel really went, "facebook → Amanda Recipes · instagram → amanda.recipes", from what Buffer said. */
+export function pagesLine(channels: ReelChannels): string {
+  return channelKeys(channels)
+    .filter((k) => channels[k]?.status === 'ok' && channels[k]?.page)
+    .map((k) => `${channelOf(k)} → ${channels[k]!.page}`)
+    .join(' · ');
 }
 
 /** Where a reel went, channel by channel, as recorded on it. */

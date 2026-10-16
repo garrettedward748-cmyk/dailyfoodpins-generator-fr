@@ -136,6 +136,25 @@ describe('publishing a reel through Buffer', () => {
     expect(deps.scheduleReel).toHaveBeenCalledWith(expect.objectContaining({ profileId: own }));
   });
 
+  it('sends the Instagram and YouTube copies after the reel\'s page, and records where each really went', async () => {
+    const { reelId, siteId } = seed();
+    firstProfile(siteId, 'facebook');
+    const own = addProfile(siteId, 'facebook');
+    dbRun('UPDATE fb_pages SET profile_id = ? WHERE id = ?', own, reelOf(reelId).fb_page_id);
+    dbRun('UPDATE sites SET ig_reels = 1, yt_reels = 1 WHERE id = ?', siteId);
+    const scheduleReel = vi.fn(async (input: { onPage?: (p: string) => void }) => { input.onPage?.('Amanda Recipes'); return 'BUF-1'; });
+    const instagramReel = vi.fn(async (input: { onPage?: (p: string) => void }) => { input.onPage?.('amanda.recipes'); return 'IG-1'; });
+    const youtubeShort = vi.fn(async () => 'YT-1');
+    await publishReel(reelOf(reelId), fakeDeps({ scheduleReel, instagramReel, youtubeShort } as Partial<ReelDeps>));
+
+    expect(instagramReel).toHaveBeenCalledWith(expect.objectContaining({ pageProfileId: own }));
+    expect(youtubeShort).toHaveBeenCalledWith(expect.objectContaining({ pageProfileId: own }));
+    const channels = JSON.parse(getReel(reelId)!.channels_json!);
+    expect(channels.facebook).toMatchObject({ status: 'ok', page: 'Amanda Recipes' });
+    expect(channels.instagram).toMatchObject({ status: 'ok', page: 'amanda.recipes' });
+    expect(channels.youtube.page).toBeUndefined(); // nothing said: nothing recorded, never a guess
+  });
+
   it('puts the video on the site and schedules it, without touching the Page token', async () => {
     const { reelId, siteId } = seed();
     const deps = fakeDeps();
@@ -150,6 +169,8 @@ describe('publishing a reel through Buffer', () => {
       videoUrl: 'https://bitespoon.com/video/videos/reel-1.mp4',
       // Named, so Facebook does not list it as "Untitled Video".
       title: 'Stew',
+      // Told which page Buffer really posted to, for the reel's record.
+      onPage: expect.any(Function),
     });
 
     // The whole point: no Graph call, so no Page token to expire.

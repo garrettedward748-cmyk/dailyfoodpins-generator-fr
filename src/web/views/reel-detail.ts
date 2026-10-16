@@ -169,6 +169,7 @@ export function reelDetailPage(
               ([name, c]) => html`<tr>
                 <td><strong>${name}</strong></td>
                 <td><span class="badge ${c.status === 'ok' ? 'ok' : c.status === 'failed' ? 'error' : 'muted'}">${c.status === 'ok' ? 'scheduled' : c.status === 'off' ? 'off for this site' : 'failed'}</span></td>
+                <td>${c.status === 'ok' ? (c.page ? html`→ <strong>${c.page}</strong>` : html`<span class="muted small">page not recorded</span>`) : raw('')}</td>
                 <td class="small muted">${c.status === 'ok' ? html`<code>${c.id ?? ''}</code>` : c.error ?? ''}</td>
               </tr>`,
             )}</tbody>

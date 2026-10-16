@@ -1,6 +1,7 @@
 import { html, raw, statusBadge, timeAgo, type Html } from './layout.js';
 import type { RunListRow, ReelView } from '../../db/repos.js';
 import type { Supply } from '../../core/supply.js';
+import { pagesLine, readChannels } from '../../reels/engine.js';
 
 /**
  * Home: what is happening, what needs a person, today's numbers, and what
@@ -208,7 +209,8 @@ export function mergeRecent(runs: RunListRow[], reels: ReelView[], limit = 12): 
       what: `${r.page_name ?? 'no page'} · ${r.seed_keyword ?? r.run_title ?? '—'}`,
       status: r.status,
       kind: 'reel',
-      detail: r.error ? r.error.slice(0, 80) : '',
+      // Where it really went first: the row's name is the page it was meant for.
+      detail: [pagesLine(readChannels(r)), r.error ? r.error.slice(0, 80) : ''].filter(Boolean).join(' — '),
     });
   }
 

@@ -86,15 +86,54 @@ describe('the Facebook page an account posts to', () => {
     expect((await pool.createReel(reel)).channelId).toBe('c-recipe');
   });
 
-  it('a Buffer account with a single page cannot be mistaken, so a loose name still posts there', async () => {
-    const { pool } = poolNamed('Recepiesyumy', [PAGES[0]!]);
-    expect((await pool.createReel(reel)).channelId).toBe('c-recipe');
+  it('a Buffer account with a single page that is not the one named is refused, not posted to', async () => {
+    // A reel shown as "ArbmomRecipes" went to that account's only page, some
+    // other page, and nothing said so.
+    const { pool, createReel } = poolNamed('ArbmomRecipes', [PAGES[0]!]);
+    const error = await pool.createReel(reel).then(() => '', (e: Error) => e.message);
+    expect(error).toMatch(/No Facebook page named "ArbmomRecipes" on Buffer account "buf"/);
+    expect(error).toContain('"The Recipe Corner"');
+    expect(createReel).not.toHaveBeenCalled();
+  });
+
+  it('says which page it really posted to', async () => {
+    const { pool } = poolNamed('the yummy spoon');
+    expect((await pool.createReel(reel)).page).toBe('The Yummy Spoon');
   });
 
   it('a site not yet on accounts never named a Facebook page, so it keeps taking the first', async () => {
     // Its pin_username is a Pinterest name: it will never match a Facebook page.
     const { pool } = poolNamed('somepinterestname', PAGES, false);
     expect((await pool.createReel(reel)).channelId).toBe('c-recipe');
+  });
+});
+
+describe('a reel\'s copy through its page\'s Buffer account', () => {
+  function igPool(channels: { id: string; name: string; service: string; boards: never[] }[]) {
+    const siteId = upsertSite({ name: 's', domain: 's.com', status: 'active', pin_username: '', project_id: '', daily_target: 1, interval_minutes: 60 }, KEY);
+    const profileId = firstProfile(siteId, 'facebook').id;
+    upsertBufferAccount({ siteId, label: 'buf', token: 'tok', enabled: true, profileId }, KEY);
+    vi.spyOn(BufferClient.prototype, 'getOrganizationId').mockResolvedValue('org');
+    vi.spyOn(BufferClient.prototype, 'getChannels').mockResolvedValue(channels as never);
+    vi.spyOn(BufferClient.prototype, 'createInstagramPost').mockResolvedValue('IG-1' as never);
+    return new BufferPool(
+      { id: siteId, domain: 's.com', pinUsername: 'ArbmomRecipes', platform: 'instagram', profileId, otherNetworkName: true },
+      KEY,
+    );
+  }
+  const post = { text: 't', type: 'reel' as const, videoUrl: 'https://s.com/v.mp4' };
+
+  it('takes the account\'s only Instagram, whatever its name: the name is the Facebook page\'s', async () => {
+    const pool = igPool([...PAGES, { id: 'ig-1', name: 'amanda.recipes', service: 'instagram', boards: [] }]);
+    expect(await pool.createInstagramPost(post)).toMatchObject({ postId: 'IG-1', page: 'amanda.recipes' });
+  });
+
+  it('with several Instagrams and none named like the page, refuses rather than guess', async () => {
+    const pool = igPool([
+      { id: 'ig-1', name: 'amanda.recipes', service: 'instagram', boards: [] },
+      { id: 'ig-2', name: 'bitecraft', service: 'instagram', boards: [] },
+    ]);
+    await expect(pool.createInstagramPost(post)).rejects.toThrow(/2 Instagram channels/);
   });
 });
 

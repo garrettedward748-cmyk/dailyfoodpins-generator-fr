@@ -136,19 +136,31 @@ export interface BufferPoolSite {
    * network. Unset: every account of the platform, as before accounts existed.
    */
   profileId?: number;
+  /**
+   * `pinUsername` is the name of a page on another network (a reel's Facebook
+   * page, while this pool posts its Instagram copy through the same Buffer
+   * account): the account's single channel of this network is taken whatever
+   * its name. See pickChannel.
+   */
+  otherNetworkName?: boolean;
 }
 
 /**
  * The channel of a network to post to: the one named, else the first.
  *
  * An account that names its page (Channels -> Accounts) means that page. When
- * the name matches none of the account's channels and there is more than one,
- * "else the first" would quietly post to some other page: with Post to all,
- * every account whose name was off by a letter piled onto the same one, as
- * duplicates. That is an error, naming the pages Buffer does have, so the
- * name can be corrected. A single channel cannot be mistaken, and a site not
- * yet on accounts (`strict` false) never named its page for this network, so
- * both still take the first.
+ * the name matches none of the account's channels, "else the first" would
+ * quietly post to some other page: with Post to all, every account whose name
+ * was off by a letter piled onto the same one, as duplicates; and a Buffer
+ * account holding a single page sent a reel shown as "ArbmomRecipes" to
+ * whatever that page was, with nothing anywhere saying so. Either way it is an
+ * error, naming the pages Buffer does have, so the name can be corrected. A
+ * site not yet on accounts (`strict` false) never named its page for this
+ * network, and a blank name names nothing, so both still take the first.
+ *
+ * `single`: the name is another network's (a reel's Facebook page, while this
+ * is its Instagram), so it cannot be expected to match. The account's only
+ * channel of the network is the one; with several, the name must pick one.
  */
 function pickChannel<T extends { name: string }>(
   channels: T[],
@@ -156,15 +168,24 @@ function pickChannel<T extends { name: string }>(
   strict: boolean,
   network: string,
   accountLabel: string,
+  single = false,
 ): T {
   const wanted = name.trim().toLowerCase();
   const named = wanted ? channels.find((c) => c.name.trim().toLowerCase() === wanted) : undefined;
   if (named) return named;
-  if (wanted && strict && channels.length > 1) {
+  const theirs = channels.map((c) => `"${c.name}"`).join(', ');
+  if (single) {
+    if (channels.length === 1) return channels[0]!;
+    throw new BufferError(
+      `No ${network} page named "${name.trim()}" on Buffer account "${accountLabel}", and it has ${channels.length} ${network} channels: ${theirs}. ` +
+        `Add the right one as its own ${network} account in Channels -> Accounts, with the same Buffer token and its name exactly as Buffer shows it.`,
+    );
+  }
+  if (wanted && strict) {
     throw new BufferError(
       `No ${network} page named "${name.trim()}" on Buffer account "${accountLabel}". ` +
-        `Its pages: ${channels.map((c) => `"${c.name}"`).join(', ')}. ` +
-        'Set the page name on this account to one of them, exactly as Buffer shows it.',
+        `Its pages: ${theirs}. ` +
+        'Set the Buffer page name on this account to one of them, exactly as Buffer shows it.',
     );
   }
   return channels[0]!;
@@ -188,6 +209,8 @@ function servesPlatform(account: BufferAccount, platform: BufferPoolSite['platfo
 /** Where a post is going: resolved per account, since ids do not carry over. */
 export interface BufferDestination {
   channelId: string;
+  /** The channel's name on Buffer: where the pin really went. */
+  channelName?: string;
   boardServiceId: string;
   boardName: string;
 }
@@ -326,6 +349,7 @@ export class BufferPool {
 
     return {
       channelId: channel.id,
+      channelName: channel.name,
       boardServiceId: board.serviceId,
       boardName: board.name,
     };
@@ -458,7 +482,7 @@ export class BufferPool {
    * Pinterest board is: a channel id belongs to the account that issued it.
    */
   /** Schedule an image post on the site's Facebook Page, moving down the accounts while Buffer refuses. */
-  async createFacebookPost(input: { text: string; imageUrl: string; firstComment?: string }): Promise<{ postId: string; account: string }> {
+  async createFacebookPost(input: { text: string; imageUrl: string; firstComment?: string }): Promise<{ postId: string; account: string; page: string }> {
     if (this.accounts.length === 0) {
       throw new BufferError(`No Buffer account is configured for ${this.site.domain}. Add one under Channels → Facebook.`);
     }
@@ -467,11 +491,14 @@ export class BufferPool {
       const account = this.accounts[this.index]!;
       const client = new BufferClient(account.token);
       let channelId = '';
+      let page = '';
       try {
         const channels = await client.getChannels(await client.getOrganizationId());
         const facebook = channels.filter((c) => c.service === 'facebook');
         if (facebook.length === 0) throw new BufferError(`Buffer account "${account.label}" has no Facebook channel.`);
-        channelId = pickChannel(facebook, this.site.pinUsername, this.site.profileId !== undefined, 'Facebook', account.label).id;
+        const picked = pickChannel(facebook, this.site.pinUsername, this.site.profileId !== undefined, 'Facebook', account.label, this.site.otherNetworkName);
+        channelId = picked.id;
+        page = picked.name;
       } catch (err) {
         lastError = errorMessage(err);
         log.warn(`Buffer account "${account.label}" has no usable Facebook channel`, lastError);
@@ -480,7 +507,7 @@ export class BufferPool {
       try {
         const postId = await throughOutage(() => client.createFacebookImagePost({ ...input, channelId }));
         if (account.id > 0) markBufferAccountUsed(account.id);
-        return { postId, account: account.label };
+        return { postId, account: account.label, page };
       } catch (err) {
         lastError = errorMessage(err);
         if (!isRotatable(err)) throw err;
@@ -498,7 +525,7 @@ export class BufferPool {
     imageUrl?: string;
     videoUrl?: string;
     firstComment?: string;
-  }): Promise<{ postId: string; account: string }> {
+  }): Promise<{ postId: string; account: string; page: string }> {
     if (this.accounts.length === 0) {
       throw new BufferError(`No Buffer account is configured for ${this.site.domain}. Add one under Channels → Facebook.`);
     }
@@ -507,11 +534,14 @@ export class BufferPool {
       const account = this.accounts[this.index]!;
       const client = new BufferClient(account.token);
       let channelId = '';
+      let page = '';
       try {
         const channels = await client.getChannels(await client.getOrganizationId());
         const instagram = channels.filter((c) => c.service === 'instagram');
         if (instagram.length === 0) throw new BufferError(`Buffer account "${account.label}" has no Instagram channel.`);
-        channelId = pickChannel(instagram, this.site.pinUsername, this.site.profileId !== undefined, 'Instagram', account.label).id;
+        const picked = pickChannel(instagram, this.site.pinUsername, this.site.profileId !== undefined, 'Instagram', account.label, this.site.otherNetworkName);
+        channelId = picked.id;
+        page = picked.name;
       } catch (err) {
         lastError = errorMessage(err);
         log.warn(`Buffer account "${account.label}" has no usable Instagram channel`, lastError);
@@ -520,7 +550,7 @@ export class BufferPool {
       try {
         const postId = await throughOutage(() => client.createInstagramPost({ ...input, channelId }));
         if (account.id > 0) markBufferAccountUsed(account.id);
-        return { postId, account: account.label };
+        return { postId, account: account.label, page };
       } catch (err) {
         lastError = errorMessage(err);
         if (!isRotatable(err)) throw err;
@@ -537,7 +567,7 @@ export class BufferPool {
     text: string;
     videoUrl: string;
     category?: string;
-  }): Promise<{ postId: string; account: string }> {
+  }): Promise<{ postId: string; account: string; page: string }> {
     if (this.accounts.length === 0) {
       throw new BufferError(`No Buffer account is configured for ${this.site.domain}. Add one under Channels → Accounts.`);
     }
@@ -546,11 +576,14 @@ export class BufferPool {
       const account = this.accounts[this.index]!;
       const client = new BufferClient(account.token);
       let channelId = '';
+      let page = '';
       try {
         const channels = await client.getChannels(await client.getOrganizationId());
         const youtube = channels.filter((c) => c.service === 'youtube');
         if (youtube.length === 0) throw new BufferError(`Buffer account "${account.label}" has no YouTube channel.`);
-        channelId = pickChannel(youtube, this.site.pinUsername, this.site.profileId !== undefined, 'YouTube', account.label).id;
+        const picked = pickChannel(youtube, this.site.pinUsername, this.site.profileId !== undefined, 'YouTube', account.label, this.site.otherNetworkName);
+        channelId = picked.id;
+        page = picked.name;
       } catch (err) {
         lastError = errorMessage(err);
         log.warn(`Buffer account "${account.label}" has no usable YouTube channel`, lastError);
@@ -559,7 +592,7 @@ export class BufferPool {
       try {
         const postId = await throughOutage(() => client.createYouTubePost({ ...input, channelId }));
         if (account.id > 0) markBufferAccountUsed(account.id);
-        return { postId, account: account.label };
+        return { postId, account: account.label, page };
       } catch (err) {
         lastError = errorMessage(err);
         if (!isRotatable(err)) throw err;
@@ -575,7 +608,7 @@ export class BufferPool {
     text: string;
     videoUrl: string;
     privacyLevel?: string;
-  }): Promise<{ postId: string; account: string }> {
+  }): Promise<{ postId: string; account: string; page: string }> {
     if (this.accounts.length === 0) {
       throw new BufferError(`No Buffer account is configured for ${this.site.domain}. Add one under Channels → Accounts.`);
     }
@@ -584,11 +617,14 @@ export class BufferPool {
       const account = this.accounts[this.index]!;
       const client = new BufferClient(account.token);
       let channelId = '';
+      let page = '';
       try {
         const channels = await client.getChannels(await client.getOrganizationId());
         const tiktok = channels.filter((c) => c.service === 'tiktok');
         if (tiktok.length === 0) throw new BufferError(`Buffer account "${account.label}" has no TikTok channel.`);
-        channelId = pickChannel(tiktok, this.site.pinUsername, this.site.profileId !== undefined, 'TikTok', account.label).id;
+        const picked = pickChannel(tiktok, this.site.pinUsername, this.site.profileId !== undefined, 'TikTok', account.label, this.site.otherNetworkName);
+        channelId = picked.id;
+        page = picked.name;
       } catch (err) {
         lastError = errorMessage(err);
         log.warn(`Buffer account "${account.label}" has no usable TikTok channel`, lastError);
@@ -597,7 +633,7 @@ export class BufferPool {
       try {
         const postId = await throughOutage(() => client.createTikTokPost({ ...input, channelId }));
         if (account.id > 0) markBufferAccountUsed(account.id);
-        return { postId, account: account.label };
+        return { postId, account: account.label, page };
       } catch (err) {
         lastError = errorMessage(err);
         if (!isRotatable(err)) throw err;
@@ -613,7 +649,7 @@ export class BufferPool {
     videoUrl: string;
     firstComment?: string;
     title?: string;
-  }): Promise<{ postId: string; account: string; channelId: string }> {
+  }): Promise<{ postId: string; account: string; channelId: string; page: string }> {
     if (this.accounts.length === 0) {
       throw new BufferError(
         `No Buffer account is configured for ${this.site.domain}. Add one under Channels → Pinterest or Facebook.`,
@@ -627,6 +663,7 @@ export class BufferPool {
       const client = new BufferClient(account.token);
 
       let channelId = '';
+      let pageName = '';
 
       try {
         const organizationId = await client.getOrganizationId();
@@ -640,8 +677,9 @@ export class BufferPool {
           );
         }
 
-        const page = pickChannel(facebook, this.site.pinUsername, this.site.profileId !== undefined, 'Facebook', account.label);
+        const page = pickChannel(facebook, this.site.pinUsername, this.site.profileId !== undefined, 'Facebook', account.label, this.site.otherNetworkName);
         channelId = page.id;
+        pageName = page.name;
 
         if (facebook.length > 1 && !this.site.pinUsername.trim()) {
           log.warn(
@@ -659,7 +697,7 @@ export class BufferPool {
         const postId = await throughOutage(() => client.createReel({ ...input, channelId }));
 
         if (account.id > 0) markBufferAccountUsed(account.id);
-        return { postId, account: account.label, channelId };
+        return { postId, account: account.label, channelId, page: pageName };
       } catch (err) {
         lastError = errorMessage(err);
 
