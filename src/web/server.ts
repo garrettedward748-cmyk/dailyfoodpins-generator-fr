@@ -643,6 +643,21 @@ export function buildServer(
       });
     }
 
+    const unassigned = listFbPages().filter((p) => p.enabled && p.site_id === null);
+    if (unassigned.length > 1) {
+      items.push({
+        kind: 'info',
+        text: `${unassigned.length} Facebook pages have no site`,
+        href: '/accounts#facebook-pages',
+        action: 'Assign',
+        post: {
+          url: '/settings/facebook/pages/delete-unassigned',
+          label: 'Remove all',
+          fields: {},
+          confirm: `Remove these ${unassigned.length} Facebook pages?`,
+        },
+      });
+    }
     for (const fbPage of listFbPages()) {
       if (fbPage.enabled && fbPage.site_id === null) {
         items.push({
@@ -650,6 +665,12 @@ export function buildServer(
           text: `Facebook page "${fbPage.name}" has no site, so nothing goes to it`,
           href: '/accounts#facebook-pages',
           action: 'Assign',
+          post: {
+            url: '/settings/facebook/pages/delete',
+            label: 'Remove',
+            fields: { pick: String(fbPage.id), back: '/' },
+            confirm: `Remove the Facebook page ${fbPage.name}? It can come back if it is still under a connected token.`,
+          },
         });
       }
     }
@@ -2917,11 +2938,17 @@ export function buildServer(
     });
   };
 
+  app.post('/settings/facebook/pages/delete-unassigned', async (_request, reply) => {
+    const pages = listFbPages().filter((p) => p.site_id === null);
+    for (const p of pages) deleteFbPage(p.id);
+    return redirect(reply, '/', { kind: 'ok', message: `${pages.length} Facebook page(s) without a site removed.` });
+  });
+
   app.post('/settings/facebook/pages/delete', async (request, reply) => {
     const ids = ([] as unknown[]).concat(formBody(request).pick ?? []).map((v) => asNumber(v, 0)).filter((n) => n > 0);
     if (ids.length === 0) return redirect(reply, '/accounts', { kind: 'warn', message: 'Tick at least one page.' });
     for (const id of ids) deleteFbPage(id);
-    return redirect(reply, '/accounts', { kind: 'ok', message: `${ids.length} page(s) deleted.` });
+    return redirect(reply, asString(formBody(request).back) === '/' ? '/' : '/accounts', { kind: 'ok', message: `${ids.length} page(s) deleted.` });
   });
 
   app.post('/settings/facebook/pages/:id', async (request, reply) => {

@@ -23,6 +23,8 @@ export interface Attention {
   action: string;
   /** Opens in its own tab (the live browser). */
   external?: boolean;
+  /** A second button that posts instead of linking, e.g. to remove what the notice is about. */
+  post?: { url: string; label: string; fields: Record<string, string>; confirm?: string };
 }
 
 export interface Running {
@@ -87,8 +89,17 @@ export function homePage(data: HomeData): Html {
           ${data.attention.map(
             (a) => html`<div class="attention-row ${a.kind}">
               <span>${a.text}</span>
-              <a class="button small" href="${a.href}"
-                ${a.external ? raw('target="_blank" rel="noopener"') : raw('')}>${a.action}</a>
+              <span class="row" style="gap:6px;flex-wrap:nowrap">
+                <a class="button small" href="${a.href}"
+                  ${a.external ? raw('target="_blank" rel="noopener"') : raw('')}>${a.action}</a>
+                ${a.post
+                  ? html`<form method="post" action="${a.post.url}" style="margin:0"
+                      ${a.post.confirm ? raw(`onsubmit="return confirm('${a.post.confirm.replace(/'/g, '&#39;')}')"`) : raw('')}>
+                      ${Object.entries(a.post.fields).map(([k, v]) => html`<input type="hidden" name="${k}" value="${v}" />`)}
+                      <button type="submit" class="small danger">${a.post.label}</button>
+                    </form>`
+                  : raw('')}
+              </span>
             </div>`,
           )}
         </div>`}
