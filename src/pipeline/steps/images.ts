@@ -1,5 +1,5 @@
 import { brandName, isSocialOnly } from '../../core/social-only.js';
-import { randomUUID } from 'node:crypto';
+import { recipeFileName } from '../../lib/file-name.js';
 import type { Step } from '../engine.js';
 import { createLogger } from '../../lib/logger.js';
 import type { ImagePromptSet } from './content.js';
@@ -44,11 +44,13 @@ async function upload(
   ctx: import('../context.js').PipelineContext,
   data: Buffer,
   contentType: string,
+  hint: string,
 ): Promise<Uploaded> {
   const extension = contentType.includes('png') ? 'png' : contentType.includes('jpeg') ? 'jpg' : 'webp';
   const result = await ctx.siteApi.uploadImage(
     data,
-    `${randomUUID()}.${extension}`,
+    // Named after the recipe: the file name is read by image search.
+    recipeFileName(ctx.keyword.seed_keyword, hint, extension),
     contentType,
     'recipes',
   );
@@ -84,6 +86,7 @@ async function generateAndUpload(
   ctx: import('../context.js').PipelineContext,
   prompt: string,
   label: string,
+  hint = label,
 ): Promise<Uploaded> {
   // Reported here rather than once per step, because this is the only path
   // that reaches Google. Copying a shared image is a plain download and needs
@@ -105,7 +108,7 @@ async function generateAndUpload(
   // this article need" rather than "how many files moved".
   ctx.countImages(1);
 
-  const uploaded = await upload(ctx, data, contentType);
+  const uploaded = await upload(ctx, data, contentType, hint);
 
   log.debug(`"${label}" uploaded to ${uploaded.path} (job ${jobId})`);
   return uploaded;
@@ -116,11 +119,12 @@ async function copyFromUrl(
   ctx: import('../context.js').PipelineContext,
   sourceUrl: string,
   label: string,
+  hint = label,
 ): Promise<Uploaded> {
   log.debug(`copying "${label}" from ${sourceUrl}`);
 
   const { data, contentType } = await ctx.images.download(sourceUrl);
-  return upload(ctx, data, contentType);
+  return upload(ctx, data, contentType, hint);
 }
 
 /**
@@ -175,7 +179,7 @@ function articleImageStep(slot: ArticleImageSlot): Step<string, Uploaded> {
 
       if (cached) {
         try {
-          return await copyFromUrl(ctx, cached[slot], label);
+          return await copyFromUrl(ctx, cached[slot], label, slot);
         } catch (err) {
           log.warn(
             `shared "${label}" for keyword ${ctx.keyword.id} could not be copied ` +
@@ -185,7 +189,7 @@ function articleImageStep(slot: ArticleImageSlot): Step<string, Uploaded> {
         }
       }
 
-      return generateAndUpload(ctx, prompt, label);
+      return generateAndUpload(ctx, prompt, label, slot);
     },
   };
 }
@@ -275,7 +279,7 @@ export const generatePinImage: Step<
     const prompt = design ? render(design.body, fields) : loadTemplate('pin-graphic.template.txt', fields);
 
     // Never shared: this is the asset that has to be unique per site.
-    const pin = await generateAndUpload(ctx, prompt, 'pinterest graphic');
+    const pin = await generateAndUpload(ctx, prompt, 'pinterest graphic', 'pin');
     if (design) {
       try { markRunPinDesign(ctx.runId, design.id); } catch { /* recorded only for the rotation */ }
     }

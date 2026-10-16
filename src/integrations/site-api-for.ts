@@ -66,7 +66,9 @@ export class SocialOnlySiteApi extends SiteApiClient {
   }
 
   override async uploadImage(data: Buffer, filename: string, contentType = 'image/webp', category = 'recipes'): Promise<UploadResult> {
-    const prefix = filename.startsWith('reel-') ? 'reel' : 'img';
+    // A name made from the recipe ("cookies-aux-pepites-hero-a1b2c3.webp") keeps its words.
+    const stem = filename.replace(/\.[a-z0-9]+$/i, '').replace(/-[0-9a-f]{6}$/, '');
+    const prefix = filename.startsWith('reel-') ? 'reel' : /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(filename) || !stem ? 'img' : stem;
     const saved = await saveMediaImage(data, contentType, prefix);
     return {
       success: true,

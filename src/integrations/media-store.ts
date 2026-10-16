@@ -142,7 +142,7 @@ export function saveMediaVideo(data: Buffer, prefix = 'video'): { name: string; 
 }
 
 function safePrefix(prefix: string): string {
-  return prefix.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20) || 'file';
+  return prefix.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 70) || 'file';
 }
 
 /**
