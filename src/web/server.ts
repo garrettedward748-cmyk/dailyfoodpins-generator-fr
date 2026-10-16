@@ -271,6 +271,7 @@ import { buildSiteBackup, encodeSiteBackup, parseSiteBackup, restoreSiteBackup, 
 import { createWriteStream, mkdirSync } from 'node:fs';
 import { rm, writeFile } from 'node:fs/promises';
 import { pipeline as pipeStreams } from 'node:stream/promises';
+import { Readable } from 'node:stream';
 import { extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { idFromFlowUrl } from '../reels/ids.js';
@@ -3042,6 +3043,55 @@ export function buildServer(
       view = { reachable: false, error: errorMessage(err), accounts: [], pending: null };
     }
     return page(reply, 'Google accounts', '/settings/google', googleAccountsPage(view), readFlash(request.query));
+  });
+
+  // The accounts WITH their Google sign-ins, as one file, to move to another
+  // server. Not part of the platform backup: the sign-ins are Chrome profiles
+  // on the image service's disk, and carry private logins, so it is a file of
+  // its own that the person chooses to download and keep safe.
+  app.get('/settings/google/export', async (_request, reply) => {
+    try {
+      const base = settings.get('image_base_url').replace(/\/+$/, '');
+      if (!base) throw new Error('The image service URL is not set under Setup.');
+      const response = await fetch(`${base}/flow/accounts-export`, {
+        headers: { 'X-API-Key': settings.get('image_api_key') },
+        signal: AbortSignal.timeout(10 * 60_000),
+      });
+      if (!response.ok || !response.body) throw new Error(await imageServiceError(response));
+      const stamp = new Date().toISOString().slice(0, 10);
+      return reply
+        .header('Content-Type', 'application/gzip')
+        .header('Content-Disposition', `attachment; filename="google-signins-${stamp}.tar.gz"`)
+        .send(Readable.fromWeb(response.body as never));
+    } catch (err) {
+      return redirect(reply, '/settings/google', { kind: 'error', message: errorMessage(err) });
+    }
+  });
+
+  app.post('/settings/google/import', async (request, reply) => {
+    try {
+      const file = await request.file({ limits: { fileSize: 2 * 1024 * 1024 * 1024 } });
+      if (!file || !/\.(tar\.gz|tgz)$/i.test(file.filename)) throw new Error('Choose a sign-ins file ending in .tar.gz.');
+      const base = settings.get('image_base_url').replace(/\/+$/, '');
+      if (!base) throw new Error('The image service URL is not set under Setup.');
+      const response = await fetch(`${base}/flow/accounts-import`, {
+        method: 'POST',
+        headers: { 'X-API-Key': settings.get('image_api_key'), 'Content-Type': 'application/gzip' },
+        body: Readable.toWeb(file.file) as never,
+        duplex: 'half',
+        signal: AbortSignal.timeout(10 * 60_000),
+      } as RequestInit);
+      if (!response.ok) throw new Error(await imageServiceError(response));
+      const done = (await response.json()) as { imported: number };
+      // What the service holds now is the truth; the next visit saves it afresh.
+      settings.set('google_accounts_snapshot', '');
+      return redirect(reply, '/settings/google', {
+        kind: 'ok',
+        message: `${done.imported} account${done.imported === 1 ? '' : 's'} imported with their sign-ins. Google may ask an account to sign in again on a new server: use Sign in on its row if it says needs sign-in.`,
+      });
+    } catch (err) {
+      return redirect(reply, '/settings/google', { kind: 'error', message: errorMessage(err) });
+    }
   });
 
   app.post('/settings/google/restore', async (_request, reply) => {

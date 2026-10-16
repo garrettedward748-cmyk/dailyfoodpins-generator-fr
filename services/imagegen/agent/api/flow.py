@@ -13,10 +13,12 @@ import logging
 import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel
 
-from agent import accounts, chrome, image_models
+from agent import accounts, chrome, image_models, profile_bundle
 from agent.auth import require_api_key
 from agent.config import FLOW_PROJECT_ID
 from agent.db import jobs
@@ -360,6 +362,50 @@ async def accounts_login_code(account_id: int, body: _Code) -> dict:
     from agent import google_login
     google_login.give_code(account_id, body.code)
     return google_login.status(account_id)
+
+
+@router.get("/accounts-export")
+async def accounts_export():
+    """The accounts and their Google sign-ins, as one .tar.gz to move to another service."""
+    import tempfile
+    from pathlib import Path
+    chrome.release_manual_hold()
+    await chrome.ensure_stopped("exporting the sign-ins")
+    fd, name = tempfile.mkstemp(suffix=".tar.gz", prefix="signins-")
+    os.close(fd)
+    path = Path(name)
+    try:
+        count = await asyncio.to_thread(profile_bundle.export_bundle, path)
+    except Exception as e:  # noqa: BLE001
+        path.unlink(missing_ok=True)
+        raise HTTPException(500, f"Could not pack the sign-ins: {e}")
+    return FileResponse(
+        path, media_type="application/gzip",
+        filename="google-signins.tar.gz",
+        headers={"X-Accounts": str(count)},
+        background=BackgroundTask(path.unlink, missing_ok=True),
+    )
+
+
+@router.post("/accounts-import")
+async def accounts_import(request: Request) -> dict:
+    """Replace the accounts and sign-ins with those in an uploaded bundle (raw body)."""
+    import tempfile
+    from pathlib import Path
+    fd, name = tempfile.mkstemp(suffix=".tar.gz", prefix="signins-in-")
+    path = Path(name)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            async for chunk in request.stream():
+                fh.write(chunk)
+        chrome.release_manual_hold()
+        await chrome.ensure_stopped("importing the sign-ins")
+        count = await asyncio.to_thread(profile_bundle.import_bundle, path)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    finally:
+        path.unlink(missing_ok=True)
+    return {"imported": count, **accounts.list_accounts()}
 
 
 class _Limits(BaseModel):
