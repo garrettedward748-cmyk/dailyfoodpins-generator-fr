@@ -30,3 +30,9 @@ __pycache__/
 src/web/public/style.css
 .preview/
 .claude/launch.json
+
+# SQLite runtime files and scratch
+*.db-wal
+*.db-shm
+*.db
+test.txt
