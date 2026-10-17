@@ -173,14 +173,12 @@ export function pinIdeasPage(data: {
               <div class="card">
                 <div class="table-wrap"><table>
                   <thead><tr>
-                    ${data.status === 'new'
-                      ? html`<th class="pick"><input type="checkbox" onclick="var on=this.checked;this.closest('table').querySelectorAll('tbody input').forEach(function(c){c.checked=on})" /></th>`
-                      : raw('')}
+                    <th class="pick"><input type="checkbox" onclick="var on=this.checked;this.closest('table').querySelectorAll('tbody input').forEach(function(c){c.checked=on})" /></th>
                     <th>Idea</th><th>Group</th><th>Pins to</th><th>Follows</th>
                   </tr></thead>
                   <tbody>${data.rows.map(
                     (i) => html`<tr>
-                      ${data.status === 'new' ? html`<td class="pick"><input type="checkbox" name="ids" value="${i.id}" /></td>` : raw('')}
+                      <td class="pick"><input type="checkbox" name="ids" value="${i.id}" /></td>
                       <td><strong>${i.title}</strong></td>
                       <td class="small muted">${i.topic || '—'}</td>
                       <td class="small">${(() => {
@@ -195,13 +193,21 @@ export function pinIdeasPage(data: {
                   )}</tbody>
                 </table></div>
               </div>
-              ${data.status === 'new'
-                ? html`<div class="save-bar">
-                    <button type="submit" class="primary">Add the ticked ones</button>
-                    <button type="submit" formaction="/pin-ideas/${site.id}/dismiss" class="danger">Dismiss the ticked ones</button>
-                    <span class="muted small">Ideas go to Keywords for ${site.domain}, under their group. Dismissed ones never come back.</span>
-                  </div>`
-                : raw('')}
+              <div class="save-bar">
+                ${data.status === 'new'
+                  ? html`<button type="submit" class="primary">Add the ticked ones</button>
+                      <button type="submit" formaction="/pin-ideas/${site.id}/dismiss" class="danger">Dismiss the ticked ones</button>`
+                  : raw('')}
+                <button type="submit" formaction="/pin-ideas/${site.id}/delete?status=${data.status}" class="danger"
+                        onclick="return confirm('Delete the ticked ideas? They are removed from this list; a later upload may propose them again.')">Delete the ticked ones</button>
+                <button type="submit" formaction="/pin-ideas/${site.id}/delete-all?status=${data.status}" formnovalidate class="danger"
+                        onclick="return confirm('Delete all ${data.rows.length} idea(s) on this tab for ${site.domain}?')">Delete all</button>
+                <span class="muted small">${data.status === 'new'
+                  ? html`Add sends ideas to Keywords for ${site.domain}, under their group. Dismissed ones never come back; deleted ones may be proposed again by a later upload.`
+                  : data.status === 'added'
+                    ? html`Deleting here removes the idea from this list only: its keyword stays in Keywords.`
+                    : html`Deleted ones may be proposed again by a later upload.`}</span>
+              </div>
             </form>`}`
       : raw('')}
   `;

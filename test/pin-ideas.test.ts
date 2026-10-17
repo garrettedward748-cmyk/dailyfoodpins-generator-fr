@@ -6,7 +6,7 @@ import {
   addPastedKeywords, addProfile, createRun, firstProfile, runProfile, updateProfile, upsertBufferAccount, upsertSite,
 } from '../src/db/repos.js';
 import {
-  addPinIdeas, analyseExport, count, dismissPinIdeas, exportAccount, exportUsername, lastPinReport, listPinIdeas, parsePinterestCsv, pinLines,
+  addPinIdeas, analyseExport, count, deletePinIdeas, dismissPinIdeas, exportAccount, exportUsername, lastPinReport, listPinIdeas, parsePinterestCsv, pinLines,
 } from '../src/research/pinterest-ideas.js';
 import { titleFromPage, slugTitle } from '../src/integrations/pinterest-page.js';
 import { Settings } from '../src/settings.js';
@@ -280,3 +280,28 @@ function addKeyword(siteId: number): number {
   addPastedKeywords(['Plain Banana Bread'], 'banana', [siteId]);
   return get<{ id: number }>("SELECT id FROM keywords WHERE spy_title = 'Plain Banana Bread'")!.id;
 }
+
+describe('deleting ideas', () => {
+  it('removes the ticked ones or a whole tab, and a deleted idea can be proposed again', async () => {
+    const siteId = site();
+    const three = { ask: async () => JSON.stringify({ ideas: [
+      { title: 'Garlic Butter Pizza Bites', group: 'pizza', from: 1 },
+      { title: 'Lemon Crinkle Cookies', group: 'lemon', from: 2 },
+      { title: 'Garlic Knot Sliders', group: 'garlic', from: 3 },
+    ] }) };
+    await analyseExport(siteId, 'p.csv', EN, three, '2026-10-17');
+    const [a, b, c] = listPinIdeas(siteId, 'new');
+    addPinIdeas(siteId, [a!.id]);
+
+    expect(deletePinIdeas(siteId, 'new', [b!.id, a!.id])).toBe(1); // a is on Added now: not touched from this tab
+    expect(listPinIdeas(siteId, 'new').map((i) => i.id)).toEqual([c!.id]);
+    expect(deletePinIdeas(siteId, 'added', 'all')).toBe(1);
+    // The keyword stays in Keywords.
+    expect(all('SELECT id FROM keywords')).toHaveLength(1);
+
+    // Deleted, not dismissed: the next upload may bring it back.
+    const again = await analyseExport(siteId, 'p.csv', EN, three, '2026-10-18');
+    expect(again.found).toBe(1);
+    expect(listPinIdeas(siteId, 'new').map((i) => i.title).sort()).toEqual(['Garlic Knot Sliders', 'Lemon Crinkle Cookies']);
+  });
+});

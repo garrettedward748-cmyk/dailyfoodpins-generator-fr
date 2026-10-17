@@ -267,7 +267,7 @@ import { backupsPage } from './views/backups.js';
 import { BufferClient } from '../integrations/buffer.js';
 import { askPrompt } from '../llm/ask.js';
 import {
-  addPinIdeas, analyseExport, dismissPinIdeas, lastPinReport, listPinIdeas, waitingPinIdeas, type PinIdea, type PinIdeasStage,
+  addPinIdeas, analyseExport, deletePinIdeas, dismissPinIdeas, lastPinReport, listPinIdeas, waitingPinIdeas, type PinIdea, type PinIdeasStage,
 } from '../research/pinterest-ideas.js';
 import { pinIdeasPage, type PinIdeasSiteView } from './views/pin-ideas.js';
 import { pinTitle } from '../integrations/pinterest-page.js';
@@ -3907,6 +3907,26 @@ export function buildServer(
     if (!ids.length) return redirect(reply, `/pin-ideas?site=${siteId}`, { kind: 'warn', message: 'Tick at least one.' });
     const n = addPinIdeas(siteId, ids);
     return redirect(reply, `/pin-ideas?site=${siteId}`, { kind: 'ok', message: `${n} idea(s) added to Keywords. Repeats were skipped.` });
+  });
+
+  const ideaTab = (request: FastifyRequest): PinIdea['status'] =>
+    (['new', 'added', 'dismissed'] as const).find((x) => x === (request.query as { status?: string }).status) ?? 'new';
+
+  app.post('/pin-ideas/:id/delete', async (request, reply) => {
+    const siteId = asNumber((request.params as { id: string }).id, 0);
+    const status = ideaTab(request);
+    const back = `/pin-ideas?site=${siteId}&status=${status}`;
+    const ids = pinIdeaIds(request);
+    if (!ids.length) return redirect(reply, back, { kind: 'warn', message: 'Tick at least one.' });
+    const n = deletePinIdeas(siteId, status, ids);
+    return redirect(reply, back, { kind: 'ok', message: `${n} idea(s) deleted.` });
+  });
+
+  app.post('/pin-ideas/:id/delete-all', async (request, reply) => {
+    const siteId = asNumber((request.params as { id: string }).id, 0);
+    const status = ideaTab(request);
+    const n = deletePinIdeas(siteId, status, 'all');
+    return redirect(reply, `/pin-ideas?site=${siteId}&status=${status}`, { kind: 'ok', message: `${n} idea(s) deleted.` });
   });
 
   app.post('/pin-ideas/:id/dismiss', async (request, reply) => {

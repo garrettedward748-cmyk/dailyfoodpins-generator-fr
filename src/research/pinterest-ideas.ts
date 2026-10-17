@@ -448,3 +448,17 @@ export function addPinIdeas(siteId: number, ids: number[]): number {
 }
 
 export const dismissPinIdeas = (siteId: number, ids: number[]): number => mark(siteId, ids, 'dismissed');
+
+/**
+ * Remove ideas from the list, the ticked ones or every one on a tab. Unlike
+ * Dismiss, nothing remembers them: a later upload may propose them again. An
+ * added idea's keyword stays in Keywords; only its line here goes.
+ */
+export function deletePinIdeas(siteId: number, status: PinIdea['status'], ids: number[] | 'all'): number {
+  if (ids === 'all') return run('DELETE FROM pin_ideas WHERE site_id = ? AND status = ?', siteId, status).changes;
+  if (!ids.length) return 0;
+  return run(
+    `DELETE FROM pin_ideas WHERE site_id = ? AND status = ? AND id IN (${ids.map(() => '?').join(',')})`,
+    siteId, status, ...ids,
+  ).changes;
+}
