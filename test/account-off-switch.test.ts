@@ -4,7 +4,7 @@ import { closeDatabase, openDatabase, run } from '../src/db/index.js';
 import {
   addProfile, createReel, createRun, fanoutPosted, firstProfile, getFbPageByProfile, getKeyword, getReel, getSite,
   insertKeyword, markRunPublished, pageForSite, setPostToAll, updateProfile, updateReel, upsertBufferAccount,
-  upsertFbPageForProfile, upsertSite, type ReelView,
+  upsertFbPageForProfile, upsertSite, facebookForSite, type ReelView,
 } from '../src/db/repos.js';
 import { AccountOffError, publishReel, tickReels, type ReelDeps } from '../src/reels/engine.js';
 import { PipelineContext } from '../src/pipeline/context.js';
@@ -265,5 +265,30 @@ describe('publishing a reel whose account is off', () => {
     const second = await tickReels(settings, deps({ scheduleReel: vi.fn(async () => 'FB') }));
     expect(second.failed).toBe(0);
     expect(getReel(reelId)!.status).toBe('published');
+  });
+});
+
+describe('a page with no card, on a site that has cards', () => {
+  it('REGRESSION arbmom.com: a synced page with Reels ticked by default no longer takes the reels the cards refuse', () => {
+    const siteId = newSite();
+    // Facebook 1: on, posts only. Facebook 2: reels ticked, account off.
+    const one = firstProfile(siteId, 'facebook').id;
+    upsertFbPageForProfile(one, siteId, 'ArbmomRecipes', true, false);
+    const two = addProfile(siteId, 'facebook');
+    upsertFbPageForProfile(two, siteId, 'Recipesbuzz', false, true);
+    updateProfile(two, { enabled: 0 });
+    // The page a Facebook token synced, assigned to the site: no card, reels on.
+    run("INSERT INTO fb_pages (page_id, name, token_id, site_id, posts, reels, auto_publish, enabled) VALUES ('123', 'ArbmomRecipes', NULL, ?, 1, 1, 1, 1)", siteId);
+
+    expect(pageForSite(siteId, 'reels')).toBeUndefined();
+    expect(facebookForSite(siteId).reels).toBe(false);
+    expect(pageForSite(siteId, 'posts')?.page_id).toBe(`profile:${one}`);
+  });
+
+  it('still counts for a site with no cards at all', () => {
+    const siteId = newSite();
+    run("DELETE FROM fb_pages WHERE site_id = ?", siteId);
+    run("INSERT INTO fb_pages (page_id, name, token_id, site_id, posts, reels, auto_publish, enabled) VALUES ('456', 'Only', NULL, ?, 1, 1, 1, 1)", siteId);
+    expect(pageForSite(siteId, 'reels')?.page_id).toBe('456');
   });
 });

@@ -2840,15 +2840,25 @@ export function markFbPageFailed(id: number, error: string): void {
  * with two pages alternates between them. `need` asks only for pages that take
  * posts or reels; none means nothing goes out and the run says why.
  */
+/** Which of a site's pages may take its posts and reels (alias p). */
+const CARD_RULE = `(
+  (p.profile_id IS NOT NULL AND EXISTS (SELECT 1 FROM channel_profiles c WHERE c.id = p.profile_id AND c.enabled = 1))
+  OR (p.profile_id IS NULL AND NOT EXISTS (SELECT 1 FROM fb_pages q WHERE q.site_id = p.site_id AND q.profile_id IS NOT NULL))
+)`;
+
 export function pageForSite(siteId: number, need?: 'posts' | 'reels' | 'collage'): FbPageRow | undefined {
   const flag =
     need === 'posts' ? 'AND p.posts = 1' : need === 'reels' ? 'AND p.reels = 1' : need === 'collage' ? 'AND p.collage = 1' : '';
   // A page set from an account's card (profile_id) is only as on as the account:
   // its toggle off means the page takes nothing, whatever its ticks say.
+  // A page with no card (one synced from a Facebook token) counts only for a
+  // site that has no cards at all: once a site has cards, they alone decide.
+  // Such a page arrives with Reels ticked and is not shown among the cards,
+  // so with every card off for reels it still took the site's reels.
   return get<FbPageRow>(
     `SELECT p.* FROM fb_pages p
       WHERE p.enabled = 1 AND p.site_id = ? ${flag}
-        AND (p.profile_id IS NULL OR EXISTS (SELECT 1 FROM channel_profiles c WHERE c.id = p.profile_id AND c.enabled = 1))
+        AND ${CARD_RULE}
       ORDER BY COALESCE((SELECT MAX(r.id) FROM reels r WHERE r.fb_page_id = p.id), 0), p.id
       LIMIT 1`,
     siteId,
@@ -2860,7 +2870,10 @@ export function pageForSite(siteId: number, need?: 'posts' | 'reels' | 'collage'
  * posts, and whether any takes reels -- what the site's Facebook card says.
  */
 export function facebookForSite(siteId: number): { pages: FbPageRow[]; posts: boolean; reels: boolean; collage: boolean } {
-  const pages = all<FbPageRow>('SELECT * FROM fb_pages WHERE enabled = 1 AND site_id = ? ORDER BY name, id', siteId);
+  // The pages that can take anything, by the same rule as pageForSite: an
+  // account switched off, or a cardless page on a site with cards, does not
+  // count -- so the card's header no longer says "reels" when none is made.
+  const pages = all<FbPageRow>(`SELECT p.* FROM fb_pages p WHERE p.enabled = 1 AND p.site_id = ? AND ${CARD_RULE} ORDER BY p.name, p.id`, siteId);
   return {
     pages,
     posts: pages.some((p) => p.posts === 1),
