@@ -185,6 +185,7 @@ import {
   getFbPageByProfile,
   upsertFbPageForProfile,
   setProfileKinds,
+  reelsElsewhere,
   deleteFbPageByProfile,
   type ReelCandidate,
   type FbPageRow,
@@ -1379,13 +1380,13 @@ export function buildServer(
     const viaBuffer = settings.get('reel_publisher') === 'buffer';
     const bufferOn = settings.getBool('buffer_enabled');
     const fb = facebookForSite(siteId);
-    // Reels are made only for a page that takes them, and only with Facebook reels on.
-    const reelsMade = fbOn && fb.reels;
+    // Reels are made with Facebook reels on, for a page that takes them -- or,
+    // through Buffer, for the other networks alone when no page does.
+    const elsewhere = Boolean(site && reelsElsewhere(site));
+    const reelsMade = fbOn && (fb.reels || (viaBuffer && elsewhere));
     const reelBlock = !fbOn
       ? 'reels: Facebook reels are off in Setup'
-      : !fb.reels
-        ? (fb.pages.length ? 'reels: off on its Facebook page' : 'reels: no Facebook page for this site')
-        : !viaBuffer ? 'reels: set Publish reels through Buffer' : '';
+      : !viaBuffer ? 'reels: set Publish reels through Buffer' : '';
     const pinPosts = (site?.pin_posts ?? 1) !== 0;
     const state = (posts: [boolean, string], reels: [boolean, string]) => ({
       on: [posts[0] && !posts[1] ? 'posts' : '', reels[0] && !reels[1] ? 'reels' : ''].filter(Boolean),
@@ -1399,7 +1400,7 @@ export function buildServer(
       facebook: {
         on: [
           fbOn && viaBuffer && fb.posts ? 'posts' : '',
-          reelsMade ? 'reels' : '',
+          fbOn && fb.reels ? 'reels' : '',
           fbOn && viaBuffer && fb.collage && settings.getBool('collage_enabled') ? 'collage' : '',
         ].filter(Boolean),
         notes: [

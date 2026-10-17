@@ -107,8 +107,14 @@ describe('presenters', () => {
       caption: 'c', references: [], stage: 'done' });
     expect(getReel(reelId)!.fb_page_id).toBeNull();
 
+    // A page that takes posts only does not adopt them: they were made for the other networks.
     await post(`/settings/facebook/pages/${pageId}`, {
-      [`site_${pageId}`]: String(siteId), [`enabled_${pageId}`]: 'on', [`presenter_${pageId}`]: '',
+      [`site_${pageId}`]: String(siteId), [`enabled_${pageId}`]: 'on', [`posts_${pageId}`]: 'on', [`presenter_${pageId}`]: '',
+    });
+    expect(getReel(reelId)!.fb_page_id).toBeNull();
+
+    await post(`/settings/facebook/pages/${pageId}`, {
+      [`site_${pageId}`]: String(siteId), [`enabled_${pageId}`]: 'on', [`reels_${pageId}`]: 'on', [`presenter_${pageId}`]: '',
     });
     expect(getReel(reelId)!.fb_page_id).toBe(pageId);
   });

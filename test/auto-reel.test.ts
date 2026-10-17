@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { closeDatabase, openDatabase } from '../src/db/index.js';
+import { closeDatabase, openDatabase, run } from '../src/db/index.js';
 import {
   createRun,
   updateReel,
@@ -214,6 +214,27 @@ describe('the create-reel step', () => {
     expect(listReels()).toEqual([]);
     expect(reelStep(runId)?.status).toBe('ok');
     expect(reelStep(runId)?.output_json).toContain('no Facebook page');
+  });
+
+  it('makes the reel with no Facebook page when another network takes reels, through Buffer', async () => {
+    vi.stubGlobal('fetch', buildWorld().fetchStub);
+    run('UPDATE sites SET pin_reels = 1 WHERE id = ?', siteId);
+    settings.set('reel_publisher', 'buffer');
+    const runId = createRun(keywordId, siteId);
+
+    expect((await executePipeline(makeContext(runId))).status).toBe('published');
+
+    const [reel] = listReels();
+    expect(reel).toMatchObject({ run_id: runId, fb_page_id: null });
+  });
+
+  it('still makes none for the other networks when reels go straight to Facebook, which only Buffer can send on', async () => {
+    vi.stubGlobal('fetch', buildWorld().fetchStub);
+    run('UPDATE sites SET pin_reels = 1 WHERE id = ?', siteId);
+    const runId = createRun(keywordId, siteId);
+    await executePipeline(makeContext(runId));
+    expect(listReels()).toEqual([]);
+    expect(reelStep(runId)?.output_json).toContain('need Publish reels through Buffer');
   });
 
   it('does nothing when reels are switched off', async () => {

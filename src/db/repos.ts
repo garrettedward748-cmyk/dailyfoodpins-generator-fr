@@ -2785,12 +2785,16 @@ export function setFbPageOptions(
   // Reels made before this page had a site were left with nowhere to go. They
   // are this page's now, so the Reels page shows them under it and
   // auto-publish can take them.
+  // Only a page that takes reels: a reel made for the other networks alone
+  // (no page took reels) must not land on a page that only takes posts.
   if (siteId && options.enabled) {
     run(
       `UPDATE reels SET fb_page_id = ?
-       WHERE fb_page_id IS NULL AND status != 'published' AND site_id = ?`,
+       WHERE fb_page_id IS NULL AND status != 'published' AND site_id = ?
+         AND (SELECT reels FROM fb_pages WHERE id = ?) = 1`,
       id,
       siteId,
+      id,
     );
   }
 }
@@ -2856,8 +2860,8 @@ export function upsertFbPageForProfile(
   );
 
   // Reels made before this account had a page to carry were left with
-  // nowhere to go; they are this page's now (see setFbPageOptions).
-  if (enabled) {
+  // nowhere to go; they are this page's now (see setFbPageOptions) -- when it takes reels.
+  if (enabled && reels) {
     run(
       `UPDATE reels SET fb_page_id = (SELECT id FROM fb_pages WHERE page_id = ?)
        WHERE fb_page_id IS NULL AND status != 'published' AND site_id = ?`,
@@ -2900,6 +2904,15 @@ const CARD_RULE = `(
   (p.profile_id IS NOT NULL AND EXISTS (SELECT 1 FROM channel_profiles c WHERE c.id = p.profile_id AND c.enabled = 1))
   OR (p.profile_id IS NULL AND NOT EXISTS (SELECT 1 FROM fb_pages q WHERE q.site_id = p.site_id AND q.profile_id IS NOT NULL))
 )`;
+
+/**
+ * Whether a site's reels go anywhere besides Facebook: a network other than
+ * Facebook switched on for reels (on Pinterest and Instagram, an account with
+ * Reels ticked). A reel is then made even with no Facebook page taking it.
+ */
+export function reelsElsewhere(site: Pick<SiteRow, 'pin_reels'> & { ig_reels?: number; yt_reels?: number; tt_reels?: number }): boolean {
+  return Boolean(site.pin_reels || site.ig_reels || site.yt_reels || site.tt_reels);
+}
 
 export function pageForSite(siteId: number, need?: 'posts' | 'reels' | 'collage'): FbPageRow | undefined {
   const flag =

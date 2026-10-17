@@ -5,7 +5,7 @@ import type { PostedRecipe } from '../../integrations/site-api.js';
 import { createLogger, errorMessage } from '../../lib/logger.js';
 import { writeReelCaption } from '../../reels/caption.js';
 import { markReelCaptionStructure, nextCaptionShape } from '../../core/caption-structures.js';
-import { createReel, getReel, pageForSite, presenterForPage, setReelStage, updateReel } from '../../db/repos.js';
+import { createReel, getReel, pageForSite, presenterForPage, reelsElsewhere, setReelStage, updateReel } from '../../db/repos.js';
 import {
   buildReelPrompt,
   isStudioMode,
@@ -56,12 +56,22 @@ export const createReelStep: Step<CreateReelInput, CreateReelOutput> = {
       return { reelId: null, skipped: 'Facebook reels are off' };
     }
 
-    const page = pageForSite(ctx.site.id, 'reels');
+    // The Facebook page the reel is for, when one takes reels. With none, the
+    // reel is still made when another network takes it (Pinterest, Instagram,
+    // YouTube, TikTok) -- those go out through Buffer, so only on that route.
+    const page = pageForSite(ctx.site.id, 'reels') ?? null;
     if (!page) {
-      const skipped = `no Facebook page of ${ctx.site.domain} takes reels`;
-      log.info(`run ${ctx.runId}: no reel — ${skipped}`);
-      return { reelId: null, skipped };
+      const elsewhere = reelsElsewhere(ctx.site as Parameters<typeof reelsElsewhere>[0]);
+      const viaBuffer = ctx.settings.get('reel_publisher') === 'buffer';
+      if (!elsewhere || !viaBuffer) {
+        const skipped = !elsewhere
+          ? `no Facebook page of ${ctx.site.domain} takes reels, and no other network does`
+          : `no Facebook page of ${ctx.site.domain} takes reels, and the other networks need Publish reels through Buffer`;
+        log.info(`run ${ctx.runId}: no reel — ${skipped}`);
+        return { reelId: null, skipped };
+      }
     }
+    const where = page ? page.name || page.page_id : 'the other networks (no Facebook page takes reels)';
 
     const title = input.title || input.seo.title;
     const host = ctx.site.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
@@ -88,13 +98,13 @@ export const createReelStep: Step<CreateReelInput, CreateReelOutput> = {
     // Setup -> Reels: one clip from one prompt, or a storyboard of scenes.
     const mode = reelMode(ctx.settings);
     if (!isStudioMode(mode)) {
-      const presenter = presenterForPage(page.id);
+      const presenter = page ? presenterForPage(page.id) : undefined;
       const scenes = nextReelShape(ctx.site.id);
       const reelId = createReel({
         runId: ctx.runId,
         siteId: ctx.site.id,
         keywordId: ctx.keyword.id,
-        fbPageId: page.id,
+        fbPageId: page?.id ?? null,
         prompt: buildReelPrompt({
           title,
           presenter: presenter ? { name: presenter.name, voice: presenter.voice_description } : null,
@@ -121,7 +131,7 @@ export const createReelStep: Step<CreateReelInput, CreateReelOutput> = {
         log.warn(`run ${ctx.runId}: reel ${reelId} could not start: ${error}`);
         return { reelId, error };
       }
-      log.info(`run ${ctx.runId}: reel ${reelId} queued as one clip for ${page.name || page.page_id}`);
+      log.info(`run ${ctx.runId}: reel ${reelId} queued as one clip for ${where}`);
       return { reelId };
     }
 
@@ -129,7 +139,7 @@ export const createReelStep: Step<CreateReelInput, CreateReelOutput> = {
       runId: ctx.runId,
       siteId: ctx.site.id,
       keywordId: ctx.keyword.id,
-      fbPageId: page.id,
+      fbPageId: page?.id ?? null,
       prompt: '',
       caption,
       references: [],
@@ -140,7 +150,7 @@ export const createReelStep: Step<CreateReelInput, CreateReelOutput> = {
       planJson: JSON.stringify({ ...seedFromRun(ctx.runId, host, input.images, title), process: mode === 'process' }),
     });
 
-    log.info(`run ${ctx.runId}: reel ${reelId} queued for planning on ${page.name || page.page_id}`);
+    log.info(`run ${ctx.runId}: reel ${reelId} queued for planning for ${where}`);
     return { reelId };
   },
 };

@@ -288,3 +288,22 @@ describe('reels refused for a full Buffer queue', () => {
     expect(reelsToRetryForFullBuffer(6, 4)).toHaveLength(0); // tried enough
   });
 });
+
+describe('a reel no Facebook page takes', () => {
+  it('goes to the other networks through Buffer, and Facebook is left out', async () => {
+    const { reelId, siteId } = seed();
+    updateReel(reelId, { fbPageId: null });
+    const pinReel = vi.fn(async () => 'PIN-1');
+    const deps = fakeDeps({ pinReel });
+    await publishReel(reelOf(reelId), deps);
+    expect(deps.scheduleReel).not.toHaveBeenCalled();
+    expect(pinReel).toHaveBeenCalledWith(expect.objectContaining({ siteId }));
+    expect(getReel(reelId)).toMatchObject({ status: 'published', fb_page_id: null });
+  });
+
+  it('is refused straight to Facebook, which has no page for it', async () => {
+    const { reelId } = seed();
+    updateReel(reelId, { fbPageId: null });
+    await expect(publishReel(reelOf(reelId), fakeDeps({ reelPublisher: 'facebook' }))).rejects.toThrow(/only take reels through Buffer/);
+  });
+});

@@ -2935,13 +2935,12 @@ export function publishControls(reel: ReelView, pages: FbPageRow[]): Html {
       <button class="primary" type="submit">Publish</button>
     </form>`;
   }
+  // No page took this site's reels: it goes to the other networks as it is,
+  // or to a page picked here as well.
   const enabled = pages.filter((p) => p.enabled === 1);
-  if (enabled.length === 0) {
-    return html`<a class="button" href="/accounts#facebook-pages">Add a Facebook page first</a>`;
-  }
   return html`<form method="post" action="/reels/${reel.id}/publish" class="row wrap">
-    <select name="page_id" required>
-      <option value="">Pick a page…</option>
+    <select name="page_id">
+      <option value="">No Facebook page — the other networks only</option>
       ${enabled.map((p) => html`<option value="${p.id}">${p.name || p.page_id}</option>`)}
     </select>
     <button class="primary" type="submit">Publish</button>

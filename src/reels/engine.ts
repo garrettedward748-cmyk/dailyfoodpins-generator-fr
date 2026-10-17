@@ -1061,11 +1061,15 @@ async function publishIfAllowed(
   settings: Settings,
   deps: ReelDeps,
 ): Promise<boolean> {
-  if (!reel.fb_page_id) return false;
-
-  const page = getFbPage(reel.fb_page_id);
-  if (!page || page.enabled !== 1) return false;
-  if (page.auto_publish !== 1) return false;
+  // A reel made for the other networks only (no Facebook page took reels)
+  // has no page to ask: it goes out through Buffer as soon as it is ready.
+  if (!reel.fb_page_id) {
+    if (deps.reelPublisher !== 'buffer') return false;
+  } else {
+    const page = getFbPage(reel.fb_page_id);
+    if (!page || page.enabled !== 1) return false;
+    if (page.auto_publish !== 1) return false;
+  }
   try {
     await publishReel(reel, deps);
   } catch (err) {
@@ -1122,16 +1126,19 @@ export async function publishReel(reel: ReelView, deps: ReelDeps): Promise<void>
 }
 
 async function publishReelOnce(reel: ReelView, deps: ReelDeps): Promise<void> {
-  if (!reel.fb_page_id) throw new Error('This reel has no Facebook page to publish to.');
+  // No page: a reel for the other networks only, which go through Buffer.
+  if (!reel.fb_page_id && deps.reelPublisher !== 'buffer') {
+    throw new Error('This reel has no Facebook page, and the other networks only take reels through Buffer (Setup → Reels → Publish reels through).');
+  }
   if (!reel.output_path && !reel.video_url) throw new Error('This reel has no video to publish.');
 
-  const page = getFbPage(reel.fb_page_id);
-  if (!page) throw new Error('The Facebook page for this reel no longer exists.');
+  const page = reel.fb_page_id ? getFbPage(reel.fb_page_id) ?? null : null;
+  if (reel.fb_page_id && !page) throw new Error('The Facebook page for this reel no longer exists.');
 
   // Straight to the Page, the account behind it is the only thing the reel
   // goes through. (Through Buffer each network checks its own account, so one
   // account off does not hold the others back; see the end of that route.)
-  if (deps.reelPublisher !== 'buffer' && page.profile_id) {
+  if (deps.reelPublisher !== 'buffer' && page?.profile_id) {
     const account = getProfile(page.profile_id);
     if (account && !account.enabled) {
       throw new AccountOffError(
@@ -1177,6 +1184,7 @@ async function publishReelOnce(reel: ReelView, deps: ReelDeps): Promise<void> {
     await publishThroughBuffer(reel, page, video, deps);
     return;
   }
+  if (!page) throw new Error('This reel has no Facebook page to publish to.');
 
   // A card (profile:<id>, manual:<slug>) holds no token: it is bridged to the
   // token's own page by name. When no page of that name is synced, say so
@@ -1283,7 +1291,7 @@ async function publishReelOnce(reel: ReelView, deps: ReelDeps): Promise<void> {
  */
 async function publishThroughBuffer(
   reel: ReelView,
-  page: { id: number; page_id: string; name: string; profile_id?: number | null },
+  page: { id: number; page_id: string; name: string; profile_id?: number | null } | null,
   video: Buffer,
   deps: ReelDeps,
 ): Promise<void> {
@@ -1293,7 +1301,7 @@ async function publishThroughBuffer(
   // reel goes through its page's own account, so the page the reel says it is
   // for is the page it lands on -- before this, a reel shown for RecipeCorner2
   // went out through whichever account the run's turn held, Recipesbuzz.
-  const pageProfile = page.profile_id ?? undefined;
+  const pageProfile = page?.profile_id ?? undefined;
   const siteId = reel.site_id;
   const runId = (reel as { run_id?: number | null }).run_id ?? null;
   const channels = readChannels(reel);
@@ -1416,6 +1424,8 @@ async function publishThroughBuffer(
   };
 
   await network('facebook', async (profileId, onPage) => {
+    // No Facebook page takes this site's reels: it is made for the others only.
+    if (!page) return null;
     const id = await deps.scheduleReel({ siteId, runId, text, videoUrl, profileId: profileId ?? pageProfile, firstComment: facebook.firstComment, title, onPage });
     if (id) markFbPageUsed(page.id); // null: the account is switched off, nothing was sent
     return id;
@@ -1477,7 +1487,7 @@ async function publishThroughBuffer(
   await notify(
     deps,
     `<b>Reel scheduled</b>\n${escapeHtml(reel.run_title ?? '')}\n\n` +
-      `Page: ${escapeHtml(page.name || page.page_id)}\n` +
+      (page ? `Page: ${escapeHtml(page.name || page.page_id)}\n` : '') +
       `On: ${ok.map((n) => `${n}${channels[n]!.page ? ` → ${escapeHtml(channels[n]!.page!)}` : ''} (${escapeHtml(channels[n]!.id ?? '')})`).join(', ') || 'nothing'}` +
       (failed.length ? `\n<b>Not on:</b> ${failed.join(', ')} — press Retry on the reel.` : '') +
       `\nBuffer publishes on its own schedule, so check the Buffer queue for the result.`,
