@@ -1995,6 +1995,15 @@ export function buildServer(
       if (isSocialOnly({ domain: key }) && getSiteByDomain(key)) {
         throw new Error(`Another account is already called "${key}". Pick another name.`);
       }
+      // A domain is one site: adding it again used to overwrite that site's
+      // name, status, schedule and tokens with this blank form's.
+      const taken = isSocialOnly({ domain: key }) ? undefined : getSiteByDomain(key);
+      if (taken) {
+        throw new Error(
+          `${key} is already a site here ("${taken.name}"). One domain is one site: open its Edit to change it. ` +
+            'For more Pinterest, Facebook or other accounts on the same site, add them under Channels → Accounts.',
+        );
+      }
       saveSite(body);
       return redirect(reply, '/sites', {
         kind: 'ok',
