@@ -268,6 +268,7 @@ import {
   addPinIdeas, analyseExport, dismissPinIdeas, lastPinReport, listPinIdeas, waitingPinIdeas, type PinIdea,
 } from '../research/pinterest-ideas.js';
 import { pinIdeasPage, type PinIdeasSiteView } from './views/pin-ideas.js';
+import { pinTitle } from '../integrations/pinterest-page.js';
 import { tryParseJson } from '../pipeline/json.js';
 import { describeRun, emptyReport, experiencesForPrompt, gatherExperiences, pickSuggestions, readSuggestions } from '../cook/suggest.js';
 import { webSearchKeys } from '../llm/web-search.js';
@@ -3821,12 +3822,12 @@ export function buildServer(
       siteId,
       name,
       text,
-      { ask: async (vars) => (await askPrompt(settings, encryptionKey, 'pin-ideas', vars)).content },
+      { ask: async (vars) => (await askPrompt(settings, encryptionKey, 'pin-ideas', vars)).content, pinTitle: (url) => pinTitle(url) },
       localDateKey(new Date(), settings.get('timezone')),
     )
       .catch((err) => log.warn(`pin ideas for site ${siteId} failed: ${errorMessage(err)}`))
       .finally(() => pinIdeasRunning.delete(siteId));
-    return redirect(reply, back, { kind: 'ok', message: 'Reading the pins. Refresh this page in a minute for the ideas.' });
+    return redirect(reply, back, { kind: 'ok', message: 'Reading the pins and looking up their titles on Pinterest. Refresh this page in a minute or two for the ideas.' });
   });
 
   const pinIdeaIds = (request: FastifyRequest): number[] =>

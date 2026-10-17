@@ -6,6 +6,7 @@ import { addPastedKeywords, upsertSite } from '../src/db/repos.js';
 import {
   addPinIdeas, analyseExport, count, dismissPinIdeas, lastPinReport, listPinIdeas, parsePinterestCsv, pinLines,
 } from '../src/research/pinterest-ideas.js';
+import { titleFromPage, slugTitle } from '../src/integrations/pinterest-page.js';
 import { Settings } from '../src/settings.js';
 import { buildServer } from '../src/web/server.js';
 import { setLogLevel } from '../src/lib/logger.js';
@@ -30,6 +31,32 @@ const FR = [
   "Tarte au citron;https://www.pinterest.fr/pin/8/;2 050;14;3;0",
 ].join('\n');
 
+/** The real export (Analytics → Overview → Export): settings, the daily table, Top boards, Top pins by link only. */
+const REAL = [
+  'Analytics overview',
+  '2026-09-17 - 2026-10-17',
+  'Content types,All',
+  'Publish Types,',
+  '',
+  'Date,Impressions',
+  '2026-09-17,247',
+  '2026-09-18,360',
+  "Data starting from 2026-10-16 is an estimate that gets adjusted as it's verified over time.",
+  '',
+  'Top Boards 2026-09-17 - 2026-10-17',
+  'Pinterest Link,Impressions,Engagement,Pin clicks,Outbound clicks,Saves',
+  'https://www.pinterest.com/ArbmomRecipes/apple-crumble-recipes/,190,0,0,0,0',
+  'https://www.pinterest.com/ArbmomRecipes/pumpkin-dessert-recipes/,167,9,5,3,1',
+  '"Top boards table is restricted to data from the last 6 months."',
+  '',
+  'Top Pins 2026-09-17 - 2026-10-17',
+  'Pins created in the last 30 days from 2026-10-17',
+  'Pinterest Link,Content Type,Source,Canonical,Impressions',
+  'https://www.pinterest.com/pin/957929783263860232/,Organic,"From you, Not from you.",Yes,174',
+  'https://www.pinterest.com/pin/957929783263665642/,Organic,From you,Yes,27',
+  '"Top pins table is restricted to data from the last 6 months."',
+].join('\n');
+
 const KEY = randomBytes(32);
 const site = () => upsertSite({ name: 'd', domain: 'd.com', status: 'active', daily_target: 1, interval_minutes: 60 }, KEY);
 
@@ -40,9 +67,45 @@ describe('reading an export', () => {
   it('finds the table under the preamble, reads the counts, names a pin from its address, and drops the Total row', () => {
     const pins = parsePinterestCsv(EN);
     expect(pins.map((p) => p.title)).toEqual(['Easy Pizza Bites', 'Lemon Bars', 'garlic knots']);
+    expect(pins.every((p) => p.kind === 'pin')).toBe(true);
     expect(pins[0]).toMatchObject({ impressions: 4855, saves: 120, pinClicks: 40, outbound: 12, url: 'https://www.pinterest.com/pin/1/' });
     // 12 outbound x10 + 120 saves x5 + 40 clicks x2 + 4855/100
     expect(pins[0]!.score).toBe(120 + 600 + 80 + 49);
+  });
+
+  it("reads the real export: skips the daily table and the notes, names boards from their address, leaves pins to be looked up", () => {
+    const rows = parsePinterestCsv(REAL);
+    expect(rows.map((r) => [r.kind, r.title])).toEqual([
+      ['board', 'pumpkin dessert recipes'],
+      ['board', 'apple crumble recipes'],
+      ['pin', ''],
+      ['pin', ''],
+    ]);
+    expect(rows[0]).toMatchObject({ impressions: 167, pinClicks: 5, outbound: 3, saves: 1, engagements: 9 });
+    expect(rows[2]).toMatchObject({ url: 'https://www.pinterest.com/pin/957929783263860232/', impressions: 174 });
+  });
+
+  it('looks the pins up, and leaves out one that has no title anywhere', async () => {
+    const siteId = site();
+    let read = '';
+    const report = await analyseExport(siteId, 'Pinterest_Analytics_overview.csv', REAL, {
+      pinTitle: async (url) => (url.includes('860232') ? 'Easy Pumpkin Pie Bars' : ''),
+      async ask(vars) { read = vars.pins; return JSON.stringify({ ideas: [{ title: 'Pumpkin Cheesecake Bars', group: 'pumpkin', from: 1 }] }); },
+    }, '2026-10-17');
+    expect(read.split('\n')).toEqual([
+      '1. [board] pumpkin dessert recipes — 167 impressions, 1 saves, 5 pin clicks, 3 outbound clicks',
+      '2. [board] apple crumble recipes — 190 impressions',
+      '3. [pin] Easy Pumpkin Pie Bars — 174 impressions',
+    ]);
+    expect(report).toMatchObject({ pins: 3, found: 1 });
+    expect(listPinIdeas(siteId, 'new')[0]).toMatchObject({ title: 'Pumpkin Cheesecake Bars', source: 'pumpkin dessert recipes' });
+  });
+
+  it("reads a pin's title from its page: og:title, else the page's data, else the link's words", () => {
+    expect(titleFromPage('<meta property="og:title" content="Easy Pumpkin Pie Bars | Pinterest">')).toBe('Easy Pumpkin Pie Bars');
+    expect(titleFromPage('<meta property="og:title" content="Pinterest"><script>{"title":"Caramel Apple Cookies"}</script>')).toBe('Caramel Apple Cookies');
+    expect(titleFromPage('<meta property="og:title" content="Pin on Desserts"><script>{"link":"https:\\/\\/arbmom.com\\/banana-bread-muffins\\/"}</script>')).toBe('banana bread muffins');
+    expect(slugTitle('https://www.pinterest.com/pin/1/')).toBe('');
   });
 
   it('reads the French export', () => {
@@ -56,7 +119,7 @@ describe('reading an export', () => {
   });
 
   it('finds nothing in a file with no pins (the daily overview)', () => {
-    expect(parsePinterestCsv('Date,Clicks\n2026-09-01,4')).toEqual([]);
+    expect(parsePinterestCsv('Date,Impressions\n2026-09-01,4\n2026-09-02,7')).toEqual([]);
   });
 });
 
@@ -93,7 +156,7 @@ describe('the ideas', () => {
     let called = false;
     const report = await analyseExport(siteId, 'overview.csv', 'Date,Impressions\n', { async ask() { called = true; return '{}'; } }, '2026-10-17');
     expect(called).toBe(false);
-    expect(report.error).toMatch(/no pins/);
+    expect(report.error).toMatch(/no pins or boards/);
   });
 
   it('adds the ticked ones to Keywords under their group, and a dismissed one never returns', async () => {

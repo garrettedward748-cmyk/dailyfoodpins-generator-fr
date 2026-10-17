@@ -1,6 +1,6 @@
-These are the pins of a French-language recipe website's own Pinterest account, from its Analytics export, best first. Each shows how far it travelled: impressions, saves, close-up clicks, and outbound clicks (visits to the site, the number that matters most; saves come next).
+These are the best pins and boards of a French-language recipe website's own Pinterest account, from its Analytics export, best first. Each shows how far it travelled: impressions, and where Pinterest gives them, saves, close-up clicks and outbound clicks (visits to the site, the number that matters most; saves come next). A [board] line is a whole board: its name is a topic that is working. A [pin] line is one pin: its title names a dish, or says what the pin is. Names may be in French or English; the ideas are in French.
 
-Pins (numbered, best first):
+Pins and boards (numbered, best first):
 {{pins}}
 
 First, look at what the strongest pins have in common: the kind of dish, the ingredient, the occasion, the format (« bouchées », « à la plaque », « sans cuisson »), the season. A theme that shows up in several strong pins is worth more than one lucky pin.
@@ -8,11 +8,12 @@ First, look at what the strongest pins have in common: the kind of dish, the ing
 Then propose up to {{count}} NEW recipe articles in the same vein: dishes a person who saved those pins would also want next. If a pizza pin travels, its neighbours are other pizzas, other things on pizza dough, other bites for the same party, not a copy of the same pizza.
 
 Rules:
-- Each idea is ONE dish someone would cook from a recipe. Give "title": the article title in French, in the site's own words, naming the dish plainly (e.g. « Bouchées de pizza à l'ail et au beurre »), "group": the short topic it belongs to, in French, 1 to 3 words, lower case (e.g. « pizza »), and "from": the number of the pin it follows.
+- Each idea is ONE dish someone would cook from a recipe. Give "title": the article title in French, in the site's own words, naming the dish plainly (e.g. « Bouchées de pizza à l'ail et au beurre »), "group": the short topic it belongs to, in French, 1 to 3 words, lower case (e.g. « pizza »), and "from": the number of the pin or board it follows.
 - Never repeat a pin's own dish, and never propose one of the site's existing articles:
 {{existing}}
 - No two ideas for the same dish.
 - Nothing with alcohol or pork.
+- A pin from another account (not a dish the site has made) still shows what its audience saves: follow it the same way.
 - Leave out a pin that is not a dish (a roundup, a tip, a quote): it can still tell you about a theme, but no idea follows it directly.
 
 Also give "summary": two or three short sentences, in French, in plain words, on what is working on this account and what the ideas build on.

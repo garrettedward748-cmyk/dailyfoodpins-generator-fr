@@ -56,11 +56,11 @@ export function pinIdeasPage(data: {
             <summary class="small muted" style="cursor:pointer">How to get the file</summary>
             <ol class="small" style="margin:8px 0 0">
               <li>On Pinterest, signed in as the account: <strong>Analytics → Overview</strong>.</li>
-              <li>Pick the dates (the last 30 or 90 days give the clearest picture).</li>
-              <li>Scroll to <strong>Top pins</strong>, set it to show pins (not boards), then <strong>Export</strong>.</li>
-              <li>Upload that CSV here. One file per Pinterest account; upload each account's in turn if the site has several.</li>
+              <li>Pick the dates (the last 30 or 90 days give the clearest picture), then <strong>Export</strong> at the top.</li>
+              <li>Upload that CSV here, as it is. It holds the top boards and the top pins; the pins' titles are looked up on Pinterest.</li>
+              <li>One file per Pinterest account: upload each account's in turn if the site has several.</li>
             </ol>
-            <p class="help" style="margin:6px 0 0">The English and French exports are both read. The daily overview export has no pins in it, so it gives no ideas.</p>
+            <p class="help" style="margin:6px 0 0">The English and French exports are both read.</p>
           </details>
           ${site.running ? html`<p class="small" style="margin:10px 0 0"><strong>Analysing now…</strong> refresh this page in a minute.</p>` : raw('')}
         </div>
@@ -75,12 +75,13 @@ export function pinIdeasPage(data: {
               ${r.summary ? html`<p style="margin:10px 0 0">${r.summary}</p>` : raw('')}
               ${r.top.length
                 ? html`<details style="margin-top:10px" ${data.rows.length ? raw('') : raw('open')}>
-                    <summary class="small" style="cursor:pointer"><strong>The strongest pins</strong> <span class="muted">(what the ideas follow)</span></summary>
+                    <summary class="small" style="cursor:pointer"><strong>The strongest boards and pins</strong> <span class="muted">(what the ideas follow)</span></summary>
                     <div class="table-wrap" style="margin-top:8px"><table>
-                      <thead><tr><th>Pin</th><th>Impressions</th><th>Saves</th><th>Pin clicks</th><th>Outbound</th><th>Score</th></tr></thead>
+                      <thead><tr><th>Board or pin</th><th>Impressions</th><th>Saves</th><th>Pin clicks</th><th>Outbound</th><th>Score</th></tr></thead>
                       <tbody>${r.top.map(
                         (p) => html`<tr>
-                          <td>${p.url ? html`<a href="${p.url}" target="_blank" rel="noopener">${p.title}</a>` : p.title}</td>
+                          <td><span class="badge ${p.kind === 'board' ? 'brand' : 'muted'}">${p.kind}</span>
+                            ${p.url ? html`<a href="${p.url}" target="_blank" rel="noopener">${p.title}</a>` : p.title}</td>
                           <td>${num(p.impressions)}</td><td>${num(p.saves)}</td><td>${num(p.pinClicks)}</td>
                           <td><strong>${num(p.outbound)}</strong></td><td>${num(p.score)}</td>
                         </tr>`,
@@ -105,7 +106,7 @@ export function pinIdeasPage(data: {
                     ${data.status === 'new'
                       ? html`<th class="pick"><input type="checkbox" onclick="var on=this.checked;this.closest('table').querySelectorAll('tbody input').forEach(function(c){c.checked=on})" /></th>`
                       : raw('')}
-                    <th>Idea</th><th>Group</th><th>Follows the pin</th>
+                    <th>Idea</th><th>Group</th><th>Follows</th>
                   </tr></thead>
                   <tbody>${data.rows.map(
                     (i) => html`<tr>

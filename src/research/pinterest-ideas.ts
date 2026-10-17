@@ -21,8 +21,12 @@ const log = createLogger('pin-ideas');
  * Keywords, and the pipeline writes each article from scratch.
  */
 
-/** One pin of the export, with the numbers that matter. */
+/**
+ * One row of the export that says something: a pin, or a board (Pinterest's
+ * export lists both, and a board's name is a topic in itself).
+ */
 export interface PinRow {
+  kind: 'pin' | 'board';
   title: string;
   url: string;
   impressions: number;
@@ -63,7 +67,7 @@ export interface PinIdeasReport {
 const norm = (s: string): string =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
-type Field = keyof Omit<PinRow, 'score'> | 'description' | 'destination';
+type Field = keyof Omit<PinRow, 'score' | 'kind'> | 'description' | 'destination' | 'date';
 
 /**
  * Which column is which, in the English and French exports. Order matters: the
@@ -76,7 +80,8 @@ const COLUMNS: [Field, RegExp][] = [
   ['saves', /^(saves?|enregistrements?|epingles? enregistrees?|repins?)$/],
   ['impressions', /^impressions?$/],
   ['engagements', /^(engagements?|total engagements?|interactions?)$/],
-  ['url', /^(pin (link|url)|lien (de|vers) l ?epingle|url de l ?epingle|pin)$/],
+  ['date', /^(date|jour)$/],
+  ['url', /^(pin (link|url)|pinterest (link|url)|lien pinterest|lien (de|vers) l ?epingle|url de l ?epingle|pin)$/],
   ['destination', /^(destination( url| link)?|url de destination|lien de destination|link|url|lien|outbound link)$/],
   ['title', /^(pin )?(title|titre)( de l ?epingle)?$/],
   ['description', /^(pin )?description( de l ?epingle)?$/],
@@ -116,58 +121,77 @@ const slugWords = (url: string): string => {
  * close-up shows interest. Impressions alone count for little: Pinterest
  * decides those.
  */
-export const pinScore = (p: Omit<PinRow, 'score'>): number =>
+export const pinScore = (p: Omit<PinRow, 'score' | 'kind' | 'title' | 'url'>): number =>
   Math.round(p.outbound * 10 + p.saves * 5 + p.pinClicks * 2 + (p.outbound + p.saves + p.pinClicks === 0 ? p.engagements * 2 : 0) + p.impressions / 100);
 
 /**
- * The pins of a Pinterest Analytics export, best first.
+ * The pins and boards of a Pinterest Analytics export, best first.
  *
- * The export can open with a few lines about the date range before its table,
- * use commas, semicolons or tabs, and name its columns in English or French;
- * the header is the first row that names impressions. A row with no title, no
- * description and no address to read one from is not a pin anyone can write
- * after, and a "Total" row is not a pin at all.
+ * The export is several tables one after another, each under its own header
+ * and a line or two of notes: the daily numbers (Date, Impressions), then Top
+ * boards, then Top pins. Every header that names impressions starts a table;
+ * a table keyed by date is the daily overview and gives nothing to write
+ * after. A board is named from its address (".../banana-bread-recipes/" ->
+ * "banana bread recipes"). A pin row usually carries only its link: its title
+ * is left empty here and looked up from Pinterest before the model reads it.
+ * Columns may come in English or French, separated by commas, semicolons or
+ * tabs; a "Total" row is not a pin.
  */
 export function parsePinterestCsv(text: string): PinRow[] {
   const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
-  const sample = body.split('\n').slice(0, 15).join('\n');
+  const sample = body.split('\n').slice(0, 40).join('\n');
   const delimiter = ([',', ';', '\t'] as const)
     .map((d) => [d, sample.split(d).length] as const)
     .sort((a, b) => b[1] - a[1])[0]![0];
   const rows = parseCsv(body, delimiter);
 
-  const headerAt = rows.findIndex((r) => r.length >= 2 && r.some((c) => fieldOf(c) === 'impressions'));
-  if (headerAt < 0) return [];
-  const columns = rows[headerAt]!.map(fieldOf);
-  const at = (cells: string[], field: Field) => {
-    const i = columns.indexOf(field);
-    return i < 0 ? '' : (cells[i] ?? '').trim();
-  };
-
-  const byTitle = new Map<string, PinRow>();
-  for (const cells of rows.slice(headerAt + 1)) {
-    if (cells.every((c) => !c.trim())) continue;
-    const url = at(cells, 'url');
-    const destination = at(cells, 'destination');
-    const description = at(cells, 'description').replace(/\s+/g, ' ');
-    const title = (at(cells, 'title') || description.slice(0, 120) || slugWords(destination)).replace(/\s+/g, ' ').trim();
-    if (!title || /^(total|totaux?|all|tous)$/i.test(title)) continue;
-    const base = {
-      title,
-      url: url.startsWith('http') ? url : destination.startsWith('http') ? destination : '',
-      impressions: count(at(cells, 'impressions')),
-      saves: count(at(cells, 'saves')),
-      pinClicks: count(at(cells, 'pinClicks')),
-      outbound: count(at(cells, 'outbound')),
-      engagements: count(at(cells, 'engagements')),
+  const found = new Map<string, PinRow>();
+  let columns: (Field | null)[] | null = null;
+  for (const cells of rows) {
+    if (cells.length >= 2 && cells.some((c) => fieldOf(c) === 'impressions')) {
+      columns = cells.map(fieldOf);
+      continue;
+    }
+    // A note, a table's own title, a blank line: one cell, no numbers.
+    if (!columns || cells.length < 2 || cells.every((c) => !c.trim())) continue;
+    if (columns.includes('date')) continue; // the daily overview
+    const at = (field: Field) => {
+      const i = columns!.indexOf(field);
+      return i < 0 ? '' : (cells[i] ?? '').trim();
     };
-    const pin = { ...base, score: pinScore(base) };
-    // The same pin listed twice (two date ranges in one file): its better line.
-    const key = norm(title);
-    const had = byTitle.get(key);
-    if (!had || had.score < pin.score) byTitle.set(key, pin);
+
+    const link = at('url');
+    const destination = at('destination');
+    const isPin = /\/pin\/\d+/.test(link);
+    const isBoard = !isPin && /pinterest\.[a-z.]+\/[^/]+\/[^/]+/.test(link);
+    const description = at('description').replace(/\s+/g, ' ');
+    const title = (at('title') || description.slice(0, 120) || (isBoard ? slugWords(link) : '') || slugWords(destination))
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (/^(total|totaux?|all|tous)$/i.test(title)) continue;
+    // Nothing to name it by, and no pin link to look a name up with.
+    if (!title && !isPin) continue;
+
+    const numbers = {
+      impressions: count(at('impressions')),
+      saves: count(at('saves')),
+      pinClicks: count(at('pinClicks')),
+      outbound: count(at('outbound')),
+      engagements: count(at('engagements')),
+    };
+    const row: PinRow = {
+      kind: isBoard ? 'board' : 'pin',
+      title,
+      url: link.startsWith('http') ? link : destination.startsWith('http') ? destination : '',
+      ...numbers,
+      score: pinScore(numbers),
+    };
+    // The same pin listed twice (two tables, two ranges): its better line.
+    const key = row.url || norm(title);
+    const had = found.get(key);
+    if (!had || had.score < row.score) found.set(key, row);
   }
-  return [...byTitle.values()].sort((a, b) => b.score - a.score);
+  return [...found.values()].sort((a, b) => b.score - a.score || b.impressions - a.impressions);
 }
 
 /* -- Asking for ideas -------------------------------------------------------- */
@@ -180,14 +204,47 @@ export const IDEAS_WANTED = 12;
 export const pinLines = (pins: PinRow[]): string =>
   pins
     .slice(0, PINS_READ)
-    .map(
-      (p, i) =>
-        `${i + 1}. ${p.title.slice(0, 160)} — ${p.impressions} impressions, ${p.saves} saves, ${p.pinClicks} pin clicks, ${p.outbound} outbound clicks`,
-    )
+    .map((p, i) => {
+      // A pin from the Top pins table often has only its impressions: no zeros for numbers it was never given.
+      const known = p.saves + p.pinClicks + p.outbound + p.engagements > 0;
+      const numbers = known
+        ? `${p.impressions} impressions, ${p.saves} saves, ${p.pinClicks} pin clicks, ${p.outbound} outbound clicks`
+        : `${p.impressions} impressions`;
+      return `${i + 1}. [${p.kind}] ${p.title.slice(0, 160)} — ${numbers}`;
+    })
     .join('\n');
+
+/** How many untitled pins are looked up on Pinterest, and how many at once. */
+const LOOKUPS = 30;
+const AT_ONCE = 4;
+
+/**
+ * Give the untitled pins their titles, from Pinterest, a few at a time. A pin
+ * whose title cannot be found is left out: the model cannot learn anything
+ * from a bare number.
+ */
+async function nameThePins(rows: PinRow[], pinTitle: ((url: string) => Promise<string>) | undefined): Promise<PinRow[]> {
+  const untitled = rows.filter((r) => !r.title && r.url).slice(0, LOOKUPS);
+  if (pinTitle) {
+    for (let i = 0; i < untitled.length; i += AT_ONCE) {
+      await Promise.all(
+        untitled.slice(i, i + AT_ONCE).map(async (r) => {
+          try {
+            r.title = (await pinTitle(r.url)).replace(/\s+/g, ' ').trim().slice(0, 160);
+          } catch {
+            r.title = '';
+          }
+        }),
+      );
+    }
+  }
+  return rows.filter((r) => r.title);
+}
 
 export interface PinIdeasDeps {
   ask(vars: { pins: string; count: number; existing: string }): Promise<string>;
+  /** A pin's title, from its page on Pinterest; '' when there is none to read. */
+  pinTitle?(url: string): Promise<string>;
 }
 
 /** What this site already has or has waiting, so no idea comes back as yesterday's article. */
@@ -208,11 +265,15 @@ function existingTitles(siteId: number): string[] {
 export async function analyseExport(siteId: number, fileName: string, text: string, deps: PinIdeasDeps, today: string): Promise<PinIdeasReport> {
   const report: PinIdeasReport = { day: today, file: fileName, pins: 0, top: [], summary: '', found: 0 };
   try {
-    const pins = parsePinterestCsv(text);
+    const rows = parsePinterestCsv(text);
+    if (rows.length === 0) {
+      throw new Error('no pins or boards in this file — export it from Pinterest Analytics → Overview → Export, with the date range you want');
+    }
+    const pins = await nameThePins(rows, deps.pinTitle);
     report.pins = pins.length;
     report.top = pins.slice(0, 15);
     if (pins.length === 0) {
-      throw new Error('no pins in this file — export the table of pins (Analytics → Top pins → Export), not the daily overview');
+      throw new Error('the pins in this file have no titles, and Pinterest did not give them — try again later');
     }
 
     const known = existingTitles(siteId);
