@@ -32,11 +32,20 @@ export interface RuleContext {
   /** Every time the recipe itself mentions, in minutes. */
   sourceMinutes: Set<number>;
   /**
+   * The most ingredient lines the card may have: 14, or the source's own count
+   * when it has more (up to 20). The card must not drop an ingredient, so a
+   * source with 15 could never meet a cap of 14.
+   */
+  maxIngredients?: number;
+  /**
    * The cook wrote notes for this keyword, so the article may speak in her
    * first person where it repeats them. Absent or false: no narrator, as before.
    */
   firstPerson?: boolean;
 }
+
+const MAX_INGREDIENTS = 14;
+const MAX_INGREDIENTS_CEILING = 20;
 
 /** Everything the rules need to know about the recipe, from the recipe. */
 export function ruleContextFor(
@@ -44,7 +53,13 @@ export function ruleContextFor(
   recipe: { raw: string; parsed: Record<string, unknown> },
 ): RuleContext {
   const times = canonicalTimes(recipe.parsed);
-  return { style, times, sourceMinutes: allowedMinutes(recipe.raw, times) };
+  const listed = Array.isArray(recipe.parsed.ingredients) ? recipe.parsed.ingredients.filter((x) => String(x ?? '').trim()).length : 0;
+  return {
+    style,
+    times,
+    sourceMinutes: allowedMinutes(recipe.raw, times),
+    maxIngredients: Math.min(MAX_INGREDIENTS_CEILING, Math.max(MAX_INGREDIENTS, listed)),
+  };
 }
 
 export interface CheckedPart {
@@ -391,8 +406,9 @@ function part2Problems(data: Record<string, unknown>, rules: RuleContext): strin
   const problems: string[] = [];
 
   const ingredients = Array.isArray(data.ingredients) ? data.ingredients : [];
-  if (ingredients.length < 8 || ingredients.length > 14) {
-    problems.push(`ingredients: ${ingredients.length} lines, it must be 8 to 14`);
+  const most = rules.maxIngredients ?? MAX_INGREDIENTS;
+  if (ingredients.length < 8 || ingredients.length > most) {
+    problems.push(`ingredients: ${ingredients.length} lines, it must be 8 to ${most}`);
   }
   ingredients.forEach((line, i) => {
     const l = (line ?? {}) as Record<string, unknown>;

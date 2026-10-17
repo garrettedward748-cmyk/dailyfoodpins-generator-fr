@@ -65,7 +65,8 @@ ingredients
   - item: the ingredient, no quantity inside it.
   - note: the preparation, if any: « finement haché », « à température ambiante ».
     Leave "" when there is none.
-- 8 to 14 lines. Do NOT group them into sections and do NOT add a "section"
+- 8 to 14 lines; when the source lists more than 14 ingredients, one line
+  per source ingredient instead (never drop one). Do NOT group them into sections and do NOT add a "section"
   key: this site lists ingredients as one flat list.
 
 steps

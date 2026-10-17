@@ -84,7 +84,7 @@ const withPlural = (word: string): string => (/[?|()\[\\]/.test(word) || word.en
 const PATTERN = new RegExp(`\\b(${[...ALCOHOL, ...PORK].map(withPlural).join('|')})\\b`, 'i');
 
 /** Safe words that contain a listed one ("hamburger", "ginger", "rumble" are fine; \b handles most). */
-const ALLOWED = /\b(turkey bacon|beef bacon|chicken bacon|halal bacon|turkey ham|beef ham|halal pepperoni|beef pepperoni|turkey pepperoni|beef salami|halal salami|beef chorizo|chicken chorizo|root beer|ginger ale|ginger beer|butterbeer|hamburgers?|gingerbread|gingers?|graham|hamantaschen|piggyback|apple cider vinegar|cider vinegar|wine vinegar|bourbon vanilla|madagascar bourbon|vanilla bourbon|sparkling (?:apple )?cider|non-alcoholic|alcohol-free|without (?:the use of )?alcohol|no alcohol|alcohol free|virgin (?:mojito|colada|margarita|daiquiri|mary)|for (?:the |your |its |their |our )?sake|\w+['’]s? sake|shot glass(?:es)?|espresso shots?|a shot of espresso|pork-free|no pork)\b/gi;
+const ALLOWED = /\b(turkey bacon|beef bacon|chicken bacon|halal bacon|turkey ham|beef ham|halal pepperoni|beef pepperoni|turkey pepperoni|beef salami|halal salami|beef chorizo|chicken chorizo|root beer|ginger ale|ginger beer|butterbeer|hamburgers?|gingerbread|gingers?|graham|hamantaschen|piggyback|apple cider vinegar|cider vinegar|wine vinegar|bourbon vanilla|madagascar bourbon|vanilla bourbon|sparkling (?:apple )?cider|non[\s\-‑–]?alcoholic|alcohol[\s\-‑–]?free|(?:no|zero|0%|without(?: (?:the use of|any|adding|added))?|free (?:of|from)(?: any)?|minus(?: the)?|skip(?:s|ping)? (?:the )?|instead of|in place of|never any|not a drop of|no added|nothing) alcohol|alcohol(?: is)? not (?:needed|required|used)|virgin (?:mojito|colada|margarita|daiquiri|mary)|for (?:the |your |its |their |our )?sake|\w+['’]s? sake|shot glass(?:es)?|espresso shots?|a shot of espresso|pork-free|no pork)\b/gi;
 
 /**
  * French pattern: "no letter next to it" instead of \\b, so accented words are
@@ -99,7 +99,8 @@ const PATTERN_FR = new RegExp(
 /** French safe phrases: no-alcohol drinks, vinegars, halal versions of pork products, œufs mimosa. */
 const ALLOWED_FR = new RegExp(
   '(?<![\\p{L}\\p{N}_])(?:'
-  + 'sans (?:alcool|porc|vin|bière)|non[- ]alcoolisée?s?|boissons? sans alcool|bières? sans alcool|pas de (?:porc|alcool)|'
+  + 'sans (?:aucune? |une goutte d\'|ajout d\')?(?:alcool|porc|vin|bière)|non[\\s\\-‑–]?alcoolisée?s?|boissons? sans alcool|bières? sans alcool|pas (?:de|d\'|une goutte d\')\\s?(?:porc|alcool)|'
+  + 'z[ée]ro (?:%\\s)?(?:d\'\\s?)?alcool|0\\s?% d\'\\s?alcool|aucun alcool|(?:sans|aucune) trace d\'\\s?alcool|au lieu (?:de l\'|d\')\\s?alcool|à la place (?:de l\'|d\')\\s?alcool|(?:libre|exempte?s?) d\'\\s?alcool|'
   + 'vinaigres? de (?:vin(?: blanc| rouge)?|cidre|xérès|riz)|vinaigre balsamique|vanille(?: de madagascar)? bourbon|bourbon vanille|'
   + 'bacon (?:de |d\'|halal)(?:dinde|bœuf|boeuf|poulet|veau)?|jambon (?:de |d\'|halal)(?:dinde|volaille|poulet|bœuf|boeuf)?|'
   + 'lardons? (?:de |d\'|halal)(?:dinde|volaille|poulet|bœuf|boeuf)?|saucissons? (?:de |d\'|halal)(?:dinde|volaille|bœuf|boeuf)?|'

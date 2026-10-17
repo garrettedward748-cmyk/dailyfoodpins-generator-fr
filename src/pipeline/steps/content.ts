@@ -288,7 +288,7 @@ export const generateRecipe: Step<SeoData, RecipeData> = {
       ({ result, parsed } = await draft(notes));
 
       haram = haramIn(parsed);
-      if (haram) throw new NotHalalError(seo.title, haram);
+      if (haram) throw new NotHalalError(seo.title, haram, 'recipe');
 
       problems = recipeProblems(parsed, style);
       if (problems.length > 0) throw new RecipeRulesError(seo.title, problems);

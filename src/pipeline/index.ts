@@ -256,7 +256,9 @@ export async function executePipeline(ctx: PipelineContext): Promise<PipelineOut
     if (cause instanceof NotHalalError) {
       const detail = `Skipped: ${cause.message}`;
       log.info(`run ${ctx.runId}: ${detail}`);
-      setKeywordStatus(ctx.keyword.id, 'no');
+      // Only a keyword that itself names alcohol or pork is retired; a recipe
+      // that slipped one in says nothing about the keyword.
+      if (cause.source === 'keyword') setKeywordStatus(ctx.keyword.id, 'no');
       markRunSkipped(ctx.runId, detail, failedStep);
       return { status: 'duplicate', error: detail, failedStep };
     }

@@ -57,6 +57,45 @@ const DURATION = new RegExp(
 /** "1 h 30", "1h30", "1 heure 30", "2 heures 05": hours and minutes written as one figure, the French way. */
 const HOUR_MINUTE = /(?<![\d.,/])(\d{1,2})\s?(?:h|heures?)\s?([0-5]\d)(?![\d\p{L}])(?!\s*(?:g|kg|ml|cl|dl|l|cm|mm|°|%|min))/giu;
 
+/**
+ * Numbers spelled out, as a recipe often writes its waits: "réfrigérer deux
+ * heures, ou jusqu'à six", "chill two hours, or up to six". Read in the source
+ * only, so "deux heures" there allows the "2 heures" a later part writes; the
+ * parts themselves are checked on digits as before.
+ */
+const WORD_NUMBERS: Record<string, number> = {
+  un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10,
+  onze: 11, douze: 12, quinze: 15, dix_huit: 18, vingt: 20, 'vingt-quatre': 24, trente: 30, quarante: 40,
+  'quarante-cinq': 45, cinquante: 50, soixante: 60, 'quatre-vingt-dix': 90,
+  one: 1, two: 2, three: 3, four: 4, five: 5, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+  fifteen: 15, eighteen: 18, twenty: 20, 'twenty-four': 24, thirty: 30, forty: 40, 'forty-five': 45, fifty: 50,
+  sixty: 60, ninety: 90,
+};
+const WORD = `(?:${Object.keys(WORD_NUMBERS).filter((w) => !w.includes('_')).sort((a, b) => b.length - a.length).join('|')})`;
+const UNIT = '(heures?|hours?|hrs?|minutes?|mins?)';
+const WORD_DURATION = new RegExp(
+  `(?<![\\p{L}])(${WORD})(?:\\s*(?:-|–|—|to|à|or|ou|et|and)\\s*(${WORD}))?\\s*-?\\s*${UNIT}(?![\\p{L}])`,
+  'giu',
+);
+// "deux heures, ou jusqu'à six" / "two hours, or up to six": the second number borrows the unit of the first.
+const WORD_UP_TO = new RegExp(
+  `(?<![\\p{L}])(${WORD})\\s+${UNIT}(?![\\p{L}])[^.;]{0,30}?(?:jusqu['’]à|up to)\\s+(${WORD}|\\d+)(?![\\p{L}\\d])(?!\\s*-?\\s*(?:heures?|hours?|hrs?|h|minutes?|mins?)(?![\\p{L}]))`,
+  'giu',
+);
+
+/** Times written in words, in minutes; for reading the source. */
+export function wordDurationsIn(text: string): number[] {
+  const out: number[] = [];
+  const value = (w: string) => WORD_NUMBERS[w.toLowerCase()] ?? Number(w);
+  const factor = (unit: string) => (/^h/i.test(unit) ? 60 : 1);
+  for (const m of text.matchAll(WORD_DURATION)) {
+    out.push(value(m[1]!) * factor(m[3]!));
+    if (m[2]) out.push(value(m[2]) * factor(m[3]!));
+  }
+  for (const m of text.matchAll(WORD_UP_TO)) out.push(value(m[3]!) * factor(m[2]!));
+  return out.filter((n) => Number.isFinite(n) && n > 0);
+}
+
 /** One time found in a piece of text, in minutes. A range has two ends. */
 export interface Duration {
   /** The words as written, for a message. */
@@ -243,6 +282,7 @@ export function timeBlocks(times: RecipeTimes | null, style: WritingStyle = 'us'
 export function allowedMinutes(source: string, times: RecipeTimes | null): Set<number> {
   const allowed = new Set<number>();
   for (const d of durationsIn(source)) for (const m of d.minutes) allowed.add(m);
+  for (const m of wordDurationsIn(source)) allowed.add(m);
   if (times) {
     for (const m of [times.prep, times.cook, times.total]) allowed.add(m);
     if (times.rest > 0) allowed.add(times.rest);

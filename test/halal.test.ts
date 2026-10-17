@@ -42,3 +42,21 @@ describe('halal only', () => {
     expect(r.recipes.map((x) => x.text)).toEqual(['banana pudding cups']);
   });
 });
+
+describe('words that say there is no alcohol', () => {
+  it('REGRESSION run #1012: a summer drink that says it has none is not refused', () => {
+    for (const text of [
+      'A refreshing strawberry quencher with zero alcohol.',
+      'Completely free of alcohol and kid friendly.',
+      'Made without any alcohol.',
+      'A non alcoholic summer drink.',
+      'Fully alcohol‑free.',
+      'Fizzy water instead of alcohol keeps it light.',
+    ]) expect(haramWord(text), text).toBeNull();
+  });
+
+  it('still refuses alcohol that is in the drink', () => {
+    expect(haramWord('Add a splash of alcohol if you like.')).toBe('alcohol');
+    expect(haramWord('Top with rum.')).toBe('rum');
+  });
+});

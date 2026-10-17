@@ -8,8 +8,17 @@ const log = createLogger('duplicate-step');
 
 /** Halal only is on and the keyword names alcohol or pork: skipped before anything is spent. */
 export class NotHalalError extends Error {
-  constructor(readonly keywordTitle: string, readonly word: string) {
-    super(`“${keywordTitle}” names ${word} — not written (Halal only)`);
+  /**
+   * `keyword`: the keyword itself names it, so no site can ever use it.
+   * `recipe`: the keyword is fine but the recipe written for it still used
+   * the word after one rewrite; the keyword stays usable for a later run.
+   */
+  constructor(readonly keywordTitle: string, readonly word: string, readonly source: 'keyword' | 'recipe' = 'keyword') {
+    super(
+      source === 'recipe'
+        ? `the recipe written for “${keywordTitle}” still used “${word}” after a rewrite — not written (Halal only)`
+        : `“${keywordTitle}” names ${word} — not written (Halal only)`,
+    );
     this.name = 'NotHalalError';
   }
 }

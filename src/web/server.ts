@@ -826,7 +826,7 @@ export function buildServer(
       published: 'Published successfully.',
       failed: `Run failed: ${result.detail ?? 'see the run detail page'}`,
       'spy-rejected': 'Spy source rejected; the keyword was marked unusable.',
-      duplicate: `Skipped — the dish is already on the site. ${result.detail ?? ''}`,
+      duplicate: result.detail || 'Skipped — the dish is already on the site.',
       held:
         result.hold === 'dry'
           ? 'Dry run finished. The article is written and nothing was published — open the run to read it.'
