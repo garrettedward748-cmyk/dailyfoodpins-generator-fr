@@ -260,6 +260,37 @@ export function exportAccount(
 /** How many of the best pins the model reads, and how many ideas it may give. */
 export const PINS_READ = 25;
 export const IDEAS_WANTED = 12;
+/** Asked for more than are kept: the repeats are dropped, the rest still fill the list. */
+export const IDEAS_ASKED = 20;
+/** Fewer new ideas than this after the repeats are dropped: asked once more, told which were repeats. */
+export const IDEAS_RETRY_BELOW = 5;
+/** How many of the site's titles the model is shown, those on the export's topics first. */
+export const EXISTING_SHOWN = 150;
+
+/** Words that name no dish: they would make every title look relevant. */
+const FILLER = new Set(('recipes recipe easy best home cooking everyday ideas idea simple quick homemade with from your this that ' +
+  'treat treats dessert desserts the and for recettes recette facile maison idees rapide pour avec dans les des une').split(' '));
+
+const wordsOf = (t: string): string[] =>
+  norm(t).split(' ').filter((w) => w.length >= 4 && !FILLER.has(w)).map((w) => w.replace(/(ies|es|s)$/, (m) => (m === 'ies' ? 'y' : '')));
+
+/**
+ * The site's titles the model is shown, so it does not propose them in the
+ * first place: those that share a word with the export's strongest pins and
+ * boards first (pumpkin, banana bread...), since those are the ones its ideas
+ * will come close to; then the most recent, up to the limit. Every title is
+ * still checked afterwards, shown or not.
+ */
+export function existingForPrompt(known: string[], pins: PinRow[], limit = EXISTING_SHOWN): string[] {
+  const topics = new Set(pins.slice(0, PINS_READ).flatMap((p) => wordsOf(p.title)));
+  const relevant = known.filter((t) => wordsOf(t).some((w) => topics.has(w)));
+  const picked = new Set(relevant.slice(-limit));
+  for (const t of [...known].reverse()) {
+    if (picked.size >= limit) break;
+    picked.add(t);
+  }
+  return [...picked];
+}
 
 /** The pins as the prompt shows them. */
 export const pinLines = (pins: PinRow[]): string =>
@@ -363,27 +394,43 @@ export async function analyseExport(
     }
 
     const known = existingTitles(siteId);
-    deps.progress?.('ai');
-    const answer = parseJson(
-      await deps.ask({ pins: pinLines(pins), count: IDEAS_WANTED, existing: known.slice(-80).map((t) => `- ${t}`).join('\n') || '- (none yet)' }),
-      'the pin ideas',
-    ) as { summary?: unknown; ideas?: { title?: unknown; group?: unknown; from?: unknown }[] };
-    report.summary = String(answer.summary ?? '').trim().slice(0, 800);
-
-    deps.progress?.('saving');
     const twins = new DishIndex(known);
     const halal = halalOnly();
     const read = pins.slice(0, PINS_READ);
+    type Idea = { title: string; topic: string; from: PinRow | undefined };
+    const kept: Idea[] = [];
+    const repeats: string[] = [];
+
+    // One request, and a second when too few survive the repeat check, told
+    // which of its ideas were repeats so it proposes others.
+    const shown = existingForPrompt(known, pins);
+    for (let attempt = 0; attempt < 2 && kept.length < IDEAS_RETRY_BELOW; attempt++) {
+      if (attempt === 1 && repeats.length === 0) break; // few ideas, but none was a repeat: asking again will not help
+      deps.progress?.('ai');
+      const existing = [...shown, ...repeats].map((t) => `- ${t}`).join('\n') || '- (none yet)';
+      const answer = parseJson(
+        await deps.ask({ pins: pinLines(pins), count: IDEAS_ASKED, existing }),
+        'the pin ideas',
+      ) as { summary?: unknown; ideas?: { title?: unknown; group?: unknown; from?: unknown }[] };
+      if (!report.summary) report.summary = String(answer.summary ?? '').trim().slice(0, 800);
+      for (const idea of answer.ideas ?? []) {
+        const title = String(idea.title ?? '').replace(/\s+/g, ' ').trim();
+        if (title.length < 3 || (halal && haramWord(title))) continue;
+        if (twins.find(title)) {
+          repeats.push(title);
+          continue;
+        }
+        twins.add(title);
+        kept.push({ title, topic: String(idea.group ?? '').trim().toLowerCase().slice(0, 40), from: read[Number(idea.from) - 1] });
+      }
+    }
+
+    deps.progress?.('saving');
     let found = 0;
-    for (const idea of answer.ideas ?? []) {
-      const title = String(idea.title ?? '').replace(/\s+/g, ' ').trim();
-      if (title.length < 3 || twins.find(title) || (halal && haramWord(title))) continue;
-      twins.add(title);
-      const from = read[Number(idea.from) - 1];
-      const topic = String(idea.group ?? '').trim().toLowerCase().slice(0, 40);
+    for (const idea of kept.slice(0, IDEAS_WANTED)) {
       found += run(
         `INSERT OR IGNORE INTO pin_ideas (site_id, title, topic, source, source_url, score, profile_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        siteId, title.slice(0, 200), topic, from?.title.slice(0, 300) ?? '', from?.url ?? '', from?.score ?? 0, profileId,
+        siteId, idea.title.slice(0, 200), idea.topic, idea.from?.title.slice(0, 300) ?? '', idea.from?.url ?? '', idea.from?.score ?? 0, profileId,
       ).changes;
     }
     report.found = found;

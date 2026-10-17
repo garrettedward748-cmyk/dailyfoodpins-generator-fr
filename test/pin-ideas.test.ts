@@ -6,7 +6,7 @@ import {
   addPastedKeywords, addProfile, createRun, firstProfile, runProfile, updateProfile, upsertBufferAccount, upsertSite,
 } from '../src/db/repos.js';
 import {
-  addPinIdeas, analyseExport, count, deletePinIdeas, dismissPinIdeas, exportAccount, exportUsername, lastPinReport, listPinIdeas, parsePinterestCsv, pinLines,
+  addPinIdeas, analyseExport, count, deletePinIdeas, dismissPinIdeas, existingForPrompt, IDEAS_WANTED, exportAccount, exportUsername, lastPinReport, listPinIdeas, parsePinterestCsv, pinLines,
 } from '../src/research/pinterest-ideas.js';
 import { titleFromPage, slugTitle } from '../src/integrations/pinterest-page.js';
 import { Settings } from '../src/settings.js';
@@ -303,5 +303,37 @@ describe('deleting ideas', () => {
     const again = await analyseExport(siteId, 'p.csv', EN, three, '2026-10-18');
     expect(again.found).toBe(1);
     expect(listPinIdeas(siteId, 'new').map((i) => i.title).sort()).toEqual(['Garlic Knot Sliders', 'Lemon Crinkle Cookies']);
+  });
+});
+
+describe('fewer repeats', () => {
+  it('shows the model the titles on the export\'s topics first, then the most recent', () => {
+    const pins = parsePinterestCsv(REAL); // pumpkin dessert recipes, apple crumble recipes, two pins
+    const known = ['Pumpkin Pie Bars', 'Chicken Curry', 'Apple Crumble Muffins', 'Beef Stew', 'Lemon Bars'];
+    expect(existingForPrompt(known, pins, 3)).toEqual(['Pumpkin Pie Bars', 'Apple Crumble Muffins', 'Lemon Bars']);
+    expect(existingForPrompt(known, pins, 10)).toHaveLength(5);
+  });
+
+  it('asks again once when too few ideas are new, told which were repeats', async () => {
+    const siteId = site();
+    addPastedKeywords(['Pumpkin Cheesecake Bars', 'Pumpkin Bread', 'Apple Crumble Pie'], 'pumpkin', [siteId]);
+    const asked: string[] = [];
+    const report = await analyseExport(siteId, 'p.csv', REAL, {
+      async ask(vars) {
+        asked.push(vars.existing);
+        return JSON.stringify({ ideas: asked.length === 1
+          ? [{ title: 'Pumpkin Cheesecake Bars', group: 'pumpkin', from: 1 }, { title: 'Pumpkin Spice Bread', group: 'pumpkin', from: 1 }]
+          : ['Maple Pecan Scones', 'Cranberry Walnut Loaf', 'Sweet Potato Pie', 'Ginger Molasses Cookies', 'Butternut Squash Soup',
+              'Cinnamon Apple Galette', 'Pear Almond Tart', 'Chai Spiced Muffins', 'Carrot Cake Cupcakes', 'Fig Honey Crostini',
+              'Hazelnut Brownies', 'Caramel Popcorn Balls', 'Orange Cardamom Buns', 'Spiced Plum Crumble', 'Chestnut Mushroom Risotto']
+              .map((title) => ({ title, group: 'autumn', from: 1 })) });
+      },
+    }, '2026-10-17');
+    expect(asked).toHaveLength(2);
+    expect(asked[0]).toContain('- Pumpkin Cheesecake Bars');
+    // The first ask brought one repeat and one new dish: too few, so a second, and the list is filled.
+    expect(listPinIdeas(siteId, 'new').map((i) => i.title)).toContain('Pumpkin Spice Bread');
+    // Never more than the list holds.
+    expect(report.found).toBe(IDEAS_WANTED);
   });
 });
