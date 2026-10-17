@@ -70,9 +70,10 @@ export const SETTING_SPECS: SettingSpec[] = [
     secret: false,
     default: process.env.PUBLIC_URL?.trim() ?? '',
     help:
-      'Only needed for social-only accounts (a site added with no domain). Their pictures and ' +
-      'reels are served from here, so Buffer and Facebook can fetch them: the address you open ' +
-      'this platform at, e.g. https://platform.example.com.',
+      'Filled in by itself: the address you open this platform at, as the browser reached it. ' +
+      'Social-only accounts (a site added with no domain) serve their pictures and reels from ' +
+      'here, so Buffer and Facebook can fetch them. Change it only to use another address; ' +
+      'empty it to go back to the automatic one.',
   },
   {
     key: 'media_keep_days',
@@ -976,6 +977,9 @@ function imageApiKey(): string {
   return (process.env.IMAGE_API_KEY ?? '').trim() || sharedImageApiKey();
 }
 
+/** Where the web server records the address the platform is opened at. Not a setting anyone edits. */
+export const DETECTED_PUBLIC_URL = 'public_url_detected';
+
 export class Settings {
   constructor(private readonly encryptionKey: Buffer) {}
 
@@ -987,7 +991,11 @@ export class Settings {
     const stored = getSetting(key, this.encryptionKey);
     if (stored !== '') return stored;
 
-    return BY_KEY.get(key)?.default ?? '';
+    const fallback = BY_KEY.get(key)?.default ?? '';
+    // The platform's own address: typed in, or PUBLIC_URL, or else the one it
+    // was last opened at (recorded by the web server on each visit).
+    if (key === 'public_url' && !fallback) return getSetting(DETECTED_PUBLIC_URL, this.encryptionKey);
+    return fallback;
   }
 
   getNumber(key: string): number {

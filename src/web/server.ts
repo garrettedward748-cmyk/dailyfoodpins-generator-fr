@@ -228,7 +228,8 @@ import {
   readShippedPrompt,
 } from '../pipeline/prompts.js';
 import { unknownVariables, variablesFor } from '../pipeline/prompt-contexts.js';
-import { SETTING_SPECS, type Settings } from '../settings.js';
+import { DETECTED_PUBLIC_URL, SETTING_SPECS, type Settings } from '../settings.js';
+import { getSetting, setSetting } from '../db/repos.js';
 import {
   lockStatus,
   resumeRun,
@@ -479,6 +480,21 @@ const asNumber = (value: unknown, fallback: number): number => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+/** https://host as the visitor's browser reached this platform, or null for a local or bare-IP address. */
+export function requestOrigin(request: Pick<FastifyRequest, 'headers'>): string | null {
+  const first = (v: string | string[] | undefined) => String(Array.isArray(v) ? v[0] : v ?? '').split(',')[0]!.trim();
+  const host = (first(request.headers['x-forwarded-host']) || first(request.headers.host)).toLowerCase().replace(/:(80|443)$/, '');
+  if (!host || !/^[a-z0-9.-]+(:\d+)?$/.test(host)) return null;
+  const name = host.replace(/:\d+$/, '');
+  if (!name.includes('.') || name === 'localhost' || name.endsWith('.localhost') || /^\d+(\.\d+){3}$/.test(name)) return null;
+  // A public domain is served over https; only the proxy saying otherwise makes it http.
+  return `${first(request.headers['x-forwarded-proto']) === 'http' ? 'http' : 'https'}://${host}`;
+}
+
+/** Two addresses that name the same place: case and a trailing slash aside. */
+export const sameOrigin = (a: string, b: string): boolean =>
+  Boolean(a && b) && a.trim().replace(/\/+$/, '').toLowerCase() === b.trim().replace(/\/+$/, '').toLowerCase();
+
 export function buildServer(
   settings: Settings,
   encryptionKey: Buffer,
@@ -551,6 +567,23 @@ export function buildServer(
   // ?site=<id> or ?site=all picks (and is remembered in a cookie, so the choice
   // follows the person from Keywords to Blog to Reels); with neither, the
   // remembered one applies. The pages read it from ?site as before.
+  // The address this platform is opened at, kept so "Public address of this
+  // platform" fills itself in: Buffer and Facebook fetch social-only media from
+  // it. Taken as the browser reached it -- through Dokploy's proxy, so its
+  // forwarded host and scheme first -- and written only when it changes. A
+  // local or bare-IP address is never one Buffer could use, so it is skipped.
+  let detectedOrigin: string | null = null;
+  app.addHook('onRequest', async (request) => {
+    const origin = requestOrigin(request);
+    if (!origin || origin === detectedOrigin) return;
+    detectedOrigin = origin;
+    try {
+      if (getSetting(DETECTED_PUBLIC_URL, encryptionKey) !== origin) setSetting(DETECTED_PUBLIC_URL, origin, false, encryptionKey);
+    } catch {
+      detectedOrigin = null; // no database yet: tried again on the next request
+    }
+  });
+
   app.addHook('preHandler', async (request, reply) => {
     if (request.method !== 'GET') return;
     const path = request.url.split('?')[0] ?? '';
@@ -5670,7 +5703,10 @@ export function buildServer(
       const submitted = body[spec.key];
       if (submitted === undefined) continue;
 
-      const value = asString(submitted).trim();
+      let value = asString(submitted).trim();
+      // The detected address, sent back as the page showed it, stays automatic:
+      // a later move to another domain then follows by itself.
+      if (spec.key === 'public_url' && sameOrigin(value, getSetting(DETECTED_PUBLIC_URL, encryptionKey))) value = '';
       // A blank secret means "keep what is stored", not "erase it".
       if (spec.secret && value === '') continue;
 
