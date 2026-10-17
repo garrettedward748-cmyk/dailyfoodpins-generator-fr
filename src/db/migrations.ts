@@ -1393,6 +1393,16 @@ export const MIGRATIONS: Migration[] = [
       addColumn(db, 'sites', 'pin_ideas_report', "TEXT NOT NULL DEFAULT ''");
     },
   },
+  {
+    id: '063-pin-ideas-account',
+    description: 'The Pinterest account a Pinterest idea came from, and the account its keyword then pins to',
+    up(db) {
+      addColumn(db, 'pin_ideas', 'profile_id', 'INTEGER');
+      // A keyword from a Pinterest idea goes to the account the idea came
+      // from, not the next in the turn. NULL: the turn, as for any keyword.
+      addColumn(db, 'keyword_sites', 'pin_profile_id', 'INTEGER');
+    },
+  },
 ];
 
 /* -- The runner ----------------------------------------------------------- */

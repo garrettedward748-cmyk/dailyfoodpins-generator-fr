@@ -1,5 +1,5 @@
 import { all, get, run } from '../db/index.js';
-import { addPastedKeywords, researchRepeats } from '../db/repos.js';
+import { addPastedKeywords, getProfile, listProfiles, researchRepeats, type ChannelProfile } from '../db/repos.js';
 import { halalOnly, haramWord } from '../core/halal.js';
 import { DishIndex } from '../core/similar-title.js';
 import { parseCsv } from '../lib/csv.js';
@@ -47,6 +47,8 @@ export interface PinIdea {
   score: number;
   status: 'new' | 'added' | 'dismissed';
   created_at: string;
+  /** The Pinterest account the export came from; its keyword pins there. */
+  profile_id: number | null;
 }
 
 export interface PinIdeasReport {
@@ -58,6 +60,12 @@ export interface PinIdeasReport {
   /** What the model says these pins have in common. */
   summary: string;
   found: number;
+  /** The Pinterest account the export is for, by its username. */
+  account?: { id: number; username: string } | null;
+  /** The username the file's own links show, when they show one. */
+  detected?: string;
+  /** Why the account could not be told, or a doubt about it. */
+  accountNote?: string;
   error?: string;
 }
 
@@ -194,6 +202,59 @@ export function parsePinterestCsv(text: string): PinRow[] {
   return [...found.values()].sort((a, b) => b.score - a.score || b.impressions - a.impressions);
 }
 
+/**
+ * The Pinterest username the export belongs to, read from its board links
+ * ("pinterest.com/ArbmomRecipes/banana-bread-recipes/" -> "ArbmomRecipes").
+ * The most frequent one, since a file is one account's; '' when the file
+ * lists no boards.
+ */
+export function exportUsername(text: string): string {
+  const counts = new Map<string, number>();
+  for (const m of text.matchAll(/pinterest\.[a-z.]+\/([A-Za-z0-9_]{3,30})\/[^/\s",]+\/?/g)) {
+    const user = m[1]!;
+    if (/^(pin|search|ideas|today|business|settings|_)$/i.test(user)) continue;
+    counts.set(user, (counts.get(user) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+}
+
+/** A Pinterest account's username: the name on Buffer when it is set, else the username field. */
+const usernameOf = (p: Pick<ChannelProfile, 'channel_name' | 'buffer_channel'>): string => (p.channel_name || p.buffer_channel || '').trim();
+
+/**
+ * Which of the site's Pinterest accounts an export is for. The username in
+ * the file decides when it matches one; the account picked on the page is
+ * used when the file shows none. A pick the file contradicts is reported,
+ * and the file wins, since it cannot be wrong about whose numbers it holds.
+ */
+export function exportAccount(
+  siteId: number,
+  detected: string,
+  pickedId: number,
+): { account: ChannelProfile | null; note: string } {
+  const accounts = listProfiles(siteId, 'pinterest');
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const byFile = detected
+    ? accounts.find((p) => same(p.channel_name, detected) || same(p.buffer_channel ?? '', detected))
+    : undefined;
+  const picked = pickedId ? accounts.find((p) => p.id === pickedId) : undefined;
+  if (byFile) {
+    return {
+      account: byFile,
+      note: picked && picked.id !== byFile.id ? `You picked ${usernameOf(picked)}, but the file is ${detected}'s: its ideas go to ${detected}.` : '',
+    };
+  }
+  if (picked) {
+    return { account: picked, note: detected ? `The file is ${detected}'s, which is none of this site's accounts; its ideas go to ${usernameOf(picked)} as picked.` : '' };
+  }
+  return {
+    account: null,
+    note: detected
+      ? `The file is ${detected}'s, which is none of this site's Pinterest accounts: its ideas pin in turn, like any keyword.`
+      : 'The file names no account and none was picked: its ideas pin in turn, like any keyword.',
+  };
+}
+
 /* -- Asking for ideas -------------------------------------------------------- */
 
 /** How many of the best pins the model reads, and how many ideas it may give. */
@@ -272,9 +333,23 @@ function existingTitles(siteId: number): string[] {
  * last upload did -- including "this file has no pins in it", which is the
  * usual mistake (the account's daily overview exported instead of its pins).
  */
-export async function analyseExport(siteId: number, fileName: string, text: string, deps: PinIdeasDeps, today: string): Promise<PinIdeasReport> {
+export async function analyseExport(
+  siteId: number,
+  fileName: string,
+  text: string,
+  deps: PinIdeasDeps,
+  today: string,
+  pickedProfileId = 0,
+): Promise<PinIdeasReport> {
   const report: PinIdeasReport = { day: today, file: fileName, pins: 0, top: [], summary: '', found: 0 };
+  let profileId: number | null = null;
   try {
+    const detected = exportUsername(text);
+    const { account, note } = exportAccount(siteId, detected, pickedProfileId);
+    profileId = account?.id ?? null;
+    report.account = account ? { id: account.id, username: usernameOf(account) || account.label } : null;
+    report.detected = detected;
+    report.accountNote = note;
     deps.progress?.('reading');
     const rows = parsePinterestCsv(text);
     if (rows.length === 0) {
@@ -307,8 +382,8 @@ export async function analyseExport(siteId: number, fileName: string, text: stri
       const from = read[Number(idea.from) - 1];
       const topic = String(idea.group ?? '').trim().toLowerCase().slice(0, 40);
       found += run(
-        `INSERT OR IGNORE INTO pin_ideas (site_id, title, topic, source, source_url, score) VALUES (?, ?, ?, ?, ?, ?)`,
-        siteId, title.slice(0, 200), topic, from?.title.slice(0, 300) ?? '', from?.url ?? '', from?.score ?? 0,
+        `INSERT OR IGNORE INTO pin_ideas (site_id, title, topic, source, source_url, score, profile_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        siteId, title.slice(0, 200), topic, from?.title.slice(0, 300) ?? '', from?.url ?? '', from?.score ?? 0, profileId,
       ).changes;
     }
     report.found = found;
@@ -352,11 +427,20 @@ export function addPinIdeas(siteId: number, ids: number[]): number {
     `SELECT * FROM pin_ideas WHERE site_id = ? AND status = 'new' AND id IN (${ids.map(() => '?').join(',')})`,
     siteId, ...ids,
   );
-  const byTopic = new Map<string, string[]>();
-  for (const r of rows) byTopic.set(r.topic || 'pinterest', [...(byTopic.get(r.topic || 'pinterest') ?? []), r.title]);
+  // By topic and by account: each keyword is told which Pinterest account its pin goes to.
+  const groups = new Map<string, { topic: string; profileId: number | null; lines: string[] }>();
+  for (const r of rows) {
+    const topic = r.topic || 'pinterest';
+    // An account removed since the upload: the turn, like any keyword.
+    const profileId = r.profile_id && getProfile(r.profile_id)?.site_id === siteId ? r.profile_id : null;
+    const key = `${topic}\u0000${profileId ?? 0}`;
+    const g = groups.get(key) ?? { topic, profileId, lines: [] };
+    g.lines.push(r.title);
+    groups.set(key, g);
+  }
   let added = 0;
-  for (const [topic, lines] of byTopic) {
-    const r = addPastedKeywords(lines, topic, [siteId]);
+  for (const g of groups.values()) {
+    const r = addPastedKeywords(g.lines, g.topic, [siteId], g.profileId ? { pinProfileId: g.profileId } : {});
     added += r.added + r.linked;
   }
   mark(siteId, rows.map((r) => r.id), 'added');

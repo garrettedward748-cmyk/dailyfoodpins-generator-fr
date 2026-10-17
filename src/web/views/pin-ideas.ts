@@ -13,6 +13,8 @@ export interface PinIdeasSiteView {
   report: PinIdeasReport | null;
   waiting: number;
   running: boolean;
+  /** The site's Pinterest accounts, by username, for the upload's picker. */
+  accounts: { id: number; username: string; label: string }[];
   /** Where the analysis stands while it runs. */
   progress?: { stage: string; done: number; total: number; seconds: number } | null;
 }
@@ -100,6 +102,14 @@ export function pinIdeasPage(data: {
       ? html`
         <div class="card">
           <form method="post" action="/pin-ideas/${site.id}/upload" enctype="multipart/form-data" class="row wrap" style="gap:12px;align-items:flex-end">
+            <!-- Before the file: multipart hands the server only the fields that come before it. -->
+            <div class="field" style="margin:0;min-width:220px">
+              <label>Pinterest account</label>
+              <select name="account">
+                <option value="0">Found in the file</option>
+                ${site.accounts.map((a) => html`<option value="${a.id}">${a.username || a.label}${a.username ? html` <span>(${a.label})</span>` : raw('')}</option>`)}
+              </select>
+            </div>
             <div class="field" style="margin:0;min-width:280px">
               <label>Pinterest Analytics export (.csv)</label>
               <input type="file" name="file" accept=".csv,text/csv" required />
@@ -114,7 +124,9 @@ export function pinIdeasPage(data: {
               <li>Upload that CSV here, as it is. It holds the top boards and the top pins; the pins' titles are looked up on Pinterest.</li>
               <li>One file per Pinterest account: upload each account's in turn if the site has several.</li>
             </ol>
-            <p class="help" style="margin:6px 0 0">The English and French exports are both read.</p>
+            <p class="help" style="margin:6px 0 0">The English and French exports are both read. The account is read from the
+              file's own board links; pick one only for a file that has no boards. Each idea's keyword then pins to that
+              account rather than the next one in the turn (while it is on, takes posts and has a Buffer token).</p>
           </details>
           ${site.running ? liveStatus(site) : raw('')}
         </div>
@@ -125,6 +137,10 @@ export function pinIdeasPage(data: {
                 <strong>Last upload</strong>
                 <span class="small muted">${r.day} · ${r.file} · ${r.pins} pin(s) read · ${r.found} new idea(s)</span>
               </div>
+              ${r.account
+                ? html`<p class="small" style="margin:8px 0 0">Account: <strong>${r.account.username}</strong> — its ideas pin there.</p>`
+                : raw('')}
+              ${r.accountNote ? html`<div class="flash warn" style="margin:8px 0 0">${r.accountNote}</div>` : raw('')}
               ${r.error ? html`<div class="flash error" style="margin:10px 0 0">${r.error}</div>` : raw('')}
               ${r.summary ? html`<p style="margin:10px 0 0">${r.summary}</p>` : raw('')}
               ${r.top.length
@@ -160,13 +176,17 @@ export function pinIdeasPage(data: {
                     ${data.status === 'new'
                       ? html`<th class="pick"><input type="checkbox" onclick="var on=this.checked;this.closest('table').querySelectorAll('tbody input').forEach(function(c){c.checked=on})" /></th>`
                       : raw('')}
-                    <th>Idea</th><th>Group</th><th>Follows</th>
+                    <th>Idea</th><th>Group</th><th>Pins to</th><th>Follows</th>
                   </tr></thead>
                   <tbody>${data.rows.map(
                     (i) => html`<tr>
                       ${data.status === 'new' ? html`<td class="pick"><input type="checkbox" name="ids" value="${i.id}" /></td>` : raw('')}
                       <td><strong>${i.title}</strong></td>
                       <td class="small muted">${i.topic || '—'}</td>
+                      <td class="small">${(() => {
+                        const acc = site.accounts.find((a) => a.id === i.profile_id);
+                        return acc ? html`<strong>${acc.username || acc.label}</strong>` : html`<span class="muted">the turn</span>`;
+                      })()}</td>
                       <td class="small">${i.source
                         ? html`${i.source_url ? html`<a href="${i.source_url}" target="_blank" rel="noopener">${i.source}</a>` : i.source}
                             <span class="muted">· score ${num(i.score)}</span>`

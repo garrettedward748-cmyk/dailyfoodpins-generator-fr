@@ -271,15 +271,35 @@ export function pickProfile(siteId: number, platform: ProfilePlatform, kind?: Pr
   // Nothing usable: the account that takes this kind, else the first, so the
   // run has something to carry -- every route then checks it before sending.
   const chosen = usable[0] ?? listProfiles(siteId, platform).find((p) => !kind || takes(p, kind)) ?? listProfiles(siteId, platform)[0];
-  if (chosen) {
-    run(
-      `UPDATE channel_profiles SET last_used_at = datetime('now'),
-         turn = (SELECT COALESCE(MAX(turn), 0) + 1 FROM channel_profiles WHERE site_id = ? AND platform = ?)
-       WHERE id = ?`,
-      siteId, platform, chosen.id,
-    );
-  }
+  if (chosen) takeTurn(chosen);
   return chosen;
+}
+
+/** An account has had its turn: it goes to the back of the queue. */
+function takeTurn(profile: ChannelProfile): void {
+  run(
+    `UPDATE channel_profiles SET last_used_at = datetime('now'),
+       turn = (SELECT COALESCE(MAX(turn), 0) + 1 FROM channel_profiles WHERE site_id = ? AND platform = ?)
+     WHERE id = ?`,
+    profile.site_id, profile.platform, profile.id,
+  );
+}
+
+/**
+ * The Pinterest account a run's keyword asks for (it came from that account's
+ * Pinterest ideas), when that account can take this kind of post now:
+ * switched on, the kind ticked, a Buffer token in use. Otherwise none, and
+ * the run takes the turn like any other.
+ */
+function preferredPinterest(runId: number, siteId: number, kind: ProfileKind): ChannelProfile | undefined {
+  const wanted = get<{ id: number | null }>(
+    `SELECT ks.pin_profile_id AS id FROM runs r
+       JOIN keyword_sites ks ON ks.keyword_id = r.keyword_id AND ks.site_id = r.site_id
+      WHERE r.id = ?`,
+    runId,
+  )?.id;
+  if (!wanted) return undefined;
+  return usableProfiles(siteId, 'pinterest', kind).find((p) => p.id === wanted);
 }
 
 /* -- Rotate, or post to every account ------------------------------------ */
@@ -384,7 +404,11 @@ export function runProfile(runId: number | null, siteId: number, platform: Profi
   const key = kind === 'posts' ? platform : `${platform}:reels`;
   const saved = key === platform ? undefined : own(key);
   if (saved) return saved;
-  const picked = pickProfile(siteId, platform, kind);
+  // A keyword from Pinterest ideas pins to the account the idea came from,
+  // which counts as that account's turn so the others keep their share.
+  const preferred = platform === 'pinterest' ? preferredPinterest(runId, siteId, kind) : undefined;
+  if (preferred) takeTurn(preferred);
+  const picked = preferred ?? pickProfile(siteId, platform, kind);
   if (picked) {
     chosen[key] = picked.id;
     run('UPDATE runs SET profiles_json = ? WHERE id = ?', JSON.stringify(chosen), runId);
@@ -875,7 +899,7 @@ export function addPastedKeywords(
   lines: string[],
   seedKeyword: string,
   siteIds: number[],
-  options: { auto?: boolean } = {},
+  options: { auto?: boolean; pinProfileId?: number } = {},
 ): { added: number; linked: number; skipped: number; similar: string[] } {
   const seed = seedKeyword.trim().toLowerCase();
   const known = keywordTitlesWithSites();
@@ -887,6 +911,10 @@ export function addPastedKeywords(
   let skipped = 0;
   const link = (keywordId: number, siteId: number) => {
     setLink(keywordId, siteId, 'go');
+    // From a Pinterest idea: its pin goes to the account the idea came from.
+    if (options.pinProfileId) {
+      run('UPDATE keyword_sites SET pin_profile_id = ? WHERE keyword_id = ? AND site_id = ?', options.pinProfileId, keywordId, siteId);
+    }
     if (options.auto) {
       run("UPDATE keyword_sites SET auto_added_at = datetime('now') WHERE keyword_id = ? AND site_id = ?", keywordId, siteId);
     }

@@ -3829,6 +3829,7 @@ export function buildServer(
       report: lastPinReport(x.id),
       waiting: waitingPinIdeas(x.id),
       running: pinIdeasRunning.has(x.id),
+      accounts: listProfiles(x.id, 'pinterest').map((p) => ({ id: p.id, username: (p.channel_name || p.buffer_channel || '').trim(), label: p.label })),
       progress: (() => {
         const p = pinIdeasRunning.get(x.id);
         return p ? { stage: p.stage, done: p.done, total: p.total, seconds: Math.round((Date.now() - p.started) / 1000) } : null;
@@ -3856,11 +3857,15 @@ export function buildServer(
     if (pinIdeasRunning.has(siteId)) return redirect(reply, back, { kind: 'warn', message: 'Already analysing an export for this site.' });
     let name = '';
     let text = '';
+    let picked = 0;
     try {
       const file = await request.file({ limits: { fileSize: 10 * 1024 * 1024 } });
       if (!file) return redirect(reply, back, { kind: 'error', message: 'No file received.' });
       name = file.filename || 'export.csv';
       text = (await file.toBuffer()).toString('utf8');
+      // The fields sent before the file come with it; the account picker is one.
+      const field = (file.fields as Record<string, { value?: unknown } | undefined>).account;
+      picked = asNumber(field?.value, 0);
     } catch (err) {
       return redirect(reply, back, { kind: 'error', message: `Could not read the file: ${errorMessage(err)}` });
     }
@@ -3877,6 +3882,7 @@ export function buildServer(
         },
       },
       localDateKey(new Date(), settings.get('timezone')),
+      picked,
     )
       .catch((err) => log.warn(`pin ideas for site ${siteId} failed: ${errorMessage(err)}`))
       .finally(() => pinIdeasRunning.delete(siteId));

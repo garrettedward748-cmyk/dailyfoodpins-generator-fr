@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { all, closeDatabase, openDatabase } from '../src/db/index.js';
-import { addPastedKeywords, upsertSite } from '../src/db/repos.js';
+import { all, closeDatabase, get, openDatabase } from '../src/db/index.js';
 import {
-  addPinIdeas, analyseExport, count, dismissPinIdeas, lastPinReport, listPinIdeas, parsePinterestCsv, pinLines,
+  addPastedKeywords, addProfile, createRun, firstProfile, runProfile, updateProfile, upsertBufferAccount, upsertSite,
+} from '../src/db/repos.js';
+import {
+  addPinIdeas, analyseExport, count, dismissPinIdeas, exportAccount, exportUsername, lastPinReport, listPinIdeas, parsePinterestCsv, pinLines,
 } from '../src/research/pinterest-ideas.js';
 import { titleFromPage, slugTitle } from '../src/integrations/pinterest-page.js';
 import { Settings } from '../src/settings.js';
@@ -220,3 +222,61 @@ describe('the page', () => {
     expect(String(res.headers.location)).toContain(`/pin-ideas?site=${siteId}`);
   });
 });
+
+describe("the account an export is for", () => {
+  /** Two Pinterest accounts with tokens: ArbmomRecipes and JenniferSoutherne. */
+  function accounts(siteId: number): { arb: number; jen: number } {
+    const arb = firstProfile(siteId, 'pinterest').id;
+    const jen = addProfile(siteId, 'pinterest');
+    updateProfile(arb, { channel_name: 'ArbmomRecipes' });
+    updateProfile(jen, { channel_name: 'JenniferSoutherne' });
+    for (const id of [arb, jen]) upsertBufferAccount({ siteId, label: `t${id}`, token: `tok${id}`, enabled: true, profileId: id }, KEY);
+    return { arb, jen };
+  }
+
+  it("reads the username from the file's board links", () => {
+    expect(exportUsername(REAL)).toBe('ArbmomRecipes');
+    expect(exportUsername(EN)).toBe('');
+  });
+
+  it('lets the file decide, says so when the pick disagrees, and falls back to the pick or the turn', () => {
+    const siteId = site();
+    const { arb, jen } = accounts(siteId);
+    expect(exportAccount(siteId, 'arbmomrecipes', 0)).toEqual({ account: expect.objectContaining({ id: arb }), note: '' });
+    expect(exportAccount(siteId, 'ArbmomRecipes', jen).note).toMatch(/JenniferSoutherne, but the file is ArbmomRecipes/);
+    expect(exportAccount(siteId, '', jen).account?.id).toBe(jen);
+    expect(exportAccount(siteId, 'SomeoneElse', 0)).toMatchObject({ account: null, note: expect.stringMatching(/pin in turn/) });
+  });
+
+  it("pins an idea's keyword to that account instead of the next in the turn, and that counts as its turn", async () => {
+    const siteId = site();
+    const { arb, jen } = accounts(siteId);
+    const report = await analyseExport(siteId, 'p.csv', REAL, {
+      ask: async () => JSON.stringify({ ideas: [{ title: 'Pumpkin Cheesecake Bars', group: 'pumpkin', from: 1 }] }),
+    }, '2026-10-17');
+    expect(report.account).toEqual({ id: arb, username: 'ArbmomRecipes' });
+    const [idea] = listPinIdeas(siteId, 'new');
+    expect(idea!.profile_id).toBe(arb);
+    addPinIdeas(siteId, [idea!.id]);
+    const link = get<{ keyword_id: number; pin_profile_id: number }>('SELECT keyword_id, pin_profile_id FROM keyword_sites WHERE site_id = ?', siteId)!;
+    expect(link.pin_profile_id).toBe(arb);
+
+    // ArbmomRecipes is not next in the turn (it was just used), yet its idea goes there.
+    updateProfile(arb, { turn: 5 } as never);
+    const run1 = createRun(link.keyword_id, siteId);
+    expect(runProfile(run1, siteId, 'pinterest', 'posts')?.id).toBe(arb);
+    // A keyword of no account takes the turn: JenniferSoutherne, now first in it.
+    const other = createRun(addKeyword(siteId), siteId);
+    expect(runProfile(other, siteId, 'pinterest', 'posts')?.id).toBe(jen);
+
+    // The account switched off: the idea's next run takes the turn instead.
+    updateProfile(arb, { enabled: 0 });
+    const run2 = createRun(link.keyword_id, siteId);
+    expect(runProfile(run2, siteId, 'pinterest', 'posts')?.id).toBe(jen);
+  });
+});
+
+function addKeyword(siteId: number): number {
+  addPastedKeywords(['Plain Banana Bread'], 'banana', [siteId]);
+  return get<{ id: number }>("SELECT id FROM keywords WHERE spy_title = 'Plain Banana Bread'")!.id;
+}
