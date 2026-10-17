@@ -50,6 +50,7 @@ import {
   bufferChannelName,
   listBufferAccounts,
   listProfiles,
+  takes,
 } from '../db/repos.js';
 import { pickFormat } from './formats.js';
 import { instagramLink } from '../core/instagram-link.js';
@@ -303,7 +304,7 @@ function profilePool(
             { id: site.id, domain: site.domain, pinUsername: bufferChannelName(linked), platform, profileId: linked.id },
             key,
           ),
-          off: !linked.enabled,
+          off: !linked.enabled || !takes(linked, 'reels'),
         };
       }
       // No account of this network shares the page's Buffer token: the page's
@@ -317,7 +318,9 @@ function profilePool(
       };
     }
   }
-  const profile = given && given.site_id === site.id ? given : runProfile(runId ?? null, site.id, platform);
+  // A reel goes to an account that takes reels: its own Reels tick (Pinterest,
+  // Instagram) decides, as the page's does on Facebook.
+  const profile = given && given.site_id === site.id ? given : runProfile(runId ?? null, site.id, platform, 'reels');
   const pool = new BufferPool(
     {
       id: site.id,
@@ -329,7 +332,7 @@ function profilePool(
     key,
     !profile || profile.position === 1 ? siteSecrets(site, key).bufferToken : '',
   );
-  return { pool, off: Boolean(profile && !profile.enabled) };
+  return { pool, off: Boolean(profile && (!profile.enabled || !takes(profile, 'reels'))) };
 }
 
 export function defaultDeps(settings: Settings, key: Buffer): ReelDeps {
@@ -380,7 +383,7 @@ export function defaultDeps(settings: Settings, key: Buffer): ReelDeps {
     // always did. Asking runTargets here would pick it a second time, and for
     // a reel with no run each pick moves the turn on.
     targets: ({ siteId, runId, platform }) =>
-      postsToAll(siteId, platform) ? runTargets(runId, siteId, platform).map((p) => p?.id ?? 0) : [0],
+      postsToAll(siteId, platform) ? runTargets(runId, siteId, platform, 'reels').map((p) => p?.id ?? 0) : [0],
     reelPublisher: settings.get('reel_publisher') === 'buffer' ? 'buffer' : 'facebook',
     captionConfig: (siteId) => {
       const own = withSiteOverrides(settings, siteId);

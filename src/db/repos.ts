@@ -153,6 +153,45 @@ export interface ChannelProfile {
   enabled: number;
   last_used_at: string | null;
   turn: number;
+  /** Pinterest and Instagram: this account takes the article posts / the reels. 1 unless unticked on its card. */
+  posts?: number;
+  reels?: number;
+}
+
+/** What an account is asked to carry: an article's post, or a reel. */
+export type ProfileKind = 'posts' | 'reels';
+
+/**
+ * Whether an account takes this kind of post. Facebook keeps the choice on its
+ * page (fb_pages), YouTube and TikTok only ever take reels, so for those the
+ * account's own switch is all there is.
+ */
+export const takes = (profile: Pick<ChannelProfile, 'platform' | 'posts' | 'reels'>, kind: ProfileKind): boolean =>
+  profile.platform === 'facebook' || profile.platform === 'youtube' || profile.platform === 'tiktok'
+    ? true
+    : (profile[kind] ?? 1) !== 0;
+
+/** The SQL twin of takes(), on alias p. */
+const takesSql = (platform: ProfilePlatform, kind?: ProfileKind): string =>
+  kind && (platform === 'pinterest' || platform === 'instagram') ? ` AND p.${kind} = 1` : '';
+
+/**
+ * Set an account's own Posts and Reels ticks, then the site's network switch
+ * to match: on while any account of the network takes that kind. Every check
+ * that reads the site's switch keeps working, and the accounts decide.
+ */
+export function setProfileKinds(id: number, posts: boolean, reels: boolean): void {
+  const profile = getProfile(id);
+  if (!profile || (profile.platform !== 'pinterest' && profile.platform !== 'instagram')) return;
+  run('UPDATE channel_profiles SET posts = ?, reels = ? WHERE id = ?', posts ? 1 : 0, reels ? 1 : 0, id);
+  syncSiteKinds(profile.site_id, profile.platform);
+}
+
+function syncSiteKinds(siteId: number, platform: 'pinterest' | 'instagram'): void {
+  const any = (kind: ProfileKind) =>
+    get<{ n: number }>(`SELECT COUNT(*) AS n FROM channel_profiles WHERE site_id = ? AND platform = ? AND ${kind} = 1`, siteId, platform)?.n ? 1 : 0;
+  const [postsCol, reelsCol] = platform === 'pinterest' ? ['pin_posts', 'pin_reels'] : ['ig_posts', 'ig_reels'];
+  run(`UPDATE sites SET ${postsCol} = ?, ${reelsCol} = ?, updated_at = datetime('now') WHERE id = ?`, any('posts'), any('reels'), siteId);
 }
 
 /** The name to look for among Buffer's channels: its own field when filled, else the account's name. */
@@ -221,15 +260,17 @@ export function deleteProfile(id: number): boolean {
  * ago (never used first), among those switched on that have a Buffer token.
  * Marked used now, so the next article goes to the one after.
  */
-export function pickProfile(siteId: number, platform: ProfilePlatform): ChannelProfile | undefined {
+export function pickProfile(siteId: number, platform: ProfilePlatform, kind?: ProfileKind): ChannelProfile | undefined {
   const usable = all<ChannelProfile>(
     `SELECT p.* FROM channel_profiles p
-      WHERE p.site_id = ? AND p.platform = ? AND p.enabled = 1
+      WHERE p.site_id = ? AND p.platform = ? AND p.enabled = 1${takesSql(platform, kind)}
         AND EXISTS (SELECT 1 FROM buffer_accounts b WHERE b.profile_id = p.id AND b.enabled = 1 AND b.token_encrypted <> '')
       ORDER BY p.turn, p.position, p.id`,
     siteId, platform,
   );
-  const chosen = usable[0] ?? listProfiles(siteId, platform)[0];
+  // Nothing usable: the account that takes this kind, else the first, so the
+  // run has something to carry -- every route then checks it before sending.
+  const chosen = usable[0] ?? listProfiles(siteId, platform).find((p) => !kind || takes(p, kind)) ?? listProfiles(siteId, platform)[0];
   if (chosen) {
     run(
       `UPDATE channel_profiles SET last_used_at = datetime('now'),
@@ -262,10 +303,10 @@ export function setPostToAll(siteId: number, platform: ProfilePlatform, on: bool
 }
 
 /** A site's accounts on a network that can post: switched on, with a Buffer token switched on. */
-export const usableProfiles = (siteId: number, platform: ProfilePlatform): ChannelProfile[] =>
+export const usableProfiles = (siteId: number, platform: ProfilePlatform, kind?: ProfileKind): ChannelProfile[] =>
   all<ChannelProfile>(
     `SELECT p.* FROM channel_profiles p
-      WHERE p.site_id = ? AND p.platform = ? AND p.enabled = 1
+      WHERE p.site_id = ? AND p.platform = ? AND p.enabled = 1${takesSql(platform, kind)}
         AND EXISTS (SELECT 1 FROM buffer_accounts b WHERE b.profile_id = p.id AND b.enabled = 1 AND b.token_encrypted <> '')
       ORDER BY p.position, p.id`,
     siteId, platform,
@@ -281,10 +322,10 @@ export const usableProfiles = (siteId: number, platform: ProfilePlatform): Chann
  * `undefined` stands for a site with no accounts yet, which posts through its
  * own Buffer token as before accounts existed.
  */
-export function runTargets(runId: number | null, siteId: number, platform: ProfilePlatform): (ChannelProfile | undefined)[] {
-  const own = runProfile(runId, siteId, platform);
+export function runTargets(runId: number | null, siteId: number, platform: ProfilePlatform, kind: ProfileKind = 'posts'): (ChannelProfile | undefined)[] {
+  const own = runProfile(runId, siteId, platform, kind);
   if (!postsToAll(siteId, platform)) return [own];
-  const others = usableProfiles(siteId, platform).filter((p) => p.id !== own?.id);
+  const others = usableProfiles(siteId, platform, kind).filter((p) => p.id !== own?.id);
   return [own, ...others];
 }
 
@@ -323,19 +364,29 @@ export function markFanoutPosted(runId: number | null, purpose: string, profileI
 }
 
 /** The account of a network a run uses: chosen once, then the same on resume and for its reel. */
-export function runProfile(runId: number | null, siteId: number, platform: ProfilePlatform): ChannelProfile | undefined {
-  if (!runId) return pickProfile(siteId, platform);
+export function runProfile(runId: number | null, siteId: number, platform: ProfilePlatform, kind: ProfileKind = 'posts'): ChannelProfile | undefined {
+  if (!runId) return pickProfile(siteId, platform, kind);
   let chosen: Record<string, number> = {};
   try {
     chosen = JSON.parse(get<{ p: string }>('SELECT profiles_json AS p FROM runs WHERE id = ?', runId)?.p || '{}');
   } catch {
     chosen = {};
   }
-  const saved = chosen[platform] ? getProfile(chosen[platform]!) : undefined;
-  if (saved && saved.site_id === siteId) return saved;
-  const picked = pickProfile(siteId, platform);
+  const own = (key: string) => {
+    const saved = chosen[key] ? getProfile(chosen[key]!) : undefined;
+    return saved && saved.site_id === siteId ? saved : undefined;
+  };
+  // The article's account carries the reel too when it takes reels, as every
+  // run did before accounts had their own ticks; otherwise the reel gets one
+  // of its own, chosen once and kept under "<network>:reels".
+  const article = own(platform);
+  if (article && takes(article, kind)) return article;
+  const key = kind === 'posts' ? platform : `${platform}:reels`;
+  const saved = key === platform ? undefined : own(key);
+  if (saved) return saved;
+  const picked = pickProfile(siteId, platform, kind);
   if (picked) {
-    chosen[platform] = picked.id;
+    chosen[key] = picked.id;
     run('UPDATE runs SET profiles_json = ? WHERE id = ?', JSON.stringify(chosen), runId);
   }
   return picked;
@@ -490,11 +541,15 @@ export function parseBoardMap(text: string): Map<string, string> {
 export const setPinterestPublishing = (siteId: number, posts: boolean, reels: boolean): void => {
   run("UPDATE sites SET pin_posts = ?, pin_reels = ?, updated_at = datetime('now') WHERE id = ?",
     posts ? 1 : 0, reels ? 1 : 0, siteId);
+  // The network's switch from an older page: every account follows it.
+  run("UPDATE channel_profiles SET posts = ?, reels = ? WHERE site_id = ? AND platform = 'pinterest'", posts ? 1 : 0, reels ? 1 : 0, siteId);
 };
 
 export const setInstagramPublishing = (siteId: number, posts: boolean, reels: boolean): void => {
   run("UPDATE sites SET ig_posts = ?, ig_reels = ?, updated_at = datetime('now') WHERE id = ?",
     posts ? 1 : 0, reels ? 1 : 0, siteId);
+  // The network's switch from an older page: every account follows it.
+  run("UPDATE channel_profiles SET posts = ?, reels = ? WHERE site_id = ? AND platform = 'instagram'", posts ? 1 : 0, reels ? 1 : 0, siteId);
 };
 
 export const setPinUsername = (siteId: number, username: string): void => {

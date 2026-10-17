@@ -1349,6 +1349,27 @@ export const MIGRATIONS: Migration[] = [
       db.prepare('INSERT INTO pin_designs (name, body, enabled, position) VALUES (?, ?, 1, ?)').run(RECIPE_CARD_NAME, RECIPE_CARD_BODY, next);
     },
   },
+  {
+    id: '061-account-posts-reels',
+    description: 'Posts and Reels on each Pinterest and Instagram account, as Facebook has, starting from the site switch',
+    up(db) {
+      addColumn(db, 'channel_profiles', 'posts', 'INTEGER NOT NULL DEFAULT 1');
+      addColumn(db, 'channel_profiles', 'reels', 'INTEGER NOT NULL DEFAULT 1');
+      // Every account starts where its site's network switch was, so nothing
+      // changes until an account's own tick is changed.
+      if (!hasTable(db, 'sites')) return;
+      const cols = columns(db, 'sites');
+      const copy = (platform: string, posts: string, reels: string) => {
+        if (!cols.includes(posts) || !cols.includes(reels)) return;
+        db.exec(`UPDATE channel_profiles SET
+            posts = COALESCE((SELECT CASE WHEN s.${posts} = 0 THEN 0 ELSE 1 END FROM sites s WHERE s.id = channel_profiles.site_id), 1),
+            reels = COALESCE((SELECT CASE WHEN s.${reels} = 0 THEN 0 ELSE 1 END FROM sites s WHERE s.id = channel_profiles.site_id), 1)
+          WHERE platform = '${platform}'`);
+      };
+      copy('pinterest', 'pin_posts', 'pin_reels');
+      copy('instagram', 'ig_posts', 'ig_reels');
+    },
+  },
 ];
 
 /* -- The runner ----------------------------------------------------------- */

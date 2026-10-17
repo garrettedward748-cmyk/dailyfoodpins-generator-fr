@@ -205,6 +205,16 @@ function profileCard(site: AccountsSiteView, profile: ChannelProfile, only: bool
           <button type="button" class="small" id="bb-${profile.id}"
                   onclick="pickBufferChannel(${profile.id})">Pick from Buffer</button>
         </div>
+        ${profile.platform === 'pinterest' || profile.platform === 'instagram'
+          ? html`
+            <input type="hidden" name="kinds" value="1" />
+            <label class="inline-check" style="margin-bottom:8px">
+              <input type="checkbox" name="posts" value="1" ${(profile.posts ?? 1) ? raw('checked') : raw('')} />
+              <span><strong>Posts</strong> <span class="muted small">— ${profile.platform === 'pinterest' ? 'an image pin for every article' : 'the photo of every new article'}</span></span></label>
+            <label class="inline-check" style="margin-bottom:8px">
+              <input type="checkbox" name="reels" value="1" ${(profile.reels ?? 1) ? raw('checked') : raw('')} />
+              <span><strong>Reels</strong> <span class="muted small">— ${profile.platform === 'pinterest' ? 'a video pin for every reel' : 'every reel the site makes'}</span></span></label>`
+          : raw('')}
         ${profile.platform === 'facebook'
           ? html`
             <label class="inline-check" style="margin-bottom:8px">
@@ -253,9 +263,10 @@ function profileCard(site: AccountsSiteView, profile: ChannelProfile, only: bool
 }
 
 function switches(site: AccountsSiteView, platform: ProfilePlatform): Html {
-  // Facebook has no site-level switch: Posts and Reels are set per account,
-  // on its own card below, because each account is its own Page.
-  if (platform === 'facebook') {
+  // Facebook, Pinterest and Instagram have no site-level switch: Posts and
+  // Reels are set per account, on its own card below, so one account can take
+  // the article pins while another takes only the video pins.
+  if (platform === 'facebook' || platform === 'pinterest' || platform === 'instagram') {
     return html`<p class="small muted" style="margin:0">Posts and Reels are set on each account below.</p>`;
   }
   // YouTube has one switch, not two: a Short is a video, so there is no

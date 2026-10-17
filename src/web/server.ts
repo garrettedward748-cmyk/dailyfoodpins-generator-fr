@@ -184,6 +184,7 @@ import {
   setFbPagePresenter,
   getFbPageByProfile,
   upsertFbPageForProfile,
+  setProfileKinds,
   deleteFbPageByProfile,
   type ReelCandidate,
   type FbPageRow,
@@ -1519,6 +1520,11 @@ export function buildServer(
     // this same card, so saving it also sets the page behind it.
     if (profile.platform === 'facebook') {
       upsertFbPageForProfile(id, profile.site_id, channelName, 'posts' in body, 'reels' in body, 'collage' in body);
+    }
+    // Pinterest and Instagram: the same two ticks, on the account itself. Only
+    // from a form that carries them, so an older page cannot clear both.
+    if ((profile.platform === 'pinterest' || profile.platform === 'instagram') && 'kinds' in body) {
+      setProfileKinds(id, 'posts' in body, 'reels' in body);
     }
     return redirect(reply, `/accounts#profile-${id}`, { kind: 'ok', message: 'Saved.' });
   });

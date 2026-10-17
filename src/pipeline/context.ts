@@ -24,6 +24,7 @@ import {
   type SiteRow,
   type KeywordRow,
   bufferChannelName,
+  takes,
 } from '../db/repos.js';
 import { createLogger } from '../lib/logger.js';
 
@@ -219,6 +220,11 @@ export class PipelineContext {
       // undefined) is the legacy single-account case and still posts.
       if (profile && !profile.enabled) {
         log.info(`run ${this.runId}: skipping ${platform} account "${profile.label}" — it is switched off`);
+        continue;
+      }
+      // Its own Posts tick (Pinterest, Instagram) is off: it takes reels only.
+      if (profile && !takes(profile, 'posts')) {
+        log.info(`run ${this.runId}: skipping ${platform} account "${profile.label}" — Posts is off on it`);
         continue;
       }
       try {
