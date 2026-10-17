@@ -112,6 +112,7 @@ export const SECTIONS: NavSection[] = [
       { href: '/keywords', label: 'Keywords' },
       { href: '/research', label: 'Research' },
       { href: '/radar', label: 'Radar' },
+      { href: '/pin-ideas', label: 'Pin ideas' },
       { href: '/blog', label: 'Blog' },
       { href: '/site-pages', label: 'Site pages' },
       { href: '/more-posts', label: 'More posts' },

@@ -112,6 +112,7 @@ export const STEP_CONTEXTS: Record<string, Record<string, unknown>> = {
   },
   'gsc-classify': { items: '1. can you freeze lemon bars (120 impressions; /recipe/lemon-bars)' },
   'radar-sort': { items: '1. [430 engagement] Nobody tells you lemon bars freeze whole, crust and all.' },
+  'pin-ideas': { pins: '1. Easy Pizza Bites — 4855 impressions, 120 saves, 40 pin clicks, 12 outbound clicks', count: 12, existing: '- Lemon Bars' },
   'queue-check': { items: '1. Lemon Bars [dessert]\n2. christmas dessert recipes [dessert]' },
   'suggest-account-names': { site: { name: 'n', domain: 'example.com' }, boards: '- Cheesecake Recipes', groups: '- cheesecake', taken: '- recipesbuzz' },
   'suggest-boards': { site: { name: 'n', domain: 'example.com' }, groups: '- dessert: Lemon Bars', existing: '- Easy Dessert Recipes' },

@@ -6,7 +6,7 @@
  * fewer dependency is one fewer thing to explain to whoever maintains this.
  */
 
-export function parseCsv(text: string): string[][] {
+export function parseCsv(text: string, delimiter = ','): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';
@@ -52,7 +52,7 @@ export function parseCsv(text: string): string[][] {
       i++;
       continue;
     }
-    if (char === ',') {
+    if (char === delimiter) {
       endField();
       i++;
       continue;

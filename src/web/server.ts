@@ -264,6 +264,10 @@ import { FORMATS } from '../reels/formats.js';
 import { backupsPage } from './views/backups.js';
 import { BufferClient } from '../integrations/buffer.js';
 import { askPrompt } from '../llm/ask.js';
+import {
+  addPinIdeas, analyseExport, dismissPinIdeas, lastPinReport, listPinIdeas, waitingPinIdeas, type PinIdea,
+} from '../research/pinterest-ideas.js';
+import { pinIdeasPage, type PinIdeasSiteView } from './views/pin-ideas.js';
 import { tryParseJson } from '../pipeline/json.js';
 import { describeRun, emptyReport, experiencesForPrompt, gatherExperiences, pickSuggestions, readSuggestions } from '../cook/suggest.js';
 import { webSearchKeys } from '../llm/web-search.js';
@@ -3769,6 +3773,78 @@ export function buildServer(
   });
 
   /* -- Radar --------------------------------------------------------------- */
+
+  /* -- Pinterest ideas: a site's Analytics export -> article ideas ---------- */
+
+  const pinIdeasRunning = new Set<number>();
+  const pinIdeasSites = (): PinIdeasSiteView[] =>
+    listSites().map((x) => ({
+      id: x.id,
+      domain: x.domain,
+      report: lastPinReport(x.id),
+      waiting: waitingPinIdeas(x.id),
+      running: pinIdeasRunning.has(x.id),
+    }));
+
+  app.get('/pin-ideas', async (request, reply) => {
+    const q = request.query as { site?: string; status?: string };
+    const sites = pinIdeasSites();
+    const site = sites.find((s) => s.id === asNumber(q.site, 0)) ?? sites[0] ?? null;
+    const status = (['new', 'added', 'dismissed'] as const).find((s) => s === q.status) ?? 'new';
+    return page(
+      reply,
+      'Pinterest ideas',
+      '/pin-ideas',
+      pinIdeasPage({ sites, site, status, rows: site ? listPinIdeas(site.id, status as PinIdea['status']) : [] }),
+      readFlash(request.query),
+    );
+  });
+
+  app.post('/pin-ideas/:id/upload', async (request, reply) => {
+    const siteId = asNumber((request.params as { id: string }).id, 0);
+    const back = `/pin-ideas?site=${siteId}`;
+    if (!getSite(siteId)) return redirect(reply, '/pin-ideas', { kind: 'error', message: 'Site not found' });
+    if (pinIdeasRunning.has(siteId)) return redirect(reply, back, { kind: 'warn', message: 'Already analysing an export for this site.' });
+    let name = '';
+    let text = '';
+    try {
+      const file = await request.file({ limits: { fileSize: 10 * 1024 * 1024 } });
+      if (!file) return redirect(reply, back, { kind: 'error', message: 'No file received.' });
+      name = file.filename || 'export.csv';
+      text = (await file.toBuffer()).toString('utf8');
+    } catch (err) {
+      return redirect(reply, back, { kind: 'error', message: `Could not read the file: ${errorMessage(err)}` });
+    }
+    // The model takes a while: the page is answered now, the ideas arrive on a refresh.
+    pinIdeasRunning.add(siteId);
+    void analyseExport(
+      siteId,
+      name,
+      text,
+      { ask: async (vars) => (await askPrompt(settings, encryptionKey, 'pin-ideas', vars)).content },
+      localDateKey(new Date(), settings.get('timezone')),
+    )
+      .catch((err) => log.warn(`pin ideas for site ${siteId} failed: ${errorMessage(err)}`))
+      .finally(() => pinIdeasRunning.delete(siteId));
+    return redirect(reply, back, { kind: 'ok', message: 'Reading the pins. Refresh this page in a minute for the ideas.' });
+  });
+
+  const pinIdeaIds = (request: FastifyRequest): number[] =>
+    ([] as unknown[]).concat(formBody(request).ids ?? []).map((v) => asNumber(v, 0)).filter((n) => n > 0);
+
+  app.post('/pin-ideas/:id/add', async (request, reply) => {
+    const siteId = asNumber((request.params as { id: string }).id, 0);
+    const ids = pinIdeaIds(request);
+    if (!ids.length) return redirect(reply, `/pin-ideas?site=${siteId}`, { kind: 'warn', message: 'Tick at least one.' });
+    const n = addPinIdeas(siteId, ids);
+    return redirect(reply, `/pin-ideas?site=${siteId}`, { kind: 'ok', message: `${n} idea(s) added to Keywords. Repeats were skipped.` });
+  });
+
+  app.post('/pin-ideas/:id/dismiss', async (request, reply) => {
+    const siteId = asNumber((request.params as { id: string }).id, 0);
+    const n = dismissPinIdeas(siteId, pinIdeaIds(request));
+    return redirect(reply, `/pin-ideas?site=${siteId}`, { kind: 'ok', message: `${n} dismissed.` });
+  });
 
   const radarRunning = new Set<number>();
   const radarSites = (): RadarSiteView[] =>

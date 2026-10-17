@@ -226,5 +226,11 @@
   "model": "gpt-oss:120b",
   "format": "json",
   "hasSystem": false
+ },
+ "pin-ideas": {
+  "sourceNode": "Pinterest ideas (Analytics export -> article ideas)",
+  "model": "gpt-oss:120b",
+  "format": "json",
+  "hasSystem": false
  }
 }

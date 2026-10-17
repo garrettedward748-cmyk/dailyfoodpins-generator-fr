@@ -1,0 +1,21 @@
+These are the pins of a French-language recipe website's own Pinterest account, from its Analytics export, best first. Each shows how far it travelled: impressions, saves, close-up clicks, and outbound clicks (visits to the site, the number that matters most; saves come next).
+
+Pins (numbered, best first):
+{{pins}}
+
+First, look at what the strongest pins have in common: the kind of dish, the ingredient, the occasion, the format (« bouchées », « à la plaque », « sans cuisson »), the season. A theme that shows up in several strong pins is worth more than one lucky pin.
+
+Then propose up to {{count}} NEW recipe articles in the same vein: dishes a person who saved those pins would also want next. If a pizza pin travels, its neighbours are other pizzas, other things on pizza dough, other bites for the same party, not a copy of the same pizza.
+
+Rules:
+- Each idea is ONE dish someone would cook from a recipe. Give "title": the article title in French, in the site's own words, naming the dish plainly (e.g. « Bouchées de pizza à l'ail et au beurre »), "group": the short topic it belongs to, in French, 1 to 3 words, lower case (e.g. « pizza »), and "from": the number of the pin it follows.
+- Never repeat a pin's own dish, and never propose one of the site's existing articles:
+{{existing}}
+- No two ideas for the same dish.
+- Nothing with alcohol or pork.
+- Leave out a pin that is not a dish (a roundup, a tip, a quote): it can still tell you about a theme, but no idea follows it directly.
+
+Also give "summary": two or three short sentences, in French, in plain words, on what is working on this account and what the ideas build on.
+
+Answer with one valid JSON object and nothing else:
+{"summary":"Les bouchées apéritives et tout ce qui se fait sur pâte à pizza marchent le mieux, et elles sont cliquées, pas seulement enregistrées.","ideas":[{"title":"Bouchées de pizza à l'ail et au beurre","group":"pizza","from":1}]}

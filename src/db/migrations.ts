@@ -1370,6 +1370,29 @@ export const MIGRATIONS: Migration[] = [
       copy('instagram', 'ig_posts', 'ig_reels');
     },
   },
+  {
+    id: '062-pin-ideas',
+    description: 'Pinterest ideas: article ideas drawn from a site\'s Pinterest Analytics export, waiting for a verdict',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS pin_ideas (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          site_id    INTEGER NOT NULL REFERENCES sites (id) ON DELETE CASCADE,
+          title      TEXT    NOT NULL,
+          topic      TEXT    NOT NULL DEFAULT '',
+          -- The pin of the export the idea follows, and how well it did.
+          source     TEXT    NOT NULL DEFAULT '',
+          source_url TEXT    NOT NULL DEFAULT '',
+          score      INTEGER NOT NULL DEFAULT 0,
+          status     TEXT    NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'added', 'dismissed')),
+          created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+          UNIQUE (site_id, title)
+        );
+        CREATE INDEX IF NOT EXISTS idx_pin_ideas_site ON pin_ideas (site_id, status, score DESC);
+      `);
+      addColumn(db, 'sites', 'pin_ideas_report', "TEXT NOT NULL DEFAULT ''");
+    },
+  },
 ];
 
 /* -- The runner ----------------------------------------------------------- */

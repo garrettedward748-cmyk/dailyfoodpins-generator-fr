@@ -145,6 +145,7 @@ export const PROMPT_MODELS: Record<string, { model: string; format: 'json' | nul
   'recipe-tools': { model: 'gpt-oss:120b', format: 'json' },
   'gsc-classify': { model: 'gpt-oss:120b', format: 'json' },
   'radar-sort': { model: 'gpt-oss:120b', format: 'json' },
+  'pin-ideas': { model: 'gpt-oss:120b', format: 'json' },
   'taxonomy-fill': { model: 'gpt-oss:120b', format: 'json' },
   'research-topics': { model: 'gpt-oss:120b', format: 'json' },
   'extra-post': { model: 'gpt-oss:120b', format: 'json' },
