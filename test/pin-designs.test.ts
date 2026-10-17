@@ -13,12 +13,12 @@ describe('pin designs', () => {
   beforeEach(() => openDatabase(':memory:'));
   afterEach(() => closeDatabase());
 
-  it('starts with six designs, the first being the old template, each carrying the three fields', () => {
+  it('starts with seven designs, the first being the old template, each carrying the three fields', () => {
     const designs = listPinDesigns();
-    expect(designs).toHaveLength(6);
+    expect(designs).toHaveLength(7);
     expect(designs[0]!.body).toContain('{{pinTitle}}');
     expect(designs.every((x) => designProblems(x.body).length === 0)).toBe(true);
-    expect(listPinDesigns()).toHaveLength(6); // not seeded twice
+    expect(listPinDesigns()).toHaveLength(7); // not seeded twice
   });
 
   it('never repeats one of the last three, prefers the least used, and differs by site', () => {

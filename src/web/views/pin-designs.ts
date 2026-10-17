@@ -20,6 +20,10 @@ export function pinDesignsPage(designs: PinDesign[], uses: Record<number, number
         <li><code>{{pinTitle}}</code> — the title written on the pin</li>
         <li><code>{{site.domain}}</code> — the site's address on the pin</li>
       </ul>
+      <p class="help">A design may also write the recipe on the pin, cut short so it reads on a phone:
+        <code>{{recipe.ingredients}}</code> (up to eight, one per line), <code>{{recipe.step1}}</code>,
+        <code>{{recipe.step2}}</code>, <code>{{recipe.step3}}</code> (the first, a middle and the last step) and
+        <code>{{recipe.badge}}</code> ("Prêt en …"). Such a design sits out a run that has no recipe.</p>
       <p class="help" style="margin-bottom:0">${on} of ${designs.length} design(s) on. A design missing one of the three is skipped until it is fixed.</p>
     </div>
 

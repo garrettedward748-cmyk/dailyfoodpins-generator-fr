@@ -2,6 +2,7 @@ import { all, get, run } from '../db/index.js';
 import { getPromptOverride } from '../db/repos.js';
 import { readShippedPrompt } from '../pipeline/prompts.js';
 import { pickInRotation } from './rotation.js';
+import { RECIPE_CARD_BODY, RECIPE_CARD_NAME } from './pin-design-recipe-card.js';
 
 /**
  * Pinterest graphic designs, rotated so a site's pins do not all look alike.
@@ -65,6 +66,7 @@ export const DEFAULT_DESIGNS: { name: string; body: string }[] = [
       'with "{{pinTitle}}" in a dark serif on two or three short lines and "{{site.domain}}" tiny beneath it. The label covers no more than a fifth of the image. ' +
       NO_EXTRA,
   },
+  { name: RECIPE_CARD_NAME, body: RECIPE_CARD_BODY },
 ];
 
 /** The designs, oldest first by position; the defaults are put in the first time this is asked. */

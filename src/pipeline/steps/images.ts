@@ -5,6 +5,7 @@ import { createLogger } from '../../lib/logger.js';
 import type { ImagePromptSet } from './content.js';
 import { loadTemplate, render } from '../prompts.js';
 import { listPinDesigns, markRunPinDesign, pickPinDesign, siteDesignHistory, type PinDesign } from '../../core/pin-designs.js';
+import { pinRecipeFields, usesRecipe } from '../../core/pin-recipe.js';
 import { describeProjectId } from '../../core/project-id.js';
 import type { SeoData } from './content.js';
 
@@ -259,11 +260,15 @@ export const generatePinImage: Step<
     // is why it comes back out of this step.
     const cta = (input.prompts.pinTitle ?? '').trim() || input.seo.title;
 
+    // The recipe, cut short, for a design that writes it on the pin (the recipe card).
+    let recipe: ReturnType<typeof pinRecipeFields> = null;
+    try { recipe = pinRecipeFields(ctx.runId); } catch { recipe = null; }
     const fields = {
       seo: input.seo,
       pinTitle: cta,
       site: { domain: brandName(ctx.site) },
       imagePrompts: { pin: input.prompts.pin ?? '' },
+      recipe: recipe ?? {},
     };
 
     // Setup -> Pin designs: the next design for this site, so its pins do
@@ -272,7 +277,9 @@ export const generatePinImage: Step<
     let design: PinDesign | null = null;
     try {
       const history = siteDesignHistory(ctx.site.id);
-      design = pickPinDesign(listPinDesigns(), history.recent, history.uses, ctx.site.id);
+      // A design that writes the recipe sits out a run that has none.
+      const designs = listPinDesigns().filter((d) => recipe || !usesRecipe(d.body));
+      design = pickPinDesign(designs, history.recent, history.uses, ctx.site.id);
     } catch {
       design = null; // no database (offline tools): the old template
     }

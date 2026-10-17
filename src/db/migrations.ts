@@ -1,5 +1,6 @@
 import { createLogger } from '../lib/logger.js';
 import type { Db } from './index.js';
+import { RECIPE_CARD_BODY, RECIPE_CARD_NAME } from '../core/pin-design-recipe-card.js';
 
 const log = createLogger('migrate');
 
@@ -1331,6 +1332,21 @@ export const MIGRATIONS: Migration[] = [
     description: 'The last names suggested for a new Pinterest account, shown until dismissed',
     up(db) {
       addColumn(db, 'sites', 'pin_name_suggestions', "TEXT NOT NULL DEFAULT ''");
+    },
+  },
+  {
+    id: '060-pin-design-recipe-card',
+    description: 'The recipe card pin design (ingredients and steps in numbered panels), added to the designs already there',
+    up(db) {
+      // An install whose designs were never listed gets it with the other
+      // defaults the first time they are; one that has them gets it at the end.
+      if (!hasTable(db, 'pin_designs')) return;
+      const count = (db.prepare('SELECT COUNT(*) AS n FROM pin_designs').get() as { n: number }).n;
+      if (count === 0) return;
+      const exists = db.prepare('SELECT 1 FROM pin_designs WHERE name = ?').get(RECIPE_CARD_NAME);
+      if (exists) return;
+      const next = (db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS p FROM pin_designs').get() as { p: number }).p;
+      db.prepare('INSERT INTO pin_designs (name, body, enabled, position) VALUES (?, ?, 1, ?)').run(RECIPE_CARD_NAME, RECIPE_CARD_BODY, next);
     },
   },
 ];
