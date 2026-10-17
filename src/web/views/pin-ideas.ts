@@ -13,6 +13,60 @@ export interface PinIdeasSiteView {
   report: PinIdeasReport | null;
   waiting: number;
   running: boolean;
+  /** Where the analysis stands while it runs. */
+  progress?: { stage: string; done: number; total: number; seconds: number } | null;
+}
+
+/** The stage in words; the same words the page's script writes as it polls. */
+const STAGES: Record<string, string> = {
+  reading: 'Reading the file',
+  titles: 'Looking up the pin titles on Pinterest',
+  ai: 'The AI is reading the pins and writing ideas',
+  saving: 'Saving the new ideas',
+};
+
+/**
+ * The live status while an export is analysed: the stage, a counter for the
+ * pin titles, the seconds gone. It asks the server every two seconds and
+ * reloads the page the moment the work is done, so the ideas appear by
+ * themselves.
+ */
+function liveStatus(site: PinIdeasSiteView): Html {
+  const p = site.progress ?? { stage: 'reading', done: 0, total: 0, seconds: 0 };
+  const pct = p.stage === 'titles' && p.total ? Math.round((p.done / p.total) * 100) : p.stage === 'ai' ? 100 : 0;
+  return html`<div id="pin-progress" style="margin:12px 0 0">
+    <div class="spread small">
+      <strong id="pin-stage">${STAGES[p.stage] ?? 'Working'}<span id="pin-count">${p.stage === 'titles' && p.total ? ` — ${p.done} / ${p.total}` : ''}</span>…</strong>
+      <span class="muted"><span id="pin-seconds">${p.seconds}</span> s</span>
+    </div>
+    <div style="height:6px;border-radius:3px;background:var(--border, #2a2f3a);margin-top:6px;overflow:hidden">
+      <div id="pin-bar" style="height:100%;width:${pct}%;background:var(--brand, #7c5cff);transition:width .4s"></div>
+    </div>
+    <p class="help" style="margin:6px 0 0">The page shows the ideas by itself when this is done. The AI step usually takes under a minute.</p>
+    <script>
+      (function () {
+        var stages = ${raw(JSON.stringify(STAGES))};
+        var started = Date.now() - ${p.seconds} * 1000;
+        setInterval(function () {
+          document.getElementById('pin-seconds').textContent = Math.round((Date.now() - started) / 1000);
+        }, 1000);
+        function poll() {
+          fetch('/pin-ideas/${site.id}/progress', { cache: 'no-store', credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (p) {
+              if (!p.running) { location.reload(); return; }
+              document.getElementById('pin-stage').firstChild.textContent = stages[p.stage] || 'Working';
+              document.getElementById('pin-count').textContent = p.stage === 'titles' && p.total ? ' — ' + p.done + ' / ' + p.total : '';
+              var pct = p.stage === 'titles' && p.total ? Math.round(p.done / p.total * 100) : (p.stage === 'ai' || p.stage === 'saving' ? 100 : 0);
+              document.getElementById('pin-bar').style.width = pct + '%';
+              setTimeout(poll, 2000);
+            })
+            .catch(function () { setTimeout(poll, 4000); });
+        }
+        setTimeout(poll, 2000);
+      })();
+    </script>
+  </div>`;
 }
 
 const num = (n: number): string => n.toLocaleString('en-US');
@@ -62,7 +116,7 @@ export function pinIdeasPage(data: {
             </ol>
             <p class="help" style="margin:6px 0 0">The English and French exports are both read.</p>
           </details>
-          ${site.running ? html`<p class="small" style="margin:10px 0 0"><strong>Analysing now…</strong> refresh this page in a minute.</p>` : raw('')}
+          ${site.running ? liveStatus(site) : raw('')}
         </div>
 
         ${r

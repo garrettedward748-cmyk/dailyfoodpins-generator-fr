@@ -101,6 +101,16 @@ describe('reading an export', () => {
     expect(listPinIdeas(siteId, 'new')[0]).toMatchObject({ title: 'Pumpkin Cheesecake Bars', source: 'pumpkin dessert recipes' });
   });
 
+  it('reports each stage as it goes, with a counter for the titles', async () => {
+    const seen: string[] = [];
+    await analyseExport(site(), 'p.csv', REAL, {
+      pinTitle: async () => 'A Pin',
+      progress: (stage, done, total) => seen.push(done === undefined ? stage : `${stage} ${done}/${total}`),
+      ask: async () => JSON.stringify({ ideas: [] }),
+    }, '2026-10-17');
+    expect(seen).toEqual(['reading', 'titles 0/2', 'titles 2/2', 'ai', 'saving']);
+  });
+
   it("reads a pin's title from its page: og:title, else the page's data, else the link's words", () => {
     expect(titleFromPage('<meta property="og:title" content="Easy Pumpkin Pie Bars | Pinterest">')).toBe('Easy Pumpkin Pie Bars');
     expect(titleFromPage('<meta property="og:title" content="Pinterest"><script>{"title":"Caramel Apple Cookies"}</script>')).toBe('Caramel Apple Cookies');
@@ -203,6 +213,10 @@ describe('the page', () => {
     ]);
     const res = await app.inject({ method: 'POST', url: `/pin-ideas/${siteId}/upload`, payload: body, headers: { cookie, 'content-type': `multipart/form-data; boundary=${boundary}` } });
     expect(res.statusCode).toBe(303);
+    // The page polls this while the export is analysed; the model is out of reach here, so it ends soon.
+    const status = await app.inject({ method: 'GET', url: `/pin-ideas/${siteId}/progress`, headers: { cookie } });
+    expect(status.statusCode).toBe(200);
+    expect(JSON.parse(status.body)).toHaveProperty('running');
     expect(String(res.headers.location)).toContain(`/pin-ideas?site=${siteId}`);
   });
 });

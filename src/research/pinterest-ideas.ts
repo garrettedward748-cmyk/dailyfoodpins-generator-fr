@@ -223,9 +223,14 @@ const AT_ONCE = 4;
  * whose title cannot be found is left out: the model cannot learn anything
  * from a bare number.
  */
-async function nameThePins(rows: PinRow[], pinTitle: ((url: string) => Promise<string>) | undefined): Promise<PinRow[]> {
+async function nameThePins(
+  rows: PinRow[],
+  pinTitle: ((url: string) => Promise<string>) | undefined,
+  progress: (done: number, total: number) => void = () => undefined,
+): Promise<PinRow[]> {
   const untitled = rows.filter((r) => !r.title && r.url).slice(0, LOOKUPS);
   if (pinTitle) {
+    progress(0, untitled.length);
     for (let i = 0; i < untitled.length; i += AT_ONCE) {
       await Promise.all(
         untitled.slice(i, i + AT_ONCE).map(async (r) => {
@@ -236,6 +241,7 @@ async function nameThePins(rows: PinRow[], pinTitle: ((url: string) => Promise<s
           }
         }),
       );
+      progress(Math.min(i + AT_ONCE, untitled.length), untitled.length);
     }
   }
   return rows.filter((r) => r.title);
@@ -245,7 +251,11 @@ export interface PinIdeasDeps {
   ask(vars: { pins: string; count: number; existing: string }): Promise<string>;
   /** A pin's title, from its page on Pinterest; '' when there is none to read. */
   pinTitle?(url: string): Promise<string>;
+  /** Where the work stands, for the page: looking up titles (done of total), asking the model, saving. */
+  progress?(stage: PinIdeasStage, done?: number, total?: number): void;
 }
+
+export type PinIdeasStage = 'reading' | 'titles' | 'ai' | 'saving';
 
 /** What this site already has or has waiting, so no idea comes back as yesterday's article. */
 function existingTitles(siteId: number): string[] {
@@ -265,11 +275,12 @@ function existingTitles(siteId: number): string[] {
 export async function analyseExport(siteId: number, fileName: string, text: string, deps: PinIdeasDeps, today: string): Promise<PinIdeasReport> {
   const report: PinIdeasReport = { day: today, file: fileName, pins: 0, top: [], summary: '', found: 0 };
   try {
+    deps.progress?.('reading');
     const rows = parsePinterestCsv(text);
     if (rows.length === 0) {
       throw new Error('no pins or boards in this file — export it from Pinterest Analytics → Overview → Export, with the date range you want');
     }
-    const pins = await nameThePins(rows, deps.pinTitle);
+    const pins = await nameThePins(rows, deps.pinTitle, (done, total) => deps.progress?.('titles', done, total));
     report.pins = pins.length;
     report.top = pins.slice(0, 15);
     if (pins.length === 0) {
@@ -277,12 +288,14 @@ export async function analyseExport(siteId: number, fileName: string, text: stri
     }
 
     const known = existingTitles(siteId);
+    deps.progress?.('ai');
     const answer = parseJson(
       await deps.ask({ pins: pinLines(pins), count: IDEAS_WANTED, existing: known.slice(-80).map((t) => `- ${t}`).join('\n') || '- (none yet)' }),
       'the pin ideas',
     ) as { summary?: unknown; ideas?: { title?: unknown; group?: unknown; from?: unknown }[] };
     report.summary = String(answer.summary ?? '').trim().slice(0, 800);
 
+    deps.progress?.('saving');
     const twins = new DishIndex(known);
     const halal = halalOnly();
     const read = pins.slice(0, PINS_READ);

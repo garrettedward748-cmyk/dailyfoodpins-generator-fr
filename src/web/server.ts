@@ -265,7 +265,7 @@ import { backupsPage } from './views/backups.js';
 import { BufferClient } from '../integrations/buffer.js';
 import { askPrompt } from '../llm/ask.js';
 import {
-  addPinIdeas, analyseExport, dismissPinIdeas, lastPinReport, listPinIdeas, waitingPinIdeas, type PinIdea,
+  addPinIdeas, analyseExport, dismissPinIdeas, lastPinReport, listPinIdeas, waitingPinIdeas, type PinIdea, type PinIdeasStage,
 } from '../research/pinterest-ideas.js';
 import { pinIdeasPage, type PinIdeasSiteView } from './views/pin-ideas.js';
 import { pinTitle } from '../integrations/pinterest-page.js';
@@ -3777,7 +3777,8 @@ export function buildServer(
 
   /* -- Pinterest ideas: a site's Analytics export -> article ideas ---------- */
 
-  const pinIdeasRunning = new Set<number>();
+  /** The exports being analysed, by site, and where each stands -- for the page's live status. */
+  const pinIdeasRunning = new Map<number, { stage: PinIdeasStage; done: number; total: number; started: number }>();
   const pinIdeasSites = (): PinIdeasSiteView[] =>
     listSites().map((x) => ({
       id: x.id,
@@ -3785,6 +3786,10 @@ export function buildServer(
       report: lastPinReport(x.id),
       waiting: waitingPinIdeas(x.id),
       running: pinIdeasRunning.has(x.id),
+      progress: (() => {
+        const p = pinIdeasRunning.get(x.id);
+        return p ? { stage: p.stage, done: p.done, total: p.total, seconds: Math.round((Date.now() - p.started) / 1000) } : null;
+      })(),
     }));
 
   app.get('/pin-ideas', async (request, reply) => {
@@ -3817,17 +3822,31 @@ export function buildServer(
       return redirect(reply, back, { kind: 'error', message: `Could not read the file: ${errorMessage(err)}` });
     }
     // The model takes a while: the page is answered now, the ideas arrive on a refresh.
-    pinIdeasRunning.add(siteId);
+    pinIdeasRunning.set(siteId, { stage: 'reading', done: 0, total: 0, started: Date.now() });
     void analyseExport(
       siteId,
       name,
       text,
-      { ask: async (vars) => (await askPrompt(settings, encryptionKey, 'pin-ideas', vars)).content, pinTitle: (url) => pinTitle(url) },
+      { ask: async (vars) => (await askPrompt(settings, encryptionKey, 'pin-ideas', vars)).content, pinTitle: (url) => pinTitle(url),
+        progress: (stage, done = 0, total = 0) => {
+          const p = pinIdeasRunning.get(siteId);
+          if (p) Object.assign(p, { stage, done, total });
+        },
+      },
       localDateKey(new Date(), settings.get('timezone')),
     )
       .catch((err) => log.warn(`pin ideas for site ${siteId} failed: ${errorMessage(err)}`))
       .finally(() => pinIdeasRunning.delete(siteId));
-    return redirect(reply, back, { kind: 'ok', message: 'Reading the pins and looking up their titles on Pinterest. Refresh this page in a minute or two for the ideas.' });
+    return redirect(reply, back, { kind: 'ok', message: 'Reading the export. The status below follows it, and the page shows the ideas by itself when it is done.' });
+  });
+
+  /** Polled by the page while an export is analysed: where it stands, and whether it is done. */
+  app.get('/pin-ideas/:id/progress', async (request, reply) => {
+    const siteId = asNumber((request.params as { id: string }).id, 0);
+    const p = pinIdeasRunning.get(siteId);
+    return reply.header('cache-control', 'no-store').send(
+      p ? { running: true, stage: p.stage, done: p.done, total: p.total, seconds: Math.round((Date.now() - p.started) / 1000) } : { running: false },
+    );
   });
 
   const pinIdeaIds = (request: FastifyRequest): number[] =>
