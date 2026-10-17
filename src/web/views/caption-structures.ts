@@ -128,7 +128,9 @@ export function captionStructuresPage(
           </div>
           <div class="help">A network left unticked gets the recipe title and the link instead, exactly as it did before
             this page existed. Pinterest is not here: a video pin carries the article's own Pinterest description, which
-            is written for Pinterest's search box rather than for a feed.
+            is written for Pinterest's search box rather than for a feed. Facebook unticked covers every Facebook post,
+            not only the reels: the article's photo post, the collage and More posts carry the title and the link too
+            (More posts set to "No link" below stays without one).
             ${off.length > 0
               ? html`Right now <strong>${named(off)}</strong> ${off.length === 1 ? raw('gets') : raw('get')} the title and the link.`
               : raw('')}</div>
@@ -225,7 +227,8 @@ export function captionStructuresPage(
                 )}
               </select></label>
           </div>
-          <div class="help">The same rule as for reels, for the photo posts that go out with each article. Instagram's link
+          <div class="help">The same rule as for reels, for the photo posts that go out with each article; with Facebook
+            unticked above, the Facebook photo post and the collage are the title and the link only. Instagram's link
             stays as set in Channels -> Instagram; Pinterest's link is the pin's own destination, which this does not touch.
             <strong>Pinterest takes about 500 characters and its description already uses about 400</strong>, so a recipe
             seldom fits there: it gives way to the ingredients, then to the description alone, and never gets cut in the middle.

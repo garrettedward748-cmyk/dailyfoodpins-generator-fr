@@ -56,6 +56,15 @@ export function parseCaptionNetworks(value: string): Set<CaptionNetwork> {
   return new Set(CAPTION_NETWORKS.filter((network) => wanted.has(network)));
 }
 
+/**
+ * Whether a network gets the written caption on the posts that follow the
+ * article (photo post, collage, More posts). An empty value is a setting never
+ * stored: every box ticked, as the default and the reels have it.
+ */
+export function captionOnFor(value: string, network: CaptionNetwork): boolean {
+  return !value.trim() || parseCaptionNetworks(value).has(network);
+}
+
 /** The ticked boxes as a value to store. */
 export function serializeCaptionNetworks(names: readonly string[]): string {
   const chosen = CAPTION_NETWORKS.filter((network) => names.includes(network));

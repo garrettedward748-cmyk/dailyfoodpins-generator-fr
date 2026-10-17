@@ -7,6 +7,7 @@ import { FacebookClient } from '../../integrations/facebook.js';
 import { composeCollage } from '../../collage/compose.js';
 import { planCollageSteps } from '../../collage/plan.js';
 import { createLogger, errorMessage } from '../../lib/logger.js';
+import { captionOnFor } from '../../core/caption-structures.js';
 import { facebookPost, pickCommentKeyword, parseFacebookLinkMode, parseRecipeInPost, recipePostText } from '../../reels/recipe-text.js';
 
 const log = createLogger('collage-post');
@@ -128,23 +129,29 @@ export const collagePostStep: Step<CollagePostInput, CollagePostOutput> = {
       const uploaded = await ctx.siteApi.uploadImage(composed, recipeFileName(ctx.keyword?.seed_keyword ?? '', 'collage', 'jpg'), 'image/jpeg', 'recipes');
       const imageUrl = ctx.siteApi.absoluteUrl(uploaded.url);
 
+      // Facebook unticked under Setup -> Caption structures: the title and
+      // the link, as on the article post and the reel -- no written text,
+      // recipe or keyword.
+      const shaped = captionOnFor(ctx.settings.get('caption_networks'), 'facebook');
       let text = '';
       try {
-        text = (await ctx.prompt('collage-caption', { seo: input.seo })).content.trim();
+        if (shaped) text = (await ctx.prompt('collage-caption', { seo: input.seo })).content.trim();
       } catch (err) {
         log.warn(`run ${ctx.runId}: could not write the collage text, using the title — ${errorMessage(err)}`);
       }
       // Each post asks for its own word, taken from the dish.
-      const keyword = await pickCommentKeyword(
-        input.title,
-        async (title) => (await ctx.prompt('comment-keyword', { title })).content,
-        ctx.settings.get('fb_comment_trigger').trim() || 'banana',
-      );
+      const keyword = shaped
+        ? await pickCommentKeyword(
+            input.title,
+            async (title) => (await ctx.prompt('comment-keyword', { title })).content,
+            ctx.settings.get('fb_comment_trigger').trim() || 'banana',
+          )
+        : '';
       const post = facebookPost({
         body: text || input.title,
-        recipe: recipePostText(ctx.runId, parseRecipeInPost(ctx.settings.get('caption_fb_post_recipe'))),
+        recipe: shaped ? recipePostText(ctx.runId, parseRecipeInPost(ctx.settings.get('caption_fb_post_recipe'))) : '',
         postUrl: input.postUrl,
-        link: parseFacebookLinkMode(ctx.settings.get('caption_fb_post_link')),
+        link: shaped ? parseFacebookLinkMode(ctx.settings.get('caption_fb_post_link')) : 'text',
         keyword,
       });
 
@@ -188,7 +195,7 @@ export const collagePostStep: Step<CollagePostInput, CollagePostOutput> = {
               log.warn(`run ${ctx.runId}: collage published, but the link comment failed — ${errorMessage(err)}`);
             }
           }
-          recordFbFeedPostResolved({ runId: ctx.runId, fbPageId: target.id, purpose: 'facebook-collage', fbPostId: posted.postId, triggerKeyword: keyword });
+          recordFbFeedPostResolved({ runId: ctx.runId, fbPageId: target.id, purpose: 'facebook-collage', fbPostId: posted.postId, triggerKeyword: keyword || null });
           return posted.postId;
         }
 
@@ -196,7 +203,7 @@ export const collagePostStep: Step<CollagePostInput, CollagePostOutput> = {
         log.info(`run ${ctx.runId}: collage scheduled as ${posted.postId} via "${posted.account}"`);
         // See facebook-post.ts: recorded now so the comment-keyword webhook
         // can find this post even if a later account in the fan-out fails.
-        recordFbFeedPost({ runId: ctx.runId, fbPageId: target.id, purpose: 'facebook-collage', bufferPostId: posted.postId, triggerKeyword: keyword });
+        recordFbFeedPost({ runId: ctx.runId, fbPageId: target.id, purpose: 'facebook-collage', bufferPostId: posted.postId, triggerKeyword: keyword || null });
         return posted.postId;
       }, 'facebook-collage');
       if (!postId) return { skipped: 'Collage is off on every Facebook account this run would reach' };

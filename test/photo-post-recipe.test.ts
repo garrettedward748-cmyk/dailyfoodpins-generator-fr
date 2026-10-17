@@ -86,6 +86,22 @@ describe('the Facebook photo post', () => {
     await facebookPostStep.run(ctx({ caption_fb_post_recipe: 'none' }), input);
     expect(sent[0]!.text).toBe('Tangy and bright.\n\nLa recette complète : https://d.com/r');
   });
+
+  it('is the title and the link when Facebook is unticked under Caption structures, whatever the photo settings say', async () => {
+    const c = ctx({ caption_networks: 'instagram,youtube,tiktok', caption_fb_post_link: 'keyword' });
+    await facebookPostStep.run(c, input);
+    expect(sent[0]!.text).toBe('Lemon Bars\n\nLa recette complète : https://d.com/r');
+    expect(sent[0]!.firstComment).toBeUndefined();
+    // Neither the text nor the comment keyword is written.
+    expect((c as unknown as { prompt: ReturnType<typeof vi.fn> }).prompt).not.toHaveBeenCalled();
+    await facebookPostStep.run(ctx({ caption_networks: 'none' }), { ...input, text: 'Written for More posts.' });
+    expect(sent[0]!.text).toBe('Lemon Bars\n\nLa recette complète : https://d.com/r');
+  });
+
+  it('keeps a More posts "No link" with Facebook unticked', async () => {
+    await facebookPostStep.run(ctx({ caption_networks: 'none' }), { ...input, linkMode: 'none' });
+    expect(sent[0]!.text).toBe('Lemon Bars');
+  });
 });
 
 describe('the Instagram photo post', () => {

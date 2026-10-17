@@ -5,6 +5,7 @@ import { getFbPageByProfile, pageForSite, recordFbFeedPost, recordFbFeedPostReso
 import { FacebookClient } from '../../integrations/facebook.js';
 import { cropForFacebookFeed, fitForFacebookFeed } from '../../lib/crop.js';
 import { createLogger, errorMessage } from '../../lib/logger.js';
+import { captionOnFor } from '../../core/caption-structures.js';
 import { facebookPost, pickCommentKeyword, parseFacebookLinkMode, type FacebookLinkMode, parseRecipeInPost, recipePostText } from '../../reels/recipe-text.js';
 
 const log = createLogger('facebook-post');
@@ -60,25 +61,37 @@ export const facebookPostStep: Step<FacebookPostInput, FacebookPostOutput> = {
     const uploaded = await ctx.siteApi.uploadImage(cropped, recipeFileName(ctx.keyword?.seed_keyword ?? '', 'facebook', 'jpg'), 'image/jpeg', 'recipes');
     const imageUrl = ctx.siteApi.absoluteUrl(uploaded.url);
 
-    let text = (input.text ?? '').trim();
+    // Setup -> Caption structures: Facebook unticked under "Networks that get
+    // the written caption" means the plain post of before those settings
+    // existed -- the title and the link, no written text, no recipe, no
+    // keyword -- the same as a reel. It used to be read by reels only, so a
+    // photo post kept its written text, recipe and keyword with the box off.
+    // A More posts site that chose "No link" still gets no link.
+    const shaped = captionOnFor(ctx.settings.get('caption_networks'), 'facebook');
+
+    let text = shaped ? (input.text ?? '').trim() : '';
     try {
-      if (!text) text = (await ctx.prompt('facebook-post', { seo: input.seo })).content.trim();
+      if (shaped && !text) text = (await ctx.prompt('facebook-post', { seo: input.seo })).content.trim();
     } catch (err) {
       log.warn(`run ${ctx.runId}: could not write the Facebook text, using the title — ${errorMessage(err)}`);
     }
     // The recipe and where the link goes are Setup -> Caption structures; the
     // defaults put the recipe under the text, the link last.
     // Each post asks for its own word, taken from the dish.
-    const keyword = await pickCommentKeyword(
-      input.title,
-      async (title) => (await ctx.prompt('comment-keyword', { title })).content,
-      ctx.settings.get('fb_comment_trigger').trim() || 'banana',
-    );
+    const keyword = shaped
+      ? await pickCommentKeyword(
+          input.title,
+          async (title) => (await ctx.prompt('comment-keyword', { title })).content,
+          ctx.settings.get('fb_comment_trigger').trim() || 'banana',
+        )
+      : '';
     const post = facebookPost({
       body: text || input.title,
-      recipe: recipePostText(ctx.runId, parseRecipeInPost(ctx.settings.get('caption_fb_post_recipe'))),
+      recipe: shaped ? recipePostText(ctx.runId, parseRecipeInPost(ctx.settings.get('caption_fb_post_recipe'))) : '',
       postUrl: input.postUrl,
-      link: input.linkMode ?? parseFacebookLinkMode(ctx.settings.get('caption_fb_post_link')),
+      link: shaped
+        ? input.linkMode ?? parseFacebookLinkMode(ctx.settings.get('caption_fb_post_link'))
+        : input.linkMode === 'none' ? 'none' : 'text',
       keyword,
     });
 
@@ -121,7 +134,7 @@ export const facebookPostStep: Step<FacebookPostInput, FacebookPostOutput> = {
         }
         // The real post id is already in hand -- nothing for the backfill
         // to do, unlike the Buffer path below.
-        recordFbFeedPostResolved({ runId: ctx.runId, fbPageId: target.id, purpose: 'facebook', fbPostId: posted.postId, triggerKeyword: keyword });
+        recordFbFeedPostResolved({ runId: ctx.runId, fbPageId: target.id, purpose: 'facebook', fbPostId: posted.postId, triggerKeyword: keyword || null });
         return posted.postId;
       }
 
@@ -131,7 +144,7 @@ export const facebookPostStep: Step<FacebookPostInput, FacebookPostOutput> = {
       // webhook ("banana") needs this row to find its way from a native post
       // id back to this run, and it must survive even if a later account in
       // the fan-out fails.
-      recordFbFeedPost({ runId: ctx.runId, fbPageId: target.id, purpose: 'facebook', bufferPostId: posted.postId, triggerKeyword: keyword });
+      recordFbFeedPost({ runId: ctx.runId, fbPageId: target.id, purpose: 'facebook', bufferPostId: posted.postId, triggerKeyword: keyword || null });
       return posted.postId;
     });
     if (!postId) return { skipped: 'Posts is off on every Facebook account this run would reach' };
