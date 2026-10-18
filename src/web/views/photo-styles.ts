@@ -1,11 +1,18 @@
 import { html, raw, type Html } from './layout.js';
 import type { PhotoStyle } from '../../core/photo-styles.js';
+import type { StepPhotoMode } from '../../core/step-photos.js';
 
 /**
  * Setup -> Photo styles: the shoot each recipe's photographs are taken on,
  * beside Pin designs and run by the same rotation.
  */
-export function photoStylesPage(styles: PhotoStyle[], uses: Record<number, number>): Html {
+const STEP_PHOTO_OPTIONS: { value: StepPhotoMode; label: string; help: string }[] = [
+  { value: '3', label: '3 photos', help: 'As before. Fastest, fewest generations.' },
+  { value: '5', label: '5 photos', help: 'Spread over the method. Fewer on a recipe with fewer steps.' },
+  { value: 'all', label: 'Every step', help: 'One per step. Slowest — about twice the time on an 8-step recipe.' },
+];
+
+export function photoStylesPage(styles: PhotoStyle[], uses: Record<number, number>, stepPhotos: StepPhotoMode = '3'): Html {
   const on = styles.filter((s) => s.enabled).length;
   return html`
     <h1>Photo styles</h1>
@@ -22,6 +29,22 @@ export function photoStylesPage(styles: PhotoStyle[], uses: Record<number, numbe
       <p class="help" style="margin-bottom:0">${on} of ${styles.length} style(s) on.
         ${on === 0 ? 'With none on, the AI chooses a look per recipe by itself — which is what it did before this page existed.' : ''}</p>
     </div>
+
+    <form method="post" action="/settings/photo-styles/step-photos" class="card">
+      <strong>Method photos per recipe</strong>
+      <p class="help" style="margin-top:4px">How many steps of the method get their own photograph. One setting for every
+        site. The hero and the pin are made as before, on top of these. Applies to new recipes only.</p>
+      <div class="row wrap" style="margin:8px 0">
+        ${STEP_PHOTO_OPTIONS.map(
+          (o) => html`
+            <label class="inline-check" style="flex:1;min-width:160px;align-items:flex-start">
+              <input type="radio" name="step_photos" value="${o.value}" ${o.value === stepPhotos ? raw('checked') : raw('')} />
+              <span><strong>${o.label}</strong><br /><span class="muted small">${o.help}</span></span>
+            </label>`,
+        )}
+      </div>
+      <button type="submit" class="primary">Save</button>
+    </form>
 
     <form method="post" action="/settings/photo-styles/save">
       ${styles.map(

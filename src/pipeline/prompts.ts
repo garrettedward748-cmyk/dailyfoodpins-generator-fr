@@ -115,6 +115,7 @@ export const PROMPT_MODELS: Record<string, { model: string; format: 'json' | nul
   'spy-validation': { model: 'gpt-oss:120b', format: null },
   'recipe-generator': { model: 'gpt-oss:20b', format: null },
   'image-prompts': { model: 'gemma4:31b', format: null },
+  'extra-step-shots': { model: 'gemma4:31b', format: 'json' },
   'part-1': { model: 'gemma4:31b', format: 'json' },
   'part-2': { model: 'gemma4:31b', format: 'json' },
   'part-3': { model: 'gemma4:31b', format: 'json' },

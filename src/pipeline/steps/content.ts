@@ -10,6 +10,9 @@ import { createLogger } from '../../lib/logger.js';
 import {
   listPhotoStyles, markRunPhotoStyle, pickPhotoStyle, shootBlock, sitePhotoHistory, type PhotoStyle,
 } from '../../core/photo-styles.js';
+import {
+  extraStepNumbers, parseStepPhotoMode, recipeStepCount, recipeStepText,
+} from '../../core/step-photos.js';
 
 const log = createLogger('content');
 
@@ -365,6 +368,68 @@ export const generateImagePrompts: Step<
         pinTitle: String(parsed.pin_title),
         pin: String(parsed.pin),
       },
+      endpoint: result.endpoint,
+      model: result.model,
+    };
+  },
+};
+
+/** One extra method photograph: the recipe step it belongs to and its prompt. */
+export interface ExtraStepShot {
+  step: number;
+  prompt: string;
+}
+
+/**
+ * Prompts for the method photographs beyond the three the image prompts
+ * chose, when Setup -> Photo styles asks for 5 or for every step.
+ *
+ * Which steps is decided in code (see core/step-photos.ts), so the model only
+ * describes them. With the setting on 3, or nothing left to photograph, no
+ * model is called and the answer is an empty list.
+ *
+ * A step the model skipped is simply left without a photograph: these are
+ * extras, and the article is complete without them.
+ */
+export const generateExtraStepPrompts: Step<
+  { seo: SeoData; recipe: RecipeData; prompts: ImagePromptSet },
+  ExtraStepShot[]
+> = {
+  name: 'generate-extra-step-prompts',
+  title: 'Generate extra method shot prompts',
+  async run(ctx, input) {
+    const mode = parseStepPhotoMode(ctx.settings.get('article_step_photos'));
+    const wanted = extraStepNumbers(mode, recipeStepCount(input.recipe.parsed), input.prompts.stepNumbers);
+    if (wanted.length === 0) return [];
+
+    const result = await ctx.prompt('extra-step-shots', {
+      title: input.seo.title,
+      recipeJson: JSON.stringify(input.recipe.parsed),
+      steps: wanted.map((n) => `Step ${n}: ${recipeStepText(input.recipe.parsed, n)}`).join('\n'),
+      hero: input.prompts.hero,
+      stepA: input.prompts.stepA,
+      stepB: input.prompts.stepB,
+      stepC: input.prompts.stepC,
+    });
+
+    const parsed = await parseJsonOrRepair<{ shots?: unknown }>(ctx, result.content, 'Extra method shot output');
+    const shots = Array.isArray(parsed.shots) ? parsed.shots : [];
+
+    const byStep = new Map<number, string>();
+    for (const shot of shots) {
+      if (!shot || typeof shot !== 'object') continue;
+      const step = Math.trunc(Number((shot as Record<string, unknown>).step));
+      const prompt = String((shot as Record<string, unknown>).prompt ?? '').trim();
+      if (wanted.includes(step) && prompt !== '' && !byStep.has(step)) byStep.set(step, prompt);
+    }
+
+    const missing = wanted.filter((n) => !byStep.has(n));
+    if (missing.length > 0) {
+      log.warn(`run ${ctx.runId}: no prompt came back for step(s) ${missing.join(', ')}; they stay without a photograph`);
+    }
+
+    return {
+      value: wanted.filter((n) => byStep.has(n)).map((step) => ({ step, prompt: byStep.get(step)! })),
       endpoint: result.endpoint,
       model: result.model,
     };

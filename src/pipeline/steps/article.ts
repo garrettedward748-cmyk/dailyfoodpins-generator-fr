@@ -336,13 +336,37 @@ function spreadStepImages(steps: unknown, images: ArticleImages): unknown {
   const positions = chosenPositions(images.stepNumbers, photos.length, steps.length)
     ?? evenPositions(photos.length, steps.length);
 
+  const placed = new Map<number, string>();
+  positions.forEach((position, slot) => placed.set(position, photos[slot]!));
+
+  // The extra method shots (Setup -> Photo styles on 5 or every step), each
+  // on the step it was drawn for. Should that step already hold one of the
+  // three — the even-spread fallback above — or the article came out with
+  // fewer steps than the recipe, it goes on the nearest step without a photo.
+  for (const extra of images.extraSteps ?? []) {
+    if (typeof extra?.path !== 'string' || extra.path === '') continue;
+    const position = nearestFree(Math.trunc(Number(extra.step)) - 1, steps.length, placed);
+    if (position !== undefined) placed.set(position, extra.path);
+  }
+
   return steps.map((step, index) => {
-    const slot = positions.indexOf(index);
+    const image = placed.get(index);
 
-    if (slot === -1 || typeof step !== 'object' || step === null) return step;
+    if (image === undefined || typeof step !== 'object' || step === null) return step;
 
-    return { ...(step as Record<string, unknown>), image: photos[slot] };
+    return { ...(step as Record<string, unknown>), image };
   });
+}
+
+/** The free step closest to `wanted` (earlier wins a tie), or undefined when every step has a photo. */
+function nearestFree(wanted: number, steps: number, placed: Map<number, string>): number | undefined {
+  const start = Number.isInteger(wanted) ? Math.min(Math.max(wanted, 0), steps - 1) : 0;
+  for (let distance = 0; distance < steps; distance++) {
+    for (const position of [start - distance, start + distance]) {
+      if (position >= 0 && position < steps && !placed.has(position)) return position;
+    }
+  }
+  return undefined;
 }
 
 /**

@@ -3,6 +3,7 @@ import { PipelineContext } from './context.js';
 import {
   fetchCategories,
   fetchCuisines,
+  generateExtraStepPrompts,
   generateImagePrompts,
   generateRecipe,
   SpyRejectedError,
@@ -10,9 +11,11 @@ import {
 } from './steps/content.js';
 import {
   ARTICLE_IMAGE_STEPS,
+  extraImageStep,
   generateArticleImages,
   generatePinImage,
   type ArticleImageUploads,
+  type Uploaded,
 } from './steps/images.js';
 import { generateArticle, postArticle } from './steps/article.js';
 import { createReelStep } from './steps/reel.js';
@@ -34,6 +37,7 @@ import {
   setLink,
   setRunTitle,
   getLinksForKeyword,
+  getCompletedStep,
 } from '../db/repos.js';
 import { findDuplicate, type DuplicateMatch } from '../core/similar-title.js';
 import { AlreadyOnSiteError, checkNotOnSite, NotHalalError } from './steps/duplicate.js';
@@ -58,6 +62,7 @@ export const PIPELINE_STEPS = [
   researchGoogle,
   generateRecipe,
   generateImagePrompts,
+  generateExtraStepPrompts,
   ...ARTICLE_IMAGE_STEPS,
   generateArticleImages,
   generateArticle,
@@ -119,9 +124,34 @@ export async function executePipeline(ctx: PipelineContext): Promise<PipelineOut
     for (const step of ARTICLE_IMAGE_STEPS) {
       uploads[step.slot] = await runStep(ctx, step, imagePrompts[step.slot]);
     }
+    // Setup -> Photo styles on 5 or every step: the further method shots,
+    // each its own checkpoint. On 3 this is an empty list and no model call.
+    // Never fatal: a failure here costs the article its extra photographs,
+    // not the article. Skipped on a resume whose images are already collected,
+    // since that checkpoint is what the article will use either way.
+    const extras: { step: number; upload: Uploaded | null }[] = [];
+    if (!(ctx.allowResume && getCompletedStep(ctx.runId, generateArticleImages.name))) {
+      try {
+        const extraShots = await runStep(ctx, generateExtraStepPrompts, { seo, recipe, prompts: imagePrompts });
+        for (const shot of extraShots) {
+          let upload: Uploaded | null = null;
+          try {
+            upload = await runStep(ctx, extraImageStep(shot.step), shot.prompt);
+          } catch (err) {
+            const cause = err instanceof StepFailedError ? err.cause : err;
+            log.warn(`run ${ctx.runId}: step ${shot.step} method shot skipped — ${errorMessage(cause)}`);
+          }
+          extras.push({ step: shot.step, upload });
+        }
+      } catch (err) {
+        const cause = err instanceof StepFailedError ? err.cause : err;
+        log.warn(`run ${ctx.runId}: extra method shots skipped — ${errorMessage(cause)}`);
+      }
+    }
     const images = await runStep(ctx, generateArticleImages, {
       uploads,
       stepNumbers: imagePrompts.stepNumbers,
+      extras,
     });
 
     // A social-only account has no website to publish an article on: the

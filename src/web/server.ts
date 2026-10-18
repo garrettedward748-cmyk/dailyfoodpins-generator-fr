@@ -230,6 +230,7 @@ import {
   readShippedPrompt,
 } from '../pipeline/prompts.js';
 import { unknownVariables, variablesFor } from '../pipeline/prompt-contexts.js';
+import { parseStepPhotoMode } from '../core/step-photos.js';
 import { DETECTED_PUBLIC_URL, SETTING_SPECS, type Settings } from '../settings.js';
 import { getSetting, setSetting } from '../db/repos.js';
 import {
@@ -4931,7 +4932,16 @@ export function buildServer(
   /* -- Setup -> Photo styles ----------------------------------------------- */
 
   app.get('/settings/photo-styles', async (request, reply) =>
-    page(reply, 'Photo styles', '/settings/photo-styles', photoStylesPage(listPhotoStyles(), photoStyleUses()), readFlash(request.query)));
+    page(reply, 'Photo styles', '/settings/photo-styles',
+      photoStylesPage(listPhotoStyles(), photoStyleUses(), parseStepPhotoMode(settings.get('article_step_photos'))),
+      readFlash(request.query)));
+
+  app.post('/settings/photo-styles/step-photos', async (request, reply) => {
+    const mode = parseStepPhotoMode(asString(formBody(request).step_photos));
+    settings.set('article_step_photos', mode);
+    const label = mode === 'all' ? 'every step' : `${mode} method photos`;
+    return redirect(reply, '/settings/photo-styles', { kind: 'ok', message: `Saved: ${label} per recipe, from the next recipe.` });
+  });
 
   app.post('/settings/photo-styles/add', async (request, reply) => {
     const body = formBody(request);

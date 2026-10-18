@@ -83,6 +83,7 @@ export const STEP_CONTEXTS: Record<string, Record<string, unknown>> = {
   // photoShoot is the chosen shoot, or '' when every style is switched off —
   // which is the state the placeholder has to leave no trace in.
   'image-prompts': { seo: SEO, spy: SPY, recipe: { raw: '{}' }, recipeJson: '{}', photoShoot: '' },
+  'extra-step-shots': { title: 'Lemon Bars', recipeJson: '{}', steps: 'Step 2: Press the crust into the pan.', hero: 'the bars', stepA: 'the crust', stepB: 'the filling', stepC: 'the cut bars' },
   'pin-description': {
     seo: SEO,
     cta: 'Try it!',

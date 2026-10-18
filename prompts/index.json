@@ -41,6 +41,12 @@
   "format": null,
   "hasSystem": true
  },
+ "extra-step-shots": {
+  "sourceNode": "Extra method shots",
+  "model": "gemma4:31b",
+  "format": "json",
+  "hasSystem": false
+ },
  "part-3": {
   "sourceNode": "Part 3",
   "model": "gemma4:31b",

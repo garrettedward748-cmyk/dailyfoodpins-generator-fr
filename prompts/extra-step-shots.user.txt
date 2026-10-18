@@ -1,0 +1,31 @@
+Write one more photograph prompt for each of these steps of "{{title}}".
+
+FULL RECIPE:
+{{recipeJson}}
+
+THE STEPS THAT STILL NEED A PHOTOGRAPH:
+{{steps}}
+
+The article already has these photographs. Yours must look like the same
+kitchen on the same day — the same surface, light, props and palette — but
+each must be a visibly different composition from all of them (change the
+angle, the distance, or what is in the frame):
+
+HERO: {{hero}}
+METHOD SHOT: {{stepA}}
+METHOD SHOT: {{stepB}}
+METHOD SHOT: {{stepC}}
+
+For each step:
+- Show the state the step is about — a texture, a shape, a colour, the dish
+  at that moment — close enough to judge it by eye. One still photograph,
+  never what happens before or after.
+- Only what the recipe actually uses: no ingredient or tool it does not have,
+  no alcohol, no pork. No hands. No text in the picture.
+- A serving step shows the dish being served or portioned, not a copy of the
+  hero.
+- End each with: Editorial food blog photography, 3:2.
+
+Answer with one valid JSON object and nothing else, one entry per step listed
+above, with its step number:
+{"shots":[{"step":0,"prompt":""}]}

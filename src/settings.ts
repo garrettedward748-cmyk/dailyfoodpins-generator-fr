@@ -399,6 +399,17 @@ export const SETTING_SPECS: SettingSpec[] = [
 
   // -- Image generation ----------------------------------------------------
   {
+    // Edited on Setup -> Rotation -> Photo styles, beside the shoots, so it is
+    // kept off the settings page.
+    key: 'article_step_photos',
+    label: 'Method photos per recipe',
+    group: 'images',
+    secret: false,
+    hidden: true,
+    default: '3',
+    help: '3, 5 or all — how many steps of the method get their own photograph.',
+  },
+  {
     key: 'image_base_url',
     label: 'Image service URL',
     group: 'images',

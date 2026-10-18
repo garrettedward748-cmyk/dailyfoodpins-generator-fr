@@ -33,6 +33,12 @@ export interface ArticleImages {
    * reel is filmed from a published article.
    */
   stepNumbers?: number[];
+  /**
+   * Method photographs beyond the three, when Setup -> Photo styles asks for
+   * 5 or for every step: each with the recipe step it was drawn for.
+   * Absent on runs made before the setting, and when it is on 3.
+   */
+  extraSteps?: { step: number; path: string }[];
 }
 
 /** One uploaded image: the path the article uses, and the link other sites use. */
@@ -203,6 +209,37 @@ function articleImageStep(slot: ArticleImageSlot): Step<string, Uploaded> {
 export const ARTICLE_IMAGE_STEPS: readonly (Step<string, Uploaded> & { slot: ArticleImageSlot })[] =
   ARTICLE_IMAGE_SLOTS.map((slot) => ({ ...articleImageStep(slot), slot }));
 
+/** Attempts at one extra method photograph before it is given up on. */
+const EXTRA_ATTEMPTS = 2;
+
+/**
+ * One extra method photograph (Setup -> Photo styles on 5 or every step).
+ *
+ * Its own checkpoint, named after the recipe step, so a resume generates only
+ * the ones that are missing. Never shared with the keyword's other sites and
+ * never fatal: after a retry it gives up and answers null, and that step is
+ * published without a picture — an extra is not worth losing the article over.
+ */
+export function extraImageStep(stepNumber: number): Step<string, Uploaded | null> {
+  return {
+    name: `generate-image-method-${stepNumber}`,
+    title: `Generate method shot for step ${stepNumber}`,
+    async run(ctx, prompt) {
+      for (let attempt = 1; attempt <= EXTRA_ATTEMPTS; attempt++) {
+        try {
+          return await generateAndUpload(ctx, prompt, `step ${stepNumber} method shot`, `step-${stepNumber}`);
+        } catch (err) {
+          log.warn(
+            `run ${ctx.runId}: step ${stepNumber} method shot failed (attempt ${attempt}/${EXTRA_ATTEMPTS}) — ` +
+              (err instanceof Error ? err.message : String(err)),
+          );
+        }
+      }
+      return null;
+    },
+  };
+}
+
 /**
  * Collect the four images into the shape the article uses, and record them
  * for the keyword's other sites.
@@ -216,12 +253,16 @@ export const ARTICLE_IMAGE_STEPS: readonly (Step<string, Uploaded> & { slot: Art
  * has to stay unique per site, so `generatePinImage` always generates.
  */
 export const generateArticleImages: Step<
-  { uploads: ArticleImageUploads; stepNumbers: number[] },
+  {
+    uploads: ArticleImageUploads;
+    stepNumbers: number[];
+    extras?: { step: number; upload: Uploaded | null }[];
+  },
   ArticleImages
 > = {
   name: 'generate-images',
   title: 'Collect article images',
-  async run(ctx, { uploads, stepNumbers }) {
+  async run(ctx, { uploads, stepNumbers, extras = [] }) {
     // A social-only account's files are deleted after a few days, so they are
     // not offered to the keyword's other sites to copy.
     if (ctx.shareImages && !isSocialOnly(ctx.site) && !ctx.sharedImages.get(ctx.keyword.id)) {
@@ -239,6 +280,13 @@ export const generateArticleImages: Step<
       stepB: uploads.stepB.path,
       stepC: uploads.stepC.path,
       stepNumbers,
+      ...(extras.length > 0
+        ? {
+            extraSteps: extras
+              .filter((e): e is { step: number; upload: Uploaded } => e.upload !== null)
+              .map((e) => ({ step: e.step, path: e.upload.path })),
+          }
+        : {}),
     };
   },
 };
