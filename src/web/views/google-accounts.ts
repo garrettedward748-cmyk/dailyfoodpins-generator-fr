@@ -25,6 +25,12 @@ function restEnds(until: number | null): string {
 }
 
 /** Setup -> Google accounts: the Flow accounts the image service rotates through. */
+/** A cost bigger than a limit means the account can never make a single clip. */
+function limitBlocksEveryClip(a: GoogleAccountView, cost: number): boolean {
+  if (cost <= 0) return false;
+  return (a.daily_limit != null && cost > a.daily_limit) || (a.monthly_limit != null && cost > a.monthly_limit);
+}
+
 export function googleAccountsPage(data: {
   reachable: boolean;
   error?: string;
@@ -37,6 +43,8 @@ export function googleAccountsPage(data: {
   restore?: { count: number } | null;
 }): Html {
   const many = data.accounts.length > 1;
+  const clipCost = data.clipCost ?? 0;
+  const blocked = data.accounts.filter((a) => a.video !== false && limitBlocksEveryClip(a, clipCost));
   return html`
     <h1>Google accounts</h1>
     <p class="subtitle">
@@ -121,6 +129,9 @@ export function googleAccountsPage(data: {
                               <button type="submit" class="small">Save</button>
                             </form>
                             <div class="small muted">used ${a.used_today ?? 0} today · ${a.used_month ?? 0} this month</div>
+                            ${a.video !== false && limitBlocksEveryClip(a, clipCost)
+                              ? html`<div class="small" style="color:var(--danger, #e5484d)">One clip (${clipCost}) is more than this limit: this account can never make a reel.</div>`
+                              : raw('')}
                           </td>
                           <td class="nowrap">
                             <form method="post" action="/settings/google/${a.id}/use" style="display:inline">
@@ -146,14 +157,22 @@ export function googleAccountsPage(data: {
                   </table>
                 </div>`}
 
+            ${blocked.length
+              ? html`<div class="flash error" style="margin-top:14px">
+                  One video clip is set to cost ${clipCost} credits, more than the limit of account${blocked.length === 1 ? '' : 's'}
+                  ${blocked.map((a) => `#${a.id}`).join(', ')}: ${blocked.length === 1 ? 'it' : 'they'} can never make a reel.
+                  Set the real cost (about 20), or 0 to stop counting.
+                </div>`
+              : raw('')}
             <form method="post" action="/settings/google/clip-cost" class="row wrap" style="gap:8px;margin-top:14px;align-items:flex-end">
               <div class="field" style="margin:0;min-width:220px">
                 <label for="g-cost">Credits one video clip costs</label>
-                <input id="g-cost" type="number" min="1" name="clip_cost" value="${data.clipCost ?? 20}" style="width:120px" />
+                <input id="g-cost" type="number" min="0" name="clip_cost" value="${clipCost}" style="width:120px" />
               </div>
               <button type="submit">Save</button>
               <span class="small muted" style="max-width:420px">
-                A reel is several clips. With a limit set, the account hands over before the next clip would pass it,
+                0 = clips are not counted: no limit stops an account, it works until Google says its credits are gone.
+                Above 0, a reel is several clips: with a limit set, the account hands over before the next clip would pass it,
                 and rests until the next day or month. Leave a limit blank for none.
               </span>
             </form>

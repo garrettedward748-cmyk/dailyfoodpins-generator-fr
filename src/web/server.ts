@@ -3122,7 +3122,7 @@ export function buildServer(
         await put(`/flow/accounts/${id}/capabilities`, { images: acc.images, video: acc.video });
         done += 1;
       }
-      if (saved.clip_cost) await put('/flow/accounts-clip-cost', { clip_cost: saved.clip_cost });
+      if (saved.clip_cost != null) await put('/flow/accounts-clip-cost', { clip_cost: saved.clip_cost });
       // What the service holds now is the truth; the next visit saves it afresh.
       settings.set('google_accounts_snapshot', '');
       return redirect(reply, '/settings/google', {
@@ -3250,7 +3250,7 @@ export function buildServer(
     try {
       const response = await imageService('/flow/accounts-clip-cost', {
         method: 'PUT',
-        body: JSON.stringify({ clip_cost: Math.max(1, asNumber(formBody(request).clip_cost, 20)) }),
+        body: JSON.stringify({ clip_cost: Math.max(0, Math.round(asNumber(formBody(request).clip_cost, 0))) }),
       });
       if (!response.ok) throw new Error(await imageServiceError(response));
       return redirect(reply, '/settings/google', { kind: 'ok', message: 'Clip cost saved.' });

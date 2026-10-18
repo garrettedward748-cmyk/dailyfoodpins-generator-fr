@@ -139,6 +139,7 @@ def test_a_credit_limit_moves_on_before_google_refuses(isolated):
 
 
 def test_no_limit_means_never_counted_against(isolated):
+    accounts.set_clip_cost(20)
     accounts.record_clip()
     accounts.record_clip()
     assert accounts.active_affords_clip()
@@ -250,6 +251,7 @@ def test_a_limit_rest_ends_when_the_limit_is_raised_or_the_count_is_under_it(iso
     new = accounts.add("")
     accounts.mark_ok(new["id"])
     accounts.set_project(new["id"], "p")
+    accounts.set_clip_cost(20)
     accounts.set_limits(new["id"], 60, None)
     data = accounts._load()
     acct = next(a for a in data["accounts"] if a["id"] == new["id"])
@@ -262,4 +264,31 @@ def test_a_limit_rest_ends_when_the_limit_is_raised_or_the_count_is_under_it(iso
     data = accounts._load()
     next(a for a in data["accounts"] if a["id"] == new["id"])["daily_limit"] = 90
     accounts._save(data)
+    assert next(a for a in accounts.list_accounts()["accounts"] if a["id"] == new["id"])["status"] == "ok"
+
+
+def test_a_clip_cost_of_zero_counts_nothing_and_no_limit_stops_work(isolated):
+    assert accounts.DEFAULT_CLIP_COST == 0
+    accounts.set_limits(1, daily=50, monthly=50)
+    accounts.record_clip()
+    accounts.record_clip()
+    accounts.record_clip()
+    assert accounts.active_affords_clip()
+    listed = next(a for a in accounts.list_accounts()["accounts"] if a["id"] == 1)
+    assert listed["used_today"] == 0
+
+
+def test_setting_the_cost_to_zero_ends_limit_rests(isolated):
+    import time as _t
+    new = accounts.add("")
+    accounts.mark_ok(new["id"])
+    accounts.set_project(new["id"], "p")
+    accounts.set_clip_cost(10000)
+    accounts.set_limits(new["id"], 105, None)
+    data = accounts._load()
+    acct = next(a for a in data["accounts"] if a["id"] == new["id"])
+    acct.update(status="cooldown", until=_t.time() + 3 * 3600, reason="Reached the credit limit set for it")
+    accounts._save(data)
+    assert next(a for a in accounts.list_accounts()["accounts"] if a["id"] == new["id"])["status"] == "cooldown"
+    accounts.set_clip_cost(0)
     assert next(a for a in accounts.list_accounts()["accounts"] if a["id"] == new["id"])["status"] == "ok"

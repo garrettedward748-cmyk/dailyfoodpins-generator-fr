@@ -62,7 +62,9 @@ UNUSUAL_COOLDOWN_M = float(os.environ.get("ACCOUNT_UNUSUAL_COOLDOWN_MINUTES", "1
 LIMIT_MARKER = "credit limit reached"
 
 # What one video clip costs in Flow credits, until someone sets it on the page.
-DEFAULT_CLIP_COST = 20
+# 0 means clips are not counted at all: no credit limit ever stops an account,
+# and work goes on until Google itself says the credits are gone.
+DEFAULT_CLIP_COST = 0
 
 
 def _now() -> float:
@@ -93,7 +95,7 @@ def _end_stale_limit_rests(data: dict) -> dict:
     count was reset, which showed "resting, reached the limit" beside a count
     under it. The limit is the truth, not the clock.
     """
-    cost = int(data.get("clip_cost") or DEFAULT_CLIP_COST)
+    cost = _clip_cost(data)
     for account in data.get("accounts", []):
         if account.get("status") == "cooldown" and str(account.get("reason") or "").startswith(LIMIT_REST_PREFIX) \
                 and _affords(account, cost):
@@ -455,10 +457,13 @@ def set_unusual_rest(minutes: float) -> None:
 
 
 def _clip_cost(data: dict) -> int:
-    return int(data.get("clip_cost") or DEFAULT_CLIP_COST)
+    value = data.get("clip_cost")
+    return max(0, int(value)) if value is not None else DEFAULT_CLIP_COST
 
 
 def _affords(account: dict, cost: int) -> bool:
+    if cost <= 0:
+        return True  # clips are not counted: no limit can stop the account
     daily, monthly = account.get("daily_limit"), account.get("monthly_limit")
     if daily is not None and _used(account, _today_from(account)) + cost > daily:
         return False
@@ -479,10 +484,12 @@ def record_clip() -> None:
     current = next((a for a in data["accounts"] if a["id"] == data["active"]), None)
     if current is None:
         return
-    cutoff = _now() - 32 * 86400
-    spend = [s for s in current.get("spend", []) if s[0] >= cutoff]
-    spend.append([_now(), _clip_cost(data)])
-    current["spend"] = spend
+    cost = _clip_cost(data)
+    if cost > 0:
+        cutoff = _now() - 32 * 86400
+        spend = [s for s in current.get("spend", []) if s[0] >= cutoff]
+        spend.append([_now(), cost])
+        current["spend"] = spend
     current["unusual"] = 0
     _save(data)
 
@@ -504,7 +511,7 @@ def set_limits(account_id: int, daily: Optional[int], monthly: Optional[int]) ->
 
 def set_clip_cost(cost: int) -> None:
     data = _load()
-    data["clip_cost"] = max(1, int(cost))
+    data["clip_cost"] = max(0, int(cost))
     _save(data)
 
 
