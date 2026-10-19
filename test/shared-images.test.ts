@@ -389,6 +389,23 @@ describe('generateArticleImages sharing behaviour', () => {
     }
   });
 
+  it('generates only an empty slot and still copies the ones after it', async () => {
+    // A recipe moved from an old site with a hero and a finished-dish photo,
+    // but nothing for the first two method shots.
+    const { ctx, rec } = fakeContext({
+      shareImages: true,
+      cached: { ...CACHED, stepA: '', stepB: '  ' },
+    });
+
+    await runImages(ctx, PROMPTS);
+
+    expect(rec.generated).toEqual(['p-top', 'p-texture']);
+    expect(rec.downloaded).toEqual([CACHED.hero, CACHED.stepC]);
+    expect(rec.cleared).toHaveLength(0);
+    expect(rec.saved).toHaveLength(0);
+    expect(rec.imagesCounted).toBe(2);
+  });
+
   it('falls back to generating when a cached url cannot be downloaded', async () => {
     const { ctx, rec } = fakeContext({
       shareImages: true,

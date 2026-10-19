@@ -178,7 +178,12 @@ function articleImageStep(slot: ArticleImageSlot): Step<string, Uploaded> {
     async run(ctx, prompt) {
       const cached = ctx.shareImages ? ctx.sharedImages.get(ctx.keyword.id) : undefined;
 
-      if (cached) {
+      // A set can leave a slot empty on purpose (a recipe moved from an old
+      // site that had no photograph for that moment): generate just that one
+      // and keep the set, so the slots after it are still copied.
+      if (cached && !cached[slot]?.trim()) {
+        log.debug(`shared "${label}" for keyword ${ctx.keyword.id} is empty; generating it`);
+      } else if (cached) {
         try {
           return await copyFromUrl(ctx, cached[slot], label, slot);
         } catch (err) {
