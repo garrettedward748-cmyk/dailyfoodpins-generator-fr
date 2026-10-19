@@ -168,6 +168,7 @@ import {
   postsToAll,
   setPostToAll,
   addProfile,
+  startSiteOff,
   getProfile,
   updateProfile,
   deleteProfile,
@@ -1461,7 +1462,7 @@ export function buildServer(
     const views = listSites().map((x) => {
       const site = getSite(x.id) as (SiteRow & { ig_posts?: number; ig_reels?: number; yt_reels?: number; tt_reels?: number }) | undefined;
       // Every site has at least account 1 of each network, so there is always somewhere to put a token.
-      for (const platform of ['pinterest', 'facebook', 'instagram', 'youtube', 'tiktok'] as const) firstProfile(x.id, platform);
+      for (const platform of ['pinterest', 'facebook', 'instagram', 'youtube', 'tiktok'] as const) firstProfile(x.id, platform, { off: true });
       return {
         id: x.id,
         domain: x.domain,
@@ -1515,8 +1516,8 @@ export function buildServer(
     const siteId = asNumber(params.siteId, 0);
     const platform = (['pinterest', 'facebook', 'instagram', 'youtube', 'tiktok'] as const).find((p) => p === params.platform);
     if (!platform || !getSite(siteId)) return redirect(reply, '/accounts', { kind: 'error', message: 'Site not found' });
-    firstProfile(siteId, platform);
-    const id = addProfile(siteId, platform);
+    firstProfile(siteId, platform, { off: true });
+    const id = addProfile(siteId, platform, { off: true });
     const added = getProfile(id)!;
     return redirect(reply, `/accounts#profile-${id}`, {
       kind: 'ok',
@@ -2004,7 +2005,8 @@ export function buildServer(
             'For more Pinterest, Facebook or other accounts on the same site, add them under Channels → Accounts.',
         );
       }
-      saveSite(body);
+      // A new site publishes nowhere until its owner turns a network on.
+      startSiteOff(saveSite(body));
       return redirect(reply, '/sites', {
         kind: 'ok',
         message: isSocialOnly({ domain: key }) ? `Social-only account "${key}" added.` : 'Site added.',

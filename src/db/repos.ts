@@ -213,25 +213,45 @@ const PLATFORM_NAME: Record<ProfilePlatform, string> = { pinterest: 'Pinterest',
  * with the first one's boards (same general board, same group -> board lines),
  * so only its username and Buffer token are left to fill.
  */
-export function addProfile(siteId: number, platform: ProfilePlatform): number {
+export function addProfile(siteId: number, platform: ProfilePlatform, options: { off?: boolean } = {}): number {
   const existing = listProfiles(siteId, platform);
   const position = (existing.at(-1)?.position ?? 0) + 1;
   const first = existing[0];
+  // `off`: what a person adding an account from the interface gets -- switched
+  // off with Posts and Reels unticked, so it publishes nothing (and spends no
+  // image generations on pins) until its owner turns it on.
+  const on = options.off ? 0 : 1;
   run(
-    `INSERT INTO channel_profiles (site_id, platform, position, label, default_board, board_map)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO channel_profiles (site_id, platform, position, label, default_board, board_map, enabled, posts, reels)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     siteId, platform, position, `${PLATFORM_NAME[platform]} ${position}`,
     platform === 'pinterest' ? first?.default_board ?? '' : '',
     platform === 'pinterest' ? first?.board_map ?? '' : '',
+    on, on, on,
   );
   return get<{ id: number }>('SELECT last_insert_rowid() AS id')?.id ?? 0;
 }
 
+/**
+ * A site just added from the interface: every network off. Pinterest and
+ * Instagram posts and reels unticked on the site too (a new site row starts
+ * with Pinterest posts on), and account 1 of each network made switched off.
+ */
+export function startSiteOff(siteId: number): void {
+  run(
+    "UPDATE sites SET pin_posts = 0, pin_reels = 0, ig_posts = 0, ig_reels = 0, updated_at = datetime('now') WHERE id = ?",
+    siteId,
+  );
+  for (const platform of ['pinterest', 'facebook', 'instagram', 'youtube', 'tiktok'] as const) {
+    firstProfile(siteId, platform, { off: true });
+  }
+}
+
 /** The first account of a network, made when a site has none yet. */
-export function firstProfile(siteId: number, platform: ProfilePlatform): ChannelProfile {
+export function firstProfile(siteId: number, platform: ProfilePlatform, options: { off?: boolean } = {}): ChannelProfile {
   const found = listProfiles(siteId, platform)[0];
   if (found) return found;
-  return getProfile(addProfile(siteId, platform))!;
+  return getProfile(addProfile(siteId, platform, options))!;
 }
 
 export function updateProfile(
