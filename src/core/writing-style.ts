@@ -349,7 +349,16 @@ const TEMPERATURE = /(\d{2,3}(?:\s?[-–]\s?\d{2,3})?)\s?°\s?([CF])\b/g;
  */
 function bracketed(text: string, index: number): boolean {
   // "(about 2 cups)" and "(roughly 8 oz)" are still the second figure.
-  return /[([]\s*(?:(?:about|around|roughly|approx\.?|approximately|or|~|≈)\s*)?$/i.test(text.slice(Math.max(0, index - 20), index));
+  const before = text.slice(Math.max(0, index - 40), index);
+  if (/[([]\s*(?:(?:about|around|roughly|approx\.?|approximately|or|~|≈)\s*)?$/i.test(before)) return true;
+
+  // A size in brackets names its last figure after the others: "9 x 5-inch
+  // (23 x 12.7 cm)", "(20 to 23 cm)". The figure is still inside the bracket,
+  // so it is the second system; only numbers and joining words may sit between.
+  const open = Math.max(before.lastIndexOf('('), before.lastIndexOf('['));
+  if (open === -1) return false;
+  const inside = before.slice(open + 1);
+  return !/[)\]]/.test(inside) && /^\s*(?:about|around|roughly|approx\.?|approximately|~|≈)?[\s\d.,/]*(?:(?:cm|mm|x|×|by|to|and|-|–)[\s\d.,/]*)*$/i.test(inside);
 }
 
 /** Temperatures in the wrong scale that are not in brackets. */

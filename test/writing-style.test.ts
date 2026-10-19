@@ -155,6 +155,16 @@ describe('weights, volumes and lengths', () => {
     expect(measureProblems('Cut into 1.3 cm strips.', 'us', 'x')).toHaveLength(1);
   });
 
+  it('accepts a bracketed size whose last figure carries the unit', () => {
+    // REGRESSION: a loaf pan written the usual way failed every attempt on "12.7 cm".
+    expect(measureProblems('Grease a 9 x 5-inch (23 x 12.7 cm) loaf pan.', 'us', 'x')).toEqual([]);
+    expect(measureProblems('Use an 8- or 9-inch (20 to 23 cm) pan.', 'us', 'x')).toEqual([]);
+    expect(measureProblems('A 9x13-inch (23x33 cm) dish.', 'us', 'x')).toEqual([]);
+    // Still caught: the bracket is closed, or holds words, before the figure.
+    expect(measureProblems('Use a pan (a big one) of 23 x 12.7 cm.', 'us', 'x')).toHaveLength(1);
+    expect(measureProblems('Use a pan (lined with paper, 23 cm wide).', 'us', 'x')).toHaveLength(1);
+  });
+
   it('refuses imperial amounts on a British site', () => {
     expect(measureProblems('Add 2 cups of flour and 8 oz butter.', 'uk', 'x')).toHaveLength(2);
     expect(measureProblems('Add 250 g flour (about 2 cups).', 'uk', 'x')).toEqual([]);
