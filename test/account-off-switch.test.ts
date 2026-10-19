@@ -137,7 +137,10 @@ describe('the Pinterest and Instagram steps', () => {
       postUrl: 'https://s.com/recipe/lemon-bars',
       heroImageUrl: '/image/recipes/hero.webp',
     });
-    expect(out).toMatchObject({ skipped: expect.stringContaining('switched off') });
+    // Turning the only account off now also turns the site's Instagram posts
+    // off, so the step stops there; either way nothing is posted.
+    expect(out).toMatchObject({ skipped: expect.stringMatching(/switched off|posts are off/) });
+    expect(uploadImage).not.toHaveBeenCalled();
   });
 });
 

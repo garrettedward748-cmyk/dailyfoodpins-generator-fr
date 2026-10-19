@@ -189,7 +189,10 @@ export function setProfileKinds(id: number, posts: boolean, reels: boolean): voi
 
 function syncSiteKinds(siteId: number, platform: 'pinterest' | 'instagram'): void {
   const any = (kind: ProfileKind) =>
-    get<{ n: number }>(`SELECT COUNT(*) AS n FROM channel_profiles WHERE site_id = ? AND platform = ? AND ${kind} = 1`, siteId, platform)?.n ? 1 : 0;
+    // Only an account that is switched on counts: one turned off with its
+    // ticks still set used to leave the site's switch on, so the site kept
+    // making pin graphics and reels for an account that publishes nothing.
+    get<{ n: number }>(`SELECT COUNT(*) AS n FROM channel_profiles WHERE site_id = ? AND platform = ? AND enabled = 1 AND ${kind} = 1`, siteId, platform)?.n ? 1 : 0;
   const [postsCol, reelsCol] = platform === 'pinterest' ? ['pin_posts', 'pin_reels'] : ['ig_posts', 'ig_reels'];
   run(`UPDATE sites SET ${postsCol} = ?, ${reelsCol} = ?, updated_at = datetime('now') WHERE id = ?`, any('posts'), any('reels'), siteId);
 }
@@ -264,6 +267,13 @@ export function updateProfile(
     `UPDATE channel_profiles SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`,
     ...keys.map((k) => fields[k] as string | number), id,
   );
+  // Turning an account on or off changes what its site makes.
+  if ('enabled' in fields) {
+    const profile = getProfile(id);
+    if (profile && (profile.platform === 'pinterest' || profile.platform === 'instagram')) {
+      syncSiteKinds(profile.site_id, profile.platform);
+    }
+  }
 }
 
 /** Remove an account and its Buffer tokens. The last one of a network stays (its settings are the site's). */

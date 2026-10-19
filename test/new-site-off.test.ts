@@ -60,6 +60,24 @@ describe('a site added from the interface starts with every network off', () => 
     expect(added.position).toBe(2);
   });
 
+  it('REGRESSION new.recipenestle.com: an account switched off with its ticks still set makes no pins or reels', () => {
+    const siteId = newSite('new.example.com');
+    const pin = firstProfile(siteId, 'pinterest'); // on, Posts and Reels ticked
+    const ig = firstProfile(siteId, 'instagram');
+    setProfileKinds(pin.id, true, true);
+    setProfileKinds(ig.id, true, true);
+
+    updateProfile(pin.id, { enabled: 0 });
+    updateProfile(ig.id, { enabled: 0 });
+
+    const site = getSite(siteId) as { pin_posts: number; pin_reels: number; ig_posts: number; ig_reels: number };
+    expect([site.pin_posts, site.pin_reels, site.ig_posts, site.ig_reels]).toEqual([0, 0, 0, 0]);
+
+    updateProfile(pin.id, { enabled: 1 });
+    expect((getSite(siteId) as { pin_posts: number; pin_reels: number }).pin_posts).toBe(1);
+    expect((getSite(siteId) as { pin_posts: number; pin_reels: number }).pin_reels).toBe(1);
+  });
+
   it('leaves the code default alone: an account made without the option is on', () => {
     const siteId = newSite('old.example.com');
     const pin = firstProfile(siteId, 'pinterest');
