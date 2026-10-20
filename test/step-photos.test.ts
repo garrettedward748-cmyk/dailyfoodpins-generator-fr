@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extraStepNumbers, parseStepPhotoMode, recipeStepCount, recipeStepText } from '../src/core/step-photos.js';
+import { alignRecipeToArticle, extraStepNumbers, parseStepPhotoMode, recipeStepCount, recipeStepText } from '../src/core/step-photos.js';
 import { attachSiteFields } from '../src/pipeline/steps/article.js';
 
 describe('parseStepPhotoMode', () => {
@@ -82,5 +82,58 @@ describe('spreading extra method photos', () => {
     const filled = attachSiteFields(article, input([]) as never);
     const images = (filled.steps as { image?: string }[]).map((s) => s.image);
     expect(images.filter(Boolean)).toEqual(['/a.webp', '/b.webp', '/c.webp']);
+  });
+});
+
+describe('an article that merged two recipe steps into one', () => {
+  // The beef gyro: the recipe heats the grill and grills the steak in two
+  // steps, the article in one. Placed by number, every photograph after it
+  // showed the step before (resting under the grilling photo, slicing under
+  // the foil, assembling under the slices).
+  const recipe = {
+    step_1: 'Whisk the Greek yoghurt, grated cucumber, lemon juice, dill and salt for the tzatziki and chill it.',
+    step_2: 'Marinate the flank steak with olive oil, garlic, lemon juice, oregano, salt and pepper.',
+    step_3: 'Pre-heat the grill pan to 200C and pat the steak dry with paper towels.',
+    step_4: 'Grill the steak 3-4 minutes per side until 60C inside for medium-rare.',
+    step_5: 'Rest the steak on a cutting board, loosely covered with foil, for 5 minutes.',
+    step_6: 'Slice the rested steak thinly against the grain and warm the pita breads in a dry pan.',
+    step_7: 'Assemble the gyros: steak slices, tomato, onion, lettuce and tzatziki on each pita, then roll tight.',
+    step_8: '', step_9: '', step_10: '',
+  };
+  const article = {
+    title: 'Beef Steak Gyro',
+    steps: [
+      { heading: 'Prepare the tzatziki', body: 'Whisk together the Greek yoghurt, grated cucumber, lemon juice, dill and salt. Chill it.' },
+      { heading: 'Marinate the steak', body: 'Place the flank steak in a bowl with olive oil, minced garlic, lemon juice, oregano, salt and pepper.' },
+      { heading: 'Grill the beef', body: 'Pre-heat your grill pan to 200C. Pat the steak dry with paper towels. Grill for 3-4 minutes per side until 60C for medium-rare.' },
+      { heading: 'Rest the meat', body: 'Transfer the steak to a cutting board and cover it loosely with foil. Let it rest for 5 minutes.' },
+      { heading: 'Slice and warm', body: 'Slice the rested steak thinly against the grain. Warm your pita breads in a dry pan.' },
+      { heading: 'Assemble the gyros', body: 'Lay the steak slices on each pita and add the tomato, onion and lettuce, tzatziki, then roll the pita tight.' },
+    ],
+  };
+  const run = (stepNumbers: number[], extraSteps: { step: number; path: string }[]) =>
+    ((attachSiteFields(article, {
+      seo: { keyword: 'k', title: 'Gyro', description: 'd', category: 'Lunch', cuisine: '' },
+      recipe: { raw: '', parsed: recipe },
+      images: { hero: '/h.webp', stepA: '/s2.webp', stepB: '/s4.webp', stepC: '/s6.webp', stepNumbers, extraSteps },
+    } as never).steps) as { image?: string }[]).map((s) => s.image);
+
+  it('puts each photograph on the step that tells its moment', () => {
+    expect(run([2, 4, 6], [
+      { step: 1, path: '/s1.webp' }, { step: 3, path: '/s3.webp' }, { step: 5, path: '/s5.webp' }, { step: 7, path: '/s7.webp' },
+    ])).toEqual(['/s1.webp', '/s2.webp', '/s4.webp', '/s5.webp', '/s6.webp', '/s7.webp']);
+  });
+
+  it('with only the three, still puts them on the right steps', () => {
+    expect(run([2, 5, 6], [])).toEqual([undefined, '/s2.webp', undefined, '/s4.webp', '/s6.webp', undefined]);
+  });
+});
+
+describe('lining up recipe steps with article steps', () => {
+  it('maps one to one when the texts follow each other', () => {
+    expect(alignRecipeToArticle(['boil the pasta', 'make the sauce', 'toss and serve'], ['Boil pasta in salted water', 'Make a garlic sauce', 'Toss the pasta and serve'])).toEqual([0, 1, 2]);
+  });
+  it('sends two merged recipe steps to the same article step', () => {
+    expect(alignRecipeToArticle(['chop the onion', 'heat the oven', 'roast the chicken', 'carve and serve'], ['Chop the onion', 'Heat the oven and roast the chicken', 'Carve and serve'])).toEqual([0, 1, 1, 2]);
   });
 });

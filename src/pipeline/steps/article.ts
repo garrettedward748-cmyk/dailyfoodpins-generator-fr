@@ -17,6 +17,7 @@ import {
   type PartName, type RuleContext,
 } from '../../core/article-rules.js';
 import { timeBlocks } from '../../core/recipe-times.js';
+import { alignRecipeToArticle, recipeStepTexts } from '../../core/step-photos.js';
 import { normaliseStyle, styleBlocks, type WritingStyle } from '../../core/writing-style.js';
 
 const log = createLogger('article');
@@ -306,7 +307,7 @@ export function attachSiteFields(
     delete filled.cuisine;
   }
 
-  filled.steps = spreadStepImages(named.steps, input.images);
+  filled.steps = spreadStepImages(named.steps, input.images, input.recipe?.parsed);
 
   return filled;
 }
@@ -324,7 +325,7 @@ export function attachSiteFields(
  * numbers that are missing, repeated, or not in the recipe at all. A
  * misplaced photograph is worth having; no photograph is not.
  */
-function spreadStepImages(steps: unknown, images: ArticleImages): unknown {
+function spreadStepImages(steps: unknown, images: ArticleImages, recipe?: Record<string, unknown>): unknown {
   if (!Array.isArray(steps) || steps.length === 0) return steps;
 
   const photos = [images.stepA, images.stepB, images.stepC].filter(
@@ -332,6 +333,9 @@ function spreadStepImages(steps: unknown, images: ArticleImages): unknown {
   );
 
   if (photos.length === 0) return steps;
+
+  const aligned = placeByContent(steps, images, photos, recipe);
+  if (aligned) return withImages(steps, aligned);
 
   const positions = chosenPositions(images.stepNumbers, photos.length, steps.length)
     ?? evenPositions(photos.length, steps.length);
@@ -349,6 +353,10 @@ function spreadStepImages(steps: unknown, images: ArticleImages): unknown {
     if (position !== undefined) placed.set(position, extra.path);
   }
 
+  return withImages(steps, placed);
+}
+
+function withImages(steps: unknown[], placed: Map<number, string>): unknown[] {
   return steps.map((step, index) => {
     const image = placed.get(index);
 
@@ -356,6 +364,62 @@ function spreadStepImages(steps: unknown, images: ArticleImages): unknown {
 
     return { ...(step as Record<string, unknown>), image };
   });
+}
+
+function articleStepText(step: unknown): string {
+  if (typeof step === 'string') return step;
+  if (!step || typeof step !== 'object') return '';
+  const o = step as Record<string, unknown>;
+  return [o.heading, o.body, o.text].filter((v) => typeof v === 'string').join(' ');
+}
+
+/**
+ * The photographs placed by what the steps say, for an article whose method
+ * does not have the recipe's number of steps; undefined when the numbers
+ * agree (each photograph then goes on its own number, as before) or when
+ * there is nothing to compare.
+ *
+ * Every photograph was drawn for a recipe step. Each goes on the article step
+ * that recipe step became. Two recipe steps the article merged into one want
+ * the same place: the photograph of the later one keeps it and the other is
+ * left out — a photograph one step late shows the cook the
+ * wrong moment, which is worse than one photograph fewer.
+ */
+function placeByContent(
+  steps: unknown[],
+  images: ArticleImages,
+  photos: string[],
+  recipe: Record<string, unknown> | undefined,
+): Map<number, string> | undefined {
+  const recipeTexts = recipe && typeof recipe === 'object' ? recipeStepTexts(recipe) : [];
+  if (recipeTexts.length === 0 || recipeTexts.length === steps.length) return undefined;
+
+  const numbers = (images.stepNumbers ?? []).slice(0, photos.length).map((n) => Math.trunc(Number(n)));
+  const mainUsable = numbers.length === photos.length
+    && numbers.every((n) => Number.isInteger(n) && n >= 1 && n <= recipeTexts.length)
+    && new Set(numbers).size === numbers.length;
+  if (!mainUsable) return undefined;
+
+  const articleTexts = steps.map(articleStepText);
+  const map = alignRecipeToArticle(recipeTexts, articleTexts);
+
+  const wanted = [
+    ...photos.map((path, slot) => ({ step: numbers[slot]!, path })),
+    ...(images.extraSteps ?? [])
+      .filter((e) => typeof e?.path === 'string' && e.path !== '')
+      .map((e) => ({ step: Math.trunc(Number(e.step)), path: e.path })),
+  ]
+    .filter((w) => Number.isInteger(w.step) && w.step >= 1 && w.step <= recipeTexts.length)
+    .map((w) => ({ ...w, target: map[w.step - 1]! }))
+    // The later moment first: a step that merges "heat the pan" and "sear
+    // the steak" ends on the seared steak, which is what its photo should show.
+    .sort((x, y) => y.step - x.step);
+
+  const placed = new Map<number, string>();
+  for (const w of wanted) {
+    if (!placed.has(w.target)) placed.set(w.target, w.path);
+  }
+  return placed;
 }
 
 /** The free step closest to `wanted` (earlier wins a tie), or undefined when every step has a photo. */
