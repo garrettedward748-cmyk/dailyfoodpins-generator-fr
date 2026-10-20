@@ -25,7 +25,9 @@ Return ONLY this JSON, with every key filled:
 
 - notes_html: exactly two sections, each an <h2> then one <p> of 40 to 60
   words. Pick two of: « Avec quoi servir ce plat », « À préparer à l'avance »,
-  « Conservation et réchauffage », « Réussir la texture ».
+  « Conservation et réchauffage », « Réussir la texture ». Storage advice is
+  food-safe: cooked food 2 to 4 days in the fridge, weeks to months in the
+  freezer, never more than 2 hours at room temperature.
 - faqs: exactly three {"question": "", "answer_html": ""}. Practical
   questions the steps do not already answer. Each answer one <p>, 25 to 50
   words, direct answer first.

@@ -68,6 +68,10 @@ ingredients
 - 8 to 14 lines; when the source lists more than 14 ingredients, one line
   per source ingredient instead (never drop one). Do NOT group them into sections and do NOT add a "section"
   key: this site lists ingredients as one flat list.
+- The same ingredient used in two parts of the dish (lemon juice in the sauce
+  and in the marinade, salt in both) gets one line per part, and each of those
+  lines says in its note which part it is for: « pour le tzatziki », « pour la
+  marinade ». Without it the list reads as a mistake: the same thing twice.
 
 steps
 - An array of 6 to 8 objects, in order.

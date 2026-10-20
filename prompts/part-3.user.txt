@@ -55,6 +55,11 @@ notes_html
   between them.
 - Use the source's serving suggestions and storage notes. Where the source
   is silent, say what the technique implies, not what would be nice.
+- Storage advice must be food-safe and put each time in the right place:
+  cooked food keeps 2 to 4 days in the fridge, and weeks to a few months in
+  the freezer. Never "freezer for a few days", and never leave cooked meat,
+  fish, eggs or dairy (yoghurt sauces included) at room temperature for more
+  than 2 hours.
 - Format: <h2>Avec quoi servir ce plat</h2><p>…</p><h2>À préparer à l'avance</h2><p>…</p>
   Headings are in French, sentence case, no final full stop.
 
