@@ -2,6 +2,10 @@ services:
   platform:
     build: .
     restart: unless-stopped
+    # CPU ceiling: ffmpeg (reels) and sharp can use every core on the host and
+    # slow every other site and generator on the same VPS. Override per stack
+    # with PLATFORM_CPUS in Dokploy's environment.
+    cpus: ${PLATFORM_CPUS:-2}
     expose:
       - "8080"
     environment:
@@ -37,6 +41,9 @@ services:
   imagegen:
     build: ./services/imagegen
     restart: unless-stopped
+    # Chrome renders Flow in software and took ~3 cores on a shared VPS.
+    # Override per stack with IMAGEGEN_CPUS.
+    cpus: ${IMAGEGEN_CPUS:-2}
     environment:
       - API_KEY=${IMAGE_API_KEY:-}
       - FLOW_PROJECT_ID
