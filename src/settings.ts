@@ -166,7 +166,10 @@ export const SETTING_SPECS: SettingSpec[] = [
     label: 'Check every (minutes)',
     group: 'schedule',
     secret: false,
-    default: '15',
+    // 1, not 15: each site still keeps its own gap between posts, so this only
+    // decides how late a due article may start. At 15 a site set to post
+    // every 10 minutes managed one every 18-19 (3 to write, 15 waiting).
+    default: '1',
     type: 'number',
     help:
       'How often the platform looks for something to publish. 1 to 5 minutes is ' +
