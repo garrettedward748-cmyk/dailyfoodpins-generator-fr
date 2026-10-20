@@ -64,11 +64,11 @@ describe('the Facebook photo post', () => {
   const input = { seo: { title: 'Lemon Bars' } as never, title: 'Lemon Bars', postUrl: 'https://d.com/r', pinImageUrl: '/p.webp' };
   beforeEach(() => { run('UPDATE fb_pages SET posts = 1 WHERE id = ?', addManualFbPage({ name: 'Page', siteId: SITE })); });
 
-  it('carries the recipe under the text and the link last, by default', async () => {
+  it('leads with the link, then the text and the recipe, by default', async () => {
     await facebookPostStep.run(ctx({}), input);
-    expect(sent[0]!.text).toMatch(/^Tangy and bright\.\n\nPréparation 15 minutes\n\nINGRÉDIENTS\n• 2 lemons/);
+    expect(sent[0]!.text).toMatch(/^La recette complète : https:\/\/d\.com\/r\n\nTangy and bright\.\n\nPréparation 15 minutes\n\nINGRÉDIENTS\n• 2 lemons/);
     expect(sent[0]!.text).toContain('PRÉPARATION\n1. Mix.\n2. Bake.');
-    expect(sent[0]!.text.endsWith('La recette complète : https://d.com/r')).toBe(true);
+    expect(sent[0]!.text.endsWith('2. Bake.')).toBe(true);
     expect(sent[0]!.firstComment).toBeUndefined();
   });
 
@@ -84,18 +84,18 @@ describe('the Facebook photo post', () => {
 
   it('is the old post when the recipe is off', async () => {
     await facebookPostStep.run(ctx({ caption_fb_post_recipe: 'none' }), input);
-    expect(sent[0]!.text).toBe('Tangy and bright.\n\nLa recette complète : https://d.com/r');
+    expect(sent[0]!.text).toBe('La recette complète : https://d.com/r\n\nTangy and bright.');
   });
 
   it('is the title and the link when Facebook is unticked under Caption structures, whatever the photo settings say', async () => {
     const c = ctx({ caption_networks: 'instagram,youtube,tiktok', caption_fb_post_link: 'keyword' });
     await facebookPostStep.run(c, input);
-    expect(sent[0]!.text).toBe('Lemon Bars\n\nLa recette complète : https://d.com/r');
+    expect(sent[0]!.text).toBe('La recette complète : https://d.com/r\n\nLemon Bars');
     expect(sent[0]!.firstComment).toBeUndefined();
     // Neither the text nor the comment keyword is written.
     expect((c as unknown as { prompt: ReturnType<typeof vi.fn> }).prompt).not.toHaveBeenCalled();
     await facebookPostStep.run(ctx({ caption_networks: 'none' }), { ...input, text: 'Written for More posts.' });
-    expect(sent[0]!.text).toBe('Lemon Bars\n\nLa recette complète : https://d.com/r');
+    expect(sent[0]!.text).toBe('La recette complète : https://d.com/r\n\nLemon Bars');
   });
 
   it('keeps a More posts "No link" with Facebook unticked', async () => {

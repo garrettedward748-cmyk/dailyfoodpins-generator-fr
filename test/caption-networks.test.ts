@@ -124,7 +124,7 @@ describe('publishing with some networks unticked', () => {
     await publishReel(reelOf(reelId), deps);
 
     // Facebook: the title and the link, exactly as before the caption existed.
-    expect(sentTo(deps.scheduleReel, 'text')).toBe(`${TITLE}\n\nLa recette complète : https://bitespoon.com/stew`);
+    expect(sentTo(deps.scheduleReel, 'text')).toBe(`La recette complète : https://bitespoon.com/stew\n\n${TITLE}`);
     // Instagram: an empty caption, which its own step reads as "use the title".
     expect(sentTo(deps.instagramReel, 'caption')).toBe('');
     expect(sentTo(deps.instagramReel, 'title')).toBe(TITLE);
@@ -140,7 +140,7 @@ describe('publishing with some networks unticked', () => {
 
     await publishReel(reelOf(reelId), deps);
 
-    expect(sentTo(deps.scheduleReel, 'text')).toBe(`${TITLE}\n\nLa recette complète : https://bitespoon.com/stew`);
+    expect(sentTo(deps.scheduleReel, 'text')).toBe(`La recette complète : https://bitespoon.com/stew\n\n${TITLE}`);
     expect(sentTo(deps.youtubeShort, 'caption')).toBe('');
     expect(getReel(reelId)!.status).toBe('published');
   });

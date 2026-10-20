@@ -148,9 +148,9 @@ export function recipePostText(runId: number | null | undefined, mode: RecipeInP
 /**
  * The words of a Facebook reel post and, separately, its first comment.
  *
- * The caption always leads. The recipe follows it when asked and available.
- * The link is one of three things the setting chooses between, never two: in
- * the text, or in the first comment, or nowhere.
+ * In the text, the link leads and the caption follows it; the recipe comes
+ * after when asked and available. The link is one of three things the setting
+ * chooses between, never two: in the text, or in the first comment, or nowhere.
  */
 export function facebookPost(input: {
   body: string;
@@ -167,7 +167,9 @@ export function facebookPost(input: {
   const { body, tags } = recipe ? splitHashtags(input.body) : { body: input.body.trim(), tags: '' };
   const word = (input.keyword ?? '').trim();
   const invite = input.link === 'keyword' && word && url ? `Commentez « ${word.toUpperCase()} » et nous vous envoyons le lien de la recette complète !` : '';
-  const parts = [body, recipe, input.link === 'text' ? line : '', invite, tags].filter(Boolean);
+  // The link leads: Facebook folds a long post after its first lines, and the
+  // link is the one thing that has to show without "See more".
+  const parts = [input.link === 'text' ? line : '', body, recipe, invite, tags].filter(Boolean);
 
   return {
     text: parts.join('\n\n'),

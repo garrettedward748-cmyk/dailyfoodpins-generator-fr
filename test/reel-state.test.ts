@@ -308,7 +308,7 @@ describe('a reel moving through its states', () => {
 
     const [[publishCall]] = (deps.facebook.publishReel as ReturnType<typeof vi.fn>).mock.calls;
     const description = (publishCall as { description: string }).description;
-    expect(description).toBe('Stew\n\nLa recette complète : https://bitespoon.com/stew');
+    expect(description).toBe('La recette complète : https://bitespoon.com/stew\n\nStew');
     expect(commentOnReel).not.toHaveBeenCalled();
     expect(getReel(reelId)!.trigger_keyword).toBeNull();
   });
