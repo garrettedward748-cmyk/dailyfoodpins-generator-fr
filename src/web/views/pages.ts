@@ -3261,6 +3261,11 @@ export function reelSettingsPage(data: ReelSettingsData): Html {
             'Clip + steps',
             'The same clip, then the method photos moving slowly with each step written on them, and the call to action. About twenty seconds, for the credits of one clip.',
           )}
+          ${modeCard(
+            'didyouknow',
+            'Vous saviez que',
+            'One clip written for this recipe in the shape of the most-watched recipe reels: hands already moving on the ingredients, a curiosity line, the method, the first bite. The voice is written on screen word by word, big and centred. No call to action, so it loops. Ten seconds, one clip’s credits.',
+          )}
         </div>
         <details ${data.mode === 'scenes' ? raw('open') : raw('')} style="margin-top:8px">
           <summary class="small muted">Advanced — storyboard reels (several scenes joined)</summary>
@@ -3273,7 +3278,7 @@ export function reelSettingsPage(data: ReelSettingsData): Html {
           </div>
         </details>
 
-        <div data-mode="single hands mixed" ${data.mode === 'single' || data.mode === 'hands' || data.mode === 'mixed' ? raw('') : raw('hidden')}>
+        <div data-mode="single hands mixed didyouknow" ${data.mode === 'single' || data.mode === 'hands' || data.mode === 'mixed' || data.mode === 'didyouknow' ? raw('') : raw('hidden')}>
           <div class="field">
             <label>Photos sent with the prompt</label>
             <div class="row wrap">
@@ -3537,7 +3542,7 @@ export function reelComposerPage(data: ReelComposerData): Html {
       <div class="split">
         <div class="card">
           <h2>What it is made from</h2>
-          ${data.mode === 'single' || data.mode === 'hands' || data.mode === 'mixed'
+          ${data.mode === 'single' || data.mode === 'hands' || data.mode === 'mixed' || data.mode === 'didyouknow'
             ? html`<p class="help">
                   Tick up to ${MAX_REFERENCES} photos. Flow reads the dish from them together, so
                   the clip shows this food and not a lookalike.
@@ -3560,16 +3565,20 @@ export function reelComposerPage(data: ReelComposerData): Html {
                             spellcheck="false"
                             ${data.mode === 'hands'
                               ? raw(`data-prompt-url="/reels/new/${data.candidate.run_id}/hands-prompt"`)
+                              : data.mode === 'didyouknow'
+                              ? raw(`data-prompt-url="/reels/new/${data.candidate.run_id}/didyouknow-prompt"`)
                               : raw('')}
                   >${data.prompt}</textarea>
                   <div class="help" id="reel-prompt-help">
                     ${data.mode === 'hands'
                       ? raw('Writing the prompt for this recipe… a hands-only take, prep to plate, no voice or text.')
+                      : data.mode === 'didyouknow'
+                      ? raw('Writing the prompt for this recipe… a curiosity line, the method, the first bite. The voice goes on screen word by word.')
                       : html`Sent as it is. The wording for every reel lives under Setup &rarr; Prompts
                         (reel-video), and the scenes under Setup &rarr; Reel structures.
                         ${data.structure?.name ? html`This one is built on <strong>${data.structure.name}</strong>.` : ''}`}
                   </div>
-                  ${data.structure?.id && data.mode !== 'hands'
+                  ${data.structure?.id && data.mode !== 'hands' && data.mode !== 'didyouknow'
                     ? html`<input type="hidden" name="reel_structure_id" value="${data.structure.id}" />`
                     : ''}
                 </div>`
@@ -3633,11 +3642,13 @@ export function reelComposerPage(data: ReelComposerData): Html {
             ? raw('One clip, a few minutes.')
             : data.mode === 'hands'
             ? raw('One clip, a few minutes. About twenty seconds, hands only, no voice.')
+            : data.mode === 'didyouknow'
+            ? raw('One clip, a few minutes. The voice is written on screen word by word before it goes out.')
             : raw('The storyboard is written first, then each scene is filmed. Ten minutes or so.')}
         </span>
       </div>
     </form>
-    ${data.mode === 'hands' ? raw(REEL_PROMPT_SCRIPT) : ''}
+    ${data.mode === 'hands' || data.mode === 'didyouknow' ? raw(REEL_PROMPT_SCRIPT) : ''}
     ${raw(REEL_CAPTION_SCRIPT)}
   `;
 }

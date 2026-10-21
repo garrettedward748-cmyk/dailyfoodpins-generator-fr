@@ -79,15 +79,6 @@ function fontArg(): string {
   return found ? `fontfile='${escapeDrawtext(found)}':` : '';
 }
 
-/**
- * A video as Facebook and Instagram Reels want it: 1080x1920, 30 fps, H.264
- * High + AAC, moov first, and no extra boxes.
- *
- * Flow's clips come as 720x1280 at 24 fps with a Content Credentials "uuid"
- * box ahead of the movie header; Buffer handed one of those to Facebook and
- * got "Facebook was unable to process the media". A file ffmpeg wrote fresh
- * carries none of that.
- */
 /** How long the hook stays on a one-clip reel, from frame 0. */
 export const HOOK_SECONDS = 3;
 
@@ -99,7 +90,48 @@ export function hookFromTitle(title: string): string {
   return title.split(/\s*[:|–—]\s*|\s+-\s+/)[0]!.replace(/\s+/g, ' ').trim().slice(0, 60);
 }
 
-export async function normalizeForSocial(video: Buffer, ffmpeg = 'ffmpeg', hook = ''): Promise<Buffer> {
+/** One spoken word and when it is said, in seconds from the start of the clip. */
+export interface WordTiming {
+  w: string;
+  start: number;
+  end: number;
+}
+
+/**
+ * The spoken words as on-screen captions: one word at a time, big, centred,
+ * white with a black outline -- the style the most-watched recipe reels use.
+ * Each word stays up until the next one is said, unless the voice pauses.
+ * Returns [text, from, to] for each word worth showing.
+ */
+export function captionWords(words: readonly WordTiming[]): [string, number, number][] {
+  const out: [string, number, number][] = [];
+  const clean = words
+    .map((x) => ({ ...x, w: x.w.replace(/[^\p{L}\p{N}'’%°-]/gu, '').toUpperCase() }))
+    .filter((x) => x.w && Number.isFinite(x.start) && Number.isFinite(x.end) && x.end >= x.start);
+  clean.forEach((x, i) => {
+    const next = clean[i + 1];
+    // Off just before the next word comes on, so two words never share a frame.
+    const to = next && next.start - x.end < 0.6 ? next.start - 0.04 : x.end + 0.25;
+    out.push([x.w.slice(0, 20), Math.max(0, x.start), Math.max(x.start + 0.12, to)]);
+  });
+  return out;
+}
+
+/**
+ * A video as Facebook and Instagram Reels want it: 1080x1920, 30 fps, H.264
+ * High + AAC, moov first, and no extra boxes.
+ *
+ * Flow's clips come as 720x1280 at 24 fps with a Content Credentials "uuid"
+ * box ahead of the movie header; Buffer handed one of those to Facebook and
+ * got "Facebook was unable to process the media". A file ffmpeg wrote fresh
+ * carries none of that.
+ */
+export async function normalizeForSocial(
+  video: Buffer,
+  ffmpeg = 'ffmpeg',
+  hook = '',
+  spoken: readonly WordTiming[] = [],
+): Promise<Buffer> {
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const dir = mkdtempSync(join(tmpdir(), 'reelnorm-'));
@@ -119,6 +151,15 @@ export async function normalizeForSocial(video: Buffer, ffmpeg = 'ffmpeg', hook 
         `box=1:boxcolor=black@0.45:boxborderw=28:x=(w-text_w)/2:y=h*0.14:` +
         `enable='between(t,0,${HOOK_SECONDS})'`;
     }
+    // "Did you know" reels: the voice on screen, word by word.
+    captionWords(spoken).forEach(([word, from, to], i) => {
+      const file = join(dir, `w${i}.txt`);
+      writeFileSync(file, word);
+      vf +=
+        `,drawtext=${fontArg()}textfile='${escapeDrawtext(file)}':fontcolor=white:fontsize=120:` +
+        `borderw=7:bordercolor=black:shadowcolor=black@0.5:shadowx=0:shadowy=6:` +
+        `x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${from.toFixed(3)},${to.toFixed(3)})'`;
+    });
     await run(ffmpeg, [
       '-y', '-i', input,
       '-map', '0:v:0', '-map', '0:a:0?',

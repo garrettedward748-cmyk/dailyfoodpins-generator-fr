@@ -124,6 +124,7 @@ export const STEP_CONTEXTS: Record<string, Record<string, unknown>> = {
   'reel-video.template': { seo: SEO, presenter: { name: 'n', voice: 'v' }, cta: 'c', reelShape: reelShape(null) },
   'reel-process': { title: 'Lemon Bars', recipe: '{}', photos: 'hero: the bars', sources: 'hero, stepA', count: 8, note: '' },
   'reel-hands': { title: 'Lemon Bars', recipe: '{}' },
+  'reel-didyouknow': { title: 'Lemon Bars', recipe: '{}' },
   'reel-steps': { title: 'Lemon Bars', stepA: 'the crust pressed into the pan', stepB: 'the filling poured over', stepC: 'the bars cut into squares', recipe: '{}' },
   'reel-plan': {
     article: { title: 't', recipe: 'r', imagePrompts: 'feature: f' },

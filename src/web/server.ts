@@ -250,6 +250,7 @@ import {
   ARTICLE_ROLES,
   MAX_REFERENCES,
   MUSIC_SLOTS,
+  buildDidYouKnowPrompt,
   buildHandsPrompt,
   buildReelPrompt,
   isLocalMusicLine,
@@ -2349,7 +2350,7 @@ export function buildServer(
         // way the caption does, so a slow or down model never holds up the
         // page itself.
         prompt:
-          mode === 'hands'
+          mode === 'hands' || mode === 'didyouknow'
             ? ''
             : buildReelPrompt({
                 title: candidate.title || candidate.spy_title,
@@ -2362,6 +2363,30 @@ export function buildServer(
       }),
       readFlash(request.query),
     );
+  });
+
+  /** The "Did you know" prompt, written for this recipe; fetched the same way as the hands-only one. */
+  app.get('/reels/new/:runId/didyouknow-prompt', async (request, reply) => {
+    const runId = asNumber((request.params as { runId: string }).runId, 0);
+    const candidate = reelCandidates(500).find((c) => c.run_id === runId);
+    if (!candidate) return reply.status(404).send({ prompt: null });
+
+    const images = readReelImages(candidate);
+    if (!images) return reply.send({ prompt: null });
+
+    const host = candidate.site_domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const title = candidate.title || candidate.spy_title;
+    const seed = seedFromRun(runId, host, images, title);
+    try {
+      const prompt = await buildDidYouKnowPrompt(
+        { title, recipe: seed.article.recipe },
+        (name, vars) => askPrompt(settings, encryptionKey, name, vars),
+      );
+      return reply.send({ prompt: prompt || null });
+    } catch (err) {
+      log.warn(`"Did you know" prompt for run ${runId} could not be written — ${errorMessage(err)}`);
+      return reply.send({ prompt: null });
+    }
   });
 
   /**
@@ -2465,6 +2490,11 @@ export function buildServer(
       if (mode === 'mixed') {
         setReelStage(reelId, 'done', {
           planJson: JSON.stringify({ ...seedFromRun(runId, host, images, title), mixed: true }),
+        });
+      }
+      if (mode === 'didyouknow') {
+        setReelStage(reelId, 'done', {
+          planJson: JSON.stringify({ ...seedFromRun(runId, host, images, title), didYouKnow: true }),
         });
       }
       try {
@@ -5902,7 +5932,7 @@ export function buildServer(
       });
     }
     const pickedMode = asString(body.reel_mode);
-    settings.set('reel_mode', ['scenes', 'mixed', 'process', 'hands'].includes(pickedMode) ? pickedMode : 'single');
+    settings.set('reel_mode', ['scenes', 'mixed', 'process', 'hands', 'didyouknow'].includes(pickedMode) ? pickedMode : 'single');
     for (let slot = 1; slot <= MUSIC_SLOTS; slot++) {
       const key = musicSlotKey(slot);
       settings.set(

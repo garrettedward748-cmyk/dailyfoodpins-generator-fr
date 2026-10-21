@@ -7,6 +7,7 @@ import { writeReelCaption } from '../../reels/caption.js';
 import { markReelCaptionStructure, nextCaptionShape } from '../../core/caption-structures.js';
 import { createReel, getReel, pageForSite, presenterForPage, reelsElsewhere, setReelStage, updateReel } from '../../db/repos.js';
 import {
+  buildDidYouKnowPrompt,
   buildReelPrompt,
   isStudioMode,
   reelMode,
@@ -100,26 +101,46 @@ export const createReelStep: Step<CreateReelInput, CreateReelOutput> = {
     if (!isStudioMode(mode)) {
       const presenter = page ? presenterForPage(page.id) : undefined;
       const scenes = nextReelShape(ctx.site.id);
+      const templatePrompt = () =>
+        buildReelPrompt({
+          title,
+          presenter: presenter ? { name: presenter.name, voice: presenter.voice_description } : null,
+          cta: reelCta(ctx.settings.get('reel_cta_text'), ctx.site.domain),
+          shape: scenes.shape,
+        });
+      // "Did you know": the model writes this recipe's own prompt. When it
+      // cannot, the reel is still made, from the usual template.
+      let videoPrompt = '';
+      let didYouKnow = false;
+      if (mode === 'didyouknow') {
+        try {
+          const recipe = seedFromRun(ctx.runId, host, input.images, title).article.recipe;
+          videoPrompt = await buildDidYouKnowPrompt({ title, recipe }, (name, vars) => ctx.prompt(name, vars));
+          didYouKnow = Boolean(videoPrompt);
+        } catch (err) {
+          log.warn(`run ${ctx.runId}: the "Did you know" prompt could not be written, using the usual one — ${errorMessage(err)}`);
+        }
+      }
       const reelId = createReel({
         runId: ctx.runId,
         siteId: ctx.site.id,
         keywordId: ctx.keyword.id,
         fbPageId: page?.id ?? null,
-        prompt: buildReelPrompt({
-          title,
-          presenter: presenter ? { name: presenter.name, voice: presenter.voice_description } : null,
-          cta: reelCta(ctx.settings.get('reel_cta_text'), ctx.site.domain),
-          shape: scenes.shape,
-        }),
+        prompt: videoPrompt || templatePrompt(),
         caption,
         references: referenceUrls(host, input.images, singleReferenceRoles(ctx.settings)),
       });
       if (shape.id) markReelCaptionStructure(reelId, shape.id);
-      if (scenes.id) markReelStructure(reelId, scenes.id);
+      if (scenes.id && !didYouKnow) markReelStructure(reelId, scenes.id);
       // Clip + steps: the clip is made the same way; what comes after it needs the article.
       if (mode === 'mixed') {
         setReelStage(reelId, 'done', {
           planJson: JSON.stringify({ ...seedFromRun(ctx.runId, host, input.images, title), mixed: true }),
+        });
+      }
+      if (didYouKnow) {
+        setReelStage(reelId, 'done', {
+          planJson: JSON.stringify({ ...seedFromRun(ctx.runId, host, input.images, title), didYouKnow: true }),
         });
       }
 

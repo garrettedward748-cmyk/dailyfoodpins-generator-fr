@@ -18,6 +18,8 @@ services:
       - HOST=0.0.0.0
       - DB_PATH=/app/data/platform.db
       - IMAGEGEN_VNC_URL=http://imagegen:6080
+      - CAPTIONS_URL=http://captions:8200
+      - CAPTIONS_LANG=fr
     volumes:
       - platform-data:/app/data
       - shared-secret:/run/shared:ro
@@ -72,6 +74,13 @@ services:
       timeout: 5s
       retries: 3
       start_period: 90s
+  captions:
+    # Word timings for « Vous saviez que » reel captions (faster-whisper, CPU, French).
+    build: ./services/captions
+    restart: unless-stopped
+    cpus: ${CAPTIONS_CPUS:-1}
+    networks:
+      - backend
 networks:
   web: null
   backend: null

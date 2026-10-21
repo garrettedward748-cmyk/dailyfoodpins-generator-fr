@@ -173,6 +173,12 @@
   "format": null,
   "hasSystem": false
  },
+ "reel-didyouknow": {
+  "sourceNode": "Reel \"Did you know\" prompt",
+  "model": "gpt-oss:120b",
+  "format": null,
+  "hasSystem": false
+ },
  "instagram-post": {
   "sourceNode": "Instagram caption",
   "model": "gpt-oss:120b",

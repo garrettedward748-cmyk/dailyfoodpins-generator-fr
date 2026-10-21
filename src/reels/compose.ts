@@ -17,15 +17,19 @@ import type { SourceRole } from './plan.js';
  *           their steps written on them and an end card -- about twenty
  *           seconds, one clip's credits.
  *   scenes: a storyboard of clips filmed one by one and joined.
+ *   didyouknow: one Flow clip written per recipe in the "Did you know" shape
+ *           the most-watched recipe reels share: hands already moving on the
+ *           ingredients, a curiosity line, the method, the first bite, no call
+ *           to action. The platform writes the voice on screen word by word.
  *   process: hands only, one kitchen, the recipe from raw to done in eight
  *            quick shots, each its own Flow generation filmed from the last
  *            frame of the one before -- eight clips' credits, about half an hour.
  */
-export type ReelMode = 'single' | 'hands' | 'mixed' | 'scenes' | 'process';
+export type ReelMode = 'single' | 'hands' | 'mixed' | 'scenes' | 'process' | 'didyouknow';
 
 export function reelMode(settings: Settings): ReelMode {
   const mode = settings.get('reel_mode');
-  return mode === 'scenes' || mode === 'mixed' || mode === 'process' || mode === 'hands'
+  return mode === 'scenes' || mode === 'mixed' || mode === 'process' || mode === 'hands' || mode === 'didyouknow'
     ? mode
     : 'single';
 }
@@ -39,6 +43,15 @@ export interface MixedSeed extends ReelSeed {
   /** Filled in once the clip is down: where it was saved. */
   clipPath?: string;
 }
+
+/** True for a "Did you know" reel: its voice is written on screen, word by word, before it goes out. */
+export const isDidYouKnowSeed = (planJson: string | null | undefined): boolean => {
+  try {
+    return Boolean((JSON.parse(planJson || '{}') as { didYouKnow?: boolean }).didYouKnow);
+  } catch {
+    return false;
+  }
+};
 
 export const isMixedSeed = (planJson: string | null | undefined): boolean => {
   try {
@@ -148,6 +161,25 @@ export function buildReelPrompt(c: {
     },
     cta: c.cta || 'La recette complète sur notre site',
   });
+}
+
+/**
+ * The "Did you know" video prompt, written for this recipe by the model: it
+ * has to find a true, surprising pairing in this recipe's own ingredients and
+ * write the voice word for word, which no fixed template can.
+ */
+export async function buildDidYouKnowPrompt(
+  c: { title: string; recipe: string },
+  prompt: (name: string, vars: Record<string, unknown>) => Promise<{ content: string }>,
+): Promise<string> {
+  const vars = { title: c.title, recipe: c.recipe.slice(0, 8000) };
+  // The voice has to open on « Vous saviez que »: a prompt whose voiceover does
+  // not is asked for once more, then given up on (the usual template is used).
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const text = (await prompt('reel-didyouknow', vars)).content.trim();
+    if (/["“«]\s*vous saviez que/i.test(text)) return text;
+  }
+  throw new Error('The model did not open the voiceover on « Vous saviez que ».');
 }
 
 /**

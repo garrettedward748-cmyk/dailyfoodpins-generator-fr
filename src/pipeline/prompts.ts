@@ -130,6 +130,7 @@ export const PROMPT_MODELS: Record<string, { model: string; format: 'json' | nul
   'reel-steps': { model: 'gpt-oss:120b', format: 'json' },
   'reel-process': { model: 'gpt-oss:120b', format: 'json' },
   'reel-hands': { model: 'gpt-oss:120b', format: null },
+  'reel-didyouknow': { model: 'gpt-oss:120b', format: null },
   'blog-article': { model: 'gpt-oss:120b', format: 'json' },
   'blog-questions': { model: 'gpt-oss:120b', format: 'json' },
   'site-page': { model: 'gpt-oss:120b', format: 'json' },

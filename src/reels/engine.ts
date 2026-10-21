@@ -58,8 +58,9 @@ import { parseCaptionNetworks, withSiteOverrides } from '../core/caption-structu
 import { reelCta } from './cta.js';
 import { planProcess, planReel, PROCESS_SHOTS, type SourceRole } from './plan.js';
 import { filmPending } from './film.js';
-import { assembleMixedReel, assembleProcessReel, assembleReel, hookFromTitle, lastFrame, normalizeForSocial, type MixedReelInput } from './assemble.js';
-import { allMusicUrls, isLocalMusicLine, isMixedSeed, localMusicPath, type MixedSeed, type ReelSeed } from './compose.js';
+import { assembleMixedReel, assembleProcessReel, assembleReel, hookFromTitle, lastFrame, normalizeForSocial, type MixedReelInput, type WordTiming } from './assemble.js';
+import { fetchWordTimings } from './word-timings.js';
+import { allMusicUrls, isDidYouKnowSeed, isLocalMusicLine, isMixedSeed, localMusicPath, type MixedSeed, type ReelSeed } from './compose.js';
 import { composeWithRecipe, facebookPost, pickCommentKeyword, parseFacebookLinkMode, parseRecipeInPost, recipeCandidates, recipePostText, type FacebookLinkMode, type RecipeInPost } from './recipe-text.js';
 
 const log = createLogger('reels');
@@ -118,7 +119,9 @@ export interface ReelDeps {
   /** Join scene clips into one file. ffmpeg, in production. */
   assemble(clipPaths: string[], outPath: string, ctaText: string): Promise<void>;
   /** Re-encode a raw Flow video for Facebook/Instagram; tests pass a stand-in. */
-  normalize?: (video: Buffer, hook?: string) => Promise<Buffer>;
+  normalize?: (video: Buffer, hook?: string, words?: WordTiming[]) => Promise<Buffer>;
+  /** When each word of the voice is said, for "Did you know" captions. The captions service, in production. */
+  wordTimings?: (video: Buffer) => Promise<WordTiming[]>;
   /**
    * Put a fresh scene image on the site the reel belongs to, and give back
    * its public url. Flow's own urls expire; the site's do not, and the clip
@@ -1176,7 +1179,21 @@ async function publishReelOnce(reel: ReelView, deps: ReelDeps): Promise<void> {
       } catch {
         hook = '';
       }
-      video = await (deps.normalize ?? ((v: Buffer, h?: string) => normalizeForSocial(v, 'ffmpeg', h)))(video, hook);
+      // "Did you know": the voice goes on screen word by word, in place of the
+      // title. Without word timings the reel still goes out, with the title.
+      let words: WordTiming[] = [];
+      if (isDidYouKnowSeed(reel.plan_json)) {
+        try {
+          words = await (deps.wordTimings ?? fetchWordTimings)(video);
+          log.info(`reel ${reel.id}: ${words.length} spoken word(s) for the captions`);
+        } catch (err) {
+          log.warn(`reel ${reel.id}: no word captions, using the title instead — ${errorMessage(err)}`);
+        }
+        if (words.length > 0) hook = '';
+      }
+      video = await (
+        deps.normalize ?? ((v: Buffer, h?: string, w?: WordTiming[]) => normalizeForSocial(v, 'ffmpeg', h, w))
+      )(video, hook, words);
     } catch (err) {
       log.warn(`reel ${reel.id}: could not re-encode the video, sending it as it came — ${errorMessage(err)}`);
     }
