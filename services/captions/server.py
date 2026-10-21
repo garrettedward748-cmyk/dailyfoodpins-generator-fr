@@ -15,6 +15,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+import av
+import numpy as np
 from faster_whisper import WhisperModel
 
 MODEL_NAME = os.environ.get("WHISPER_MODEL", "base")
@@ -25,10 +27,33 @@ model = WhisperModel(MODEL_NAME, device="cpu", compute_type="int8", download_roo
 lock = threading.Lock()
 
 
+def audio_of(path: str) -> np.ndarray:
+    """
+    The sound as 16 kHz mono float32, decoded here rather than by faster-whisper:
+    its own decoder passes an argument PyAV 15 and later no longer accept.
+    """
+    resampler = av.AudioResampler(format="s16", layout="mono", rate=16000)
+    chunks: list[np.ndarray] = []
+    with av.open(path, mode="r") as container:
+        if not container.streams.audio:
+            return np.zeros(0, dtype=np.float32)
+        for frame in container.decode(audio=0):
+            for out in resampler.resample(frame):
+                chunks.append(out.to_ndarray().reshape(-1))
+        for out in resampler.resample(None):
+            chunks.append(out.to_ndarray().reshape(-1))
+    if not chunks:
+        return np.zeros(0, dtype=np.float32)
+    return np.concatenate(chunks).astype(np.float32) / 32768.0
+
+
 def words_for(path: str, lang: str | None) -> list[dict]:
+    audio = audio_of(path)
+    if audio.size == 0:
+        return []
     with lock:
         segments, _ = model.transcribe(
-            path, language=lang or None, word_timestamps=True, vad_filter=True, beam_size=1
+            audio, language=lang or None, word_timestamps=True, vad_filter=True, beam_size=1
         )
         out = []
         for seg in segments:
