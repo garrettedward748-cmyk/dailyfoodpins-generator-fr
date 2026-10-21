@@ -32,16 +32,37 @@ describe('"Did you know" reels', () => {
   });
 });
 
-import { buildDidYouKnowPrompt } from '../src/reels/compose.js';
+import { buildDidYouKnowPrompt, ingredientCount, validateDidYouKnow } from '../src/reels/compose.js';
 
-describe('the "Did you know" prompt', () => {
-  it('asks again when the voiceover does not open on « Vous saviez que », then gives up', async () => {
-    let calls = 0;
-    const bad = async () => ({ content: (calls++, 'Video of bars. VOICEOVER: « Vous pouvez les cuire. »') });
-    await expect(buildDidYouKnowPrompt({ title: 't', recipe: 'r' }, bad)).rejects.toThrow(/Vous saviez que/);
-    expect(calls).toBe(2);
-    const good = async () => ({ content: 'Video of bars. VOICEOVER: « Vous saviez que ces barres se font en 10 minutes ? »' });
-    await expect(buildDidYouKnowPrompt({ title: 't', recipe: 'r' }, good)).resolves.toMatch(/Vous saviez que/);
+const goodPlan = {
+  dish: 'pumpkin caramels',
+  shots: [
+    'hands pour pumpkin puree and cream into a saucepan of melted butter and sugar',
+    'the glossy caramel is poured into a parchment-lined pan',
+    'soft caramel squares on a plate, a hand lifts one toward the camera',
+  ],
+  voiceover: 'Vous saviez que la purée de potiron transforme un simple caramel en bonbon fondant ? On mélange, on verse, on coupe. Trop fondant.',
+};
+const recipe = JSON.stringify({ raw: '', parsed: { ingredients: ['1', '2', '3', '4', '5', '6', '7', '8'] } });
+
+describe('le prompt « Vous saviez que »', () => {
+  it('compte les ingrédients', () => {
+    expect(ingredientCount(recipe)).toBe(8);
+  });
+
+  it('refuse un nombre d\'ingrédients faux', () => {
+    expect(() => validateDidYouKnow({ ...goodPlan, voiceover: 'Vous saviez que ces bonbons fondants au potiron se font avec seulement trois ingrédients et sans farine ? Trop fondant.' }, 8)).toThrow(/recipe has 8/);
+    expect(() => validateDidYouKnow({ ...goodPlan, voiceover: 'Vous saviez que ces bonbons fondants au potiron demandent huit ingrédients et une seule casserole ? Trop fondant.' }, 8)).not.toThrow();
+  });
+
+  it('refuse une voix qui ne commence pas par « Vous saviez que »', () => {
+    expect(() => validateDidYouKnow({ ...goodPlan, voiceover: 'Ces bonbons au potiron se font dans une seule casserole, puis on les coupe en petits carrés. Trop fondant.' }, 8)).toThrow(/Vous saviez que/);
+  });
+
+  it('écrit le prompt Flow avec trois plans minutés et une voix française', async () => {
+    const out = await buildDidYouKnowPrompt({ title: 'Bonbons caramel potiron', recipe }, async () => ({ content: JSON.stringify(goodPlan) }));
+    expect(out).toMatch(/0–3 s: .*3–6 s: .*6–10 s: /);
+    expect(out).toMatch(/Voiceover in French \(France\).*word for word: « Vous saviez que/);
   });
 });
 

@@ -176,7 +176,7 @@
  "reel-didyouknow": {
   "sourceNode": "Reel \"Did you know\" prompt",
   "model": "gpt-oss:120b",
-  "format": null,
+  "format": "json",
   "hasSystem": false
  },
  "instagram-post": {

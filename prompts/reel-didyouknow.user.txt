@@ -1,21 +1,27 @@
-Write ONE video-generation prompt for a 10-second vertical (9:16) « Vous saviez que » recipe reel for "{{title}}". The prompt itself is written in English; everything spoken in the video is in French (France).
+You are planning a 10-second vertical « Vous saviez que » recipe reel for "{{title}}". The video is for a French audience: the voice speaks French (France).
 
 The reels this copies get millions of views on Facebook. What they all do:
-- The very first frame is already moving: hands pouring, adding or mixing the two or three main ingredients of the recipe. Never a still shot, never the finished dish first.
-- A curiosity line starting with the words « Vous saviez que » is spoken from the very first second, built on a surprising but TRUE pairing from this recipe: « Vous saviez que vous pouvez mélanger de la noix de coco à des bananes écrasées ? »
-- The method follows in quick hand-only shots, in the real order: mix, shape or pour, into the oven or pan, done.
-- Then the short promise, only what the recipe really supports: « Seulement trois ingrédients. Sans farine, sans sucre. » Never claim « sans sucre », « sans farine », « healthy » or a number of ingredients the recipe does not back.
-- It ends on a hand lifting one piece toward the camera, the inside visible, with two or three words like « Trop fondant. » No call to action, no website, no « recette en description »: the end has to feel like the start of a loop.
+- The very first frame is already moving: hands pouring, adding or mixing the main ingredients. Never a still shot, never the finished dish first.
+- The voice starts in the very first second with « Vous saviez que », on a surprising but TRUE fact about this recipe.
+- Three quick hand-only shots tell the method in its real order, and the last one ends on a hand lifting one piece toward the camera, the inside visible.
+- The voice ends on a two- or three-word reaction (« Trop fondant. », « Trop bon. »). No call to action, no website, no « recette en description »: the end has to feel like the start of a loop.
 
-How it is made:
+The recipe:
 {{recipe}}
 
-Write the prompt as one paragraph of plain sentences, in this order:
-1. "Ultra-realistic vertical 9:16 food video, 10 seconds, of {{title}}" said plainly by its everyday name, not the full SEO title. The attached reference photos are the finished dish: show exactly that food, same colours and toppings.
-2. The shots, each one short clause with the real ingredient and the real action, as described above. Hands and forearms only, never a face. Warm natural kitchen light, close-ups, the action already happening in the first frame.
-3. VOICEOVER in French, word for word, between « and »: a warm, natural native French (France) female voice, fast and friendly, no English accent, no pauses. In total 18 to 26 words, so it fills the ten seconds. The voiceover ALWAYS starts with the exact words « Vous saviez que » -- they are the first words heard, at the very first second -- and that first sentence is the curiosity line. Correct French with accents, speaking to the viewer as « vous ». The last words are the two- or three-word reaction.
-4. Always end with exactly: "No text, no captions, no subtitles, no titles and no logos anywhere in the video. Natural cooking sounds under the voice, no music. No steam on baked or cold food."
+This recipe has {{ingredientCount}} ingredients.
 
-At most 170 words. No headings, no line breaks, no markdown.
+Write three things:
 
-Answer with the finished prompt and nothing else.
+"dish": the dish's everyday name in English, 2 to 5 words ("pumpkin caramels", "peach cobbler") -- never the full title. The video model reads English.
+
+"shots": exactly THREE short shot descriptions in English, one per part of the video, each at most 25 words, each ONE action with the real ingredient or the real cookware:
+  1. 0-3 s: hands adding, pouring or mixing the two or three ingredients that make this dish what it is.
+  2. 3-6 s: the one moment that shows how it is made (shaping, pouring into the pan, into the oven or onto the heat).
+  3. 6-10 s: the finished dish, exactly as in the reference photos, and a hand lifting one piece toward the camera, the inside visible.
+Three actions, not more: a video model given ten actions for ten seconds does none of them.
+
+"voiceover": the words spoken, in correct French with every accent, 16 to 26 words in total, speaking to the viewer as « vous ». It ALWAYS starts with the exact words « Vous saviez que ». Only claims this recipe supports: say a number of ingredients only if it is exactly {{ingredientCount}}, and say « sans farine », « sans sucre », « sans œufs » or « sans four » only if the recipe really has none. When in doubt, leave the claim out. It ends on the two- or three-word reaction.
+
+Answer with one valid JSON object and nothing else:
+{"dish":"","shots":["","",""],"voiceover":""}

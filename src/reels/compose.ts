@@ -172,23 +172,126 @@ export function buildReelPrompt(c: {
   });
 }
 
+/** How many ingredients the recipe lists, or null when it cannot be told. */
+export function ingredientCount(recipe: string): number | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(recipe);
+  } catch {
+    return null;
+  }
+  const seen = new Set<unknown>();
+  const find = (node: unknown): number | null => {
+    if (!node || typeof node !== 'object' || seen.has(node)) return null;
+    seen.add(node);
+    const o = node as Record<string, unknown>;
+    if (Array.isArray(o.ingredients)) {
+      return o.ingredients.filter((x) => x && (typeof x !== 'object' || !Array.isArray((x as { items?: unknown }).items))).length
+        + o.ingredients.reduce<number>((n, x) => n + (x && typeof x === 'object' && Array.isArray((x as { items?: unknown[] }).items) ? (x as { items: unknown[] }).items.length : 0), 0);
+    }
+    const numbered = Object.keys(o).filter((k) => /^ingredient_\d+$/.test(k) && String(o[k] ?? '').trim() !== '');
+    if (numbered.length > 0) return numbered.length;
+    for (const v of Object.values(o)) {
+      const n = find(v);
+      if (n !== null) return n;
+    }
+    return null;
+  };
+  const n = find(data);
+  return n && n > 0 ? n : null;
+}
+
+const NUMBER_WORDS: Record<string, number> = {
+  deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10, onze: 11, douze: 12,
+};
+
+export interface DidYouKnowPlan {
+  dish: string;
+  shots: [string, string, string];
+  voiceover: string;
+}
+
 /**
- * The "Did you know" video prompt, written for this recipe by the model: it
- * has to find a true, surprising pairing in this recipe's own ingredients and
- * write the voice word for word, which no fixed template can.
+ * Check what the model planned. Every rule here is one the prompt states;
+ * the error is the sentence the model is shown when it asks again.
+ */
+export function validateDidYouKnow(raw: unknown, ingredients: number | null): DidYouKnowPlan {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const clean = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim();
+  const words = (t: string) => t.split(' ').filter(Boolean).length;
+
+  const dish = clean(o.dish).replace(/[."]+$/, '');
+  if (!dish || words(dish) > 6) throw new Error('"dish" must be the everyday name in 2 to 5 words.');
+
+  const shots = Array.isArray(o.shots) ? o.shots.map(clean).filter(Boolean) : [];
+  if (shots.length !== 3) throw new Error(`There must be exactly three shots; there were ${shots.length}.`);
+  shots.forEach((shot, i) => {
+    if (words(shot) > 30) throw new Error(`Shot ${i + 1} is ${words(shot)} words; at most 25, one action.`);
+  });
+
+  const voiceover = clean(o.voiceover).replace(/^["“«]\s*|\s*["”»]$/g, '');
+  if (!/^vous saviez que\b/i.test(voiceover)) throw new Error('The voiceover must start with « Vous saviez que ».');
+  const n = words(voiceover);
+  if (n < 14 || n > 30) throw new Error(`The voiceover is ${n} words; it must be 16 to 26.`);
+
+  // "only three ingredients" when the recipe has eight is the one claim a
+  // viewer checks -- and the reel loses them when it is wrong.
+  const said = /(?:^|[^\p{L}])(\d+|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze)[ -]ingrédients?(?![\p{L}])/iu.exec(voiceover);
+  if (said) {
+    const claimed = /^\d+$/.test(said[1]!) ? Number(said[1]) : NUMBER_WORDS[said[1]!.toLowerCase()]!;
+    if (ingredients === null || claimed !== ingredients) {
+      throw new Error(
+        ingredients === null
+          ? 'Do not say a number of ingredients.'
+          : `The voiceover says ${claimed} ingredients; the recipe has ${ingredients}. Say ${ingredients} or leave the number out.`,
+      );
+    }
+  }
+  return { dish, shots: shots as [string, string, string], voiceover };
+}
+
+/** The prompt sent to Flow, in the shape that came out right: three timed shots and a named voice. */
+export function didYouKnowVideoPrompt(plan: DidYouKnowPlan): string {
+  const end = (t: string) => (/[.!?]$/.test(t) ? t : `${t}.`);
+  return [
+    `Ultra-realistic vertical 9:16 food video, 10 seconds, of ${plan.dish}, exactly the dish in the reference photos.`,
+    `0–3 s: the action is already happening in the very first frame — ${end(plan.shots[0])}`,
+    `3–6 s: ${end(plan.shots[1])}`,
+    `6–10 s: ${end(plan.shots[2])}`,
+    'Hands and forearms only, never a face. Warm natural kitchen light, close-ups.',
+    'Voiceover in French (France), a warm natural native French female voice, fast and friendly, no English accent, starting in the very first second and speaking until the end, word for word:',
+    `« ${plan.voiceover} »`,
+    'No text, no captions, no subtitles, no titles and no logos anywhere in the video. Natural cooking sounds under the voice, no music. No steam on baked or cold food.',
+  ].join(' ');
+}
+
+/**
+ * The "Did you know" video prompt for this recipe: the model plans the dish's
+ * name, three shots and the voice; the code checks the plan and writes the
+ * prompt. A plan the checks refuse is asked for once more with the reason,
+ * then given up on (the usual template is used).
  */
 export async function buildDidYouKnowPrompt(
   c: { title: string; recipe: string },
   prompt: (name: string, vars: Record<string, unknown>) => Promise<{ content: string }>,
 ): Promise<string> {
-  const vars = { title: c.title, recipe: c.recipe.slice(0, 8000) };
-  // The voice has to open on « Vous saviez que »: a prompt whose voiceover does
-  // not is asked for once more, then given up on (the usual template is used).
+  const ingredients = ingredientCount(c.recipe);
+  const vars = {
+    title: c.title,
+    recipe: c.recipe.slice(0, 8000),
+    ingredientCount: ingredients ?? 'an unknown number of',
+  };
+  let note = '';
   for (let attempt = 0; attempt < 2; attempt++) {
-    const text = (await prompt('reel-didyouknow', vars)).content.trim();
-    if (/["“«]\s*vous saviez que/i.test(text)) return text;
+    const answer = (await prompt('reel-didyouknow', { ...vars, recipe: vars.recipe + note })).content;
+    try {
+      const json = answer.slice(answer.indexOf('{'), answer.lastIndexOf('}') + 1);
+      return didYouKnowVideoPrompt(validateDidYouKnow(JSON.parse(json), ingredients));
+    } catch (err) {
+      note = `\n\nYour previous answer was refused: ${err instanceof Error ? err.message : String(err)} Fix that and answer again with the full JSON.`;
+    }
   }
-  throw new Error('The model did not open the voiceover on « Vous saviez que ».');
+  throw new Error(`The "Did you know" plan was refused twice.${note.replace(/\n+/g, ' ')}`);
 }
 
 /**
