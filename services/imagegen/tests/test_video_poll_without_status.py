@@ -118,3 +118,44 @@ def test_a_video_that_never_appears_fails_after_the_full_wait(monkeypatch, no_wa
 
     assert job["status"] in ("FAILED", "PENDING")  # handed to _handle_failure
     assert client.polls == 8
+
+
+def test_a_video_never_in_the_project_gives_up_early_and_switches_account(monkeypatch, no_waiting):
+    """One account took every request and made nothing; the others made a clip a minute."""
+    client = FakeClient(listing_after=10**6)
+    rotated = []
+    monkeypatch.setattr(processor.accounts, "rotate", lambda problem: rotated.append(problem) or 3)
+
+    job = run(monkeypatch, client)
+
+    assert rotated, "the account should be switched"
+    assert job["status"] == "PENDING"  # back in line for the next account
+    assert client.polls * processor.VIDEO_POLL_INTERVAL <= processor.VIDEO_LISTING_GIVEUP_S + 60
+
+
+def test_with_no_other_account_it_fails_with_a_clear_message(monkeypatch, no_waiting):
+    client = FakeClient(listing_after=10**6)
+    monkeypatch.setattr(processor.accounts, "rotate", lambda problem: None)
+
+    job = run(monkeypatch, client)
+
+    assert job["status"] == "FAILED"
+    assert "nothing appeared in the project" in job["error_message"]
+    assert client.polls < processor.VIDEO_MAX_POLLS
+
+
+def test_a_video_flow_reports_on_is_not_cut_short(monkeypatch, no_waiting):
+    """When Flow does say it is working, believe it for the whole budget."""
+    monkeypatch.setattr(processor, "VIDEO_MAX_POLLS", 40)
+    client = FakeClient(listing_after=10**6)
+
+    async def pending(operation_id):
+        client.polls += 1
+        return {"done": False, "status": "MEDIA_GENERATION_STATUS_PENDING"}
+
+    client.check_operation_batch = pending
+    monkeypatch.setattr(processor.accounts, "rotate", lambda problem: pytest.fail("must not rotate"))
+
+    run(monkeypatch, client)
+
+    assert client.polls == 40

@@ -30,6 +30,7 @@ from agent.config import (
     STALE_PROCESSING_TIMEOUT,
     TOKEN_MAX_AGE_BEFORE_BATCH,
     VIDEO_MAX_POLLS,
+    VIDEO_LISTING_GIVEUP_S,
     VIDEO_USE_BATCH,
     VIDEO_POLL_INTERVAL,
 )
@@ -660,6 +661,7 @@ class WorkerController:
         seen_status = object()  # so the very first poll is always logged
         watching_listing = False
         listing_misses = 0
+        ever_had_status = False  # did Flow ever say anything about this operation?
 
         for attempt in range(1, VIDEO_MAX_POLLS + 1):
             await asyncio.sleep(VIDEO_POLL_INTERVAL)
@@ -673,6 +675,9 @@ class WorkerController:
             # Once per change, not once per poll: eighty polls of "still
             # pending" is noise, and a video that never leaves its first status
             # is the thing worth seeing.
+            if state.get("status") or state.get("done"):
+                ever_had_status = True
+
             if state.get("status") != seen_status:
                 seen_status = state.get("status")
                 logger.info(
@@ -707,6 +712,14 @@ class WorkerController:
                 if state.get("done") or listing_misses == 1:
                     logger.warning("job %s: no media for the operation in the project "
                                    "yet (%s)", job_id[:8], found.get("error") or "not in listing")
+                # Flow never gave a status and the video is still not in the
+                # project: this account accepted the request and made nothing
+                # (seen for hours on one account while the others delivered in
+                # a minute). Stop waiting and move the work on.
+                if (not ever_had_status and not found.get("error")
+                        and attempt * VIDEO_POLL_INTERVAL >= VIDEO_LISTING_GIVEUP_S):
+                    await self._video_never_appeared(job, attempt * VIDEO_POLL_INTERVAL)
+                    return
                 continue
 
             urls = await client.get_media_urls_batch(found["media_id"])
@@ -726,6 +739,20 @@ class WorkerController:
             f"Video did not finish within {waited}s ({VIDEO_MAX_POLLS} polls). "
             "Raise VIDEO_MAX_POLLS if generation is legitimately slower.",
         )
+
+    async def _video_never_appeared(self, job: dict, waited: int) -> None:
+        """A video this account accepted but never produced: next account, or a clear failure."""
+        job_id = job["id"]
+        problem = (f"Flow accepted the video but nothing appeared in the project after {waited}s "
+                   "on this Google account (no status, not in the listing)")
+        if accounts.rotate(problem) is not None:
+            logger.warning("job %s: %s — switching Google account", job_id[:8], problem)
+            await jobs.requeue(job_id, problem + "; moving to the next account")
+            return
+        message = (problem + ". Nothing was generated. Check this account's video credits "
+                   "and access on Flow, or add another account under Setup -> Google accounts.")
+        logger.error("job %s FAILED: %s", job_id[:8], message)
+        await jobs.fail(job_id, message)
 
     async def _submit_video(self, client, job, media_ids, project_id, aspect_ratio):
         """Submit the video, working out which model name Flow still accepts.

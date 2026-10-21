@@ -135,6 +135,11 @@ IMAGE_USE_BATCH = os.environ.get("IMAGE_USE_BATCH", "1") == "1"
 # its own budget rather than inheriting numbers chosen for images.
 VIDEO_POLL_INTERVAL = int(os.environ.get("VIDEO_POLL_INTERVAL", "15"))
 VIDEO_MAX_POLLS = int(os.environ.get("VIDEO_MAX_POLLS", "80"))
+# A video with no status from Flow that has still not shown up in the project
+# after this long is not coming: a healthy account delivers one in about a
+# minute. Give up then and move to the next Google account instead of waiting
+# out the whole VIDEO_MAX_POLLS budget.
+VIDEO_LISTING_GIVEUP_S = int(os.environ.get("VIDEO_LISTING_GIVEUP_S", "300"))
 
 # --- API Endpoints ------------------------------------------
 # Frozen: these paths and their query shape are what the Flow UI calls.
