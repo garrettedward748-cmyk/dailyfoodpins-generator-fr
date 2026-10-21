@@ -2,7 +2,8 @@
 FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 WHISPER_MODEL=base
-RUN pip install --no-cache-dir faster-whisper==1.1.1
+# faster-whisper 1.1.1 imports requests, which huggingface_hub 1.x no longer pulls in.
+RUN pip install --no-cache-dir faster-whisper==1.1.1 requests "huggingface_hub<1.0"
 # Bake the model in, so the first reel does not wait on a download.
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8', download_root='/models')"
 COPY server.py ./
