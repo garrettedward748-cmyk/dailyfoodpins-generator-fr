@@ -60,7 +60,7 @@ import { planProcess, planReel, PROCESS_SHOTS, type SourceRole } from './plan.js
 import { filmPending } from './film.js';
 import { assembleMixedReel, assembleProcessReel, assembleReel, hookFromTitle, lastFrame, normalizeForSocial, type MixedReelInput, type WordTiming } from './assemble.js';
 import { fetchWordTimings } from './word-timings.js';
-import { allMusicUrls, isDidYouKnowSeed, isLocalMusicLine, isMixedSeed, localMusicPath, type MixedSeed, type ReelSeed } from './compose.js';
+import { allMusicUrls, isDidYouKnowSeed, isFinishedSeed, isLocalMusicLine, isMixedSeed, localMusicPath, type MixedSeed, type ReelSeed } from './compose.js';
 import { composeWithRecipe, facebookPost, pickCommentKeyword, parseFacebookLinkMode, parseRecipeInPost, recipeCandidates, recipePostText, type FacebookLinkMode, type RecipeInPost } from './recipe-text.js';
 
 const log = createLogger('reels');
@@ -1111,6 +1111,62 @@ export class AccountOffError extends Error {
   }
 }
 
+/**
+ * The video exactly as it goes out: read or downloaded, then for a one-shot
+ * reel re-encoded to the Reels shape with its hook or its word-by-word
+ * captions. Used by publishing, and by the reel page's preview, so what is
+ * previewed is what would be sent.
+ */
+export async function finalVideo(reel: ReelView, deps: Pick<ReelDeps, 'download' | 'normalize' | 'wordTimings'>): Promise<Buffer> {
+  // A studio reel is a file the platform assembled; a one-shot reel is a url
+  // the image service handed back.
+  let video: Buffer;
+  try {
+    video = reel.output_path ? await readFile(reel.output_path) : await deps.download(reel.video_url!);
+  } catch (err) {
+    // Google's video links expire. A dead link is not something a retry of
+    // the publish can fix: forget it, so Retry makes the video again.
+    if (!reel.output_path && /HTTP (403|404|410)/.test(errorMessage(err))) {
+      updateReel(reel.id, { videoUrl: null });
+      throw new Error('The video link has expired. Press Retry to make the video again.');
+    }
+    throw err;
+  }
+
+  // A one-shot reel is Flow's file as it came: re-encoded to the Reels shape
+  // before anyone else sees it (see normalizeForSocial). A file that cannot be
+  // re-encoded still goes out as it is.
+  if (!reel.output_path && !isFinishedSeed(reel.plan_json)) {
+    try {
+      let hook = '';
+      try {
+        hook = hookFromTitle((JSON.parse(reel.plan_json || '{}') as Partial<ReelSeed>).article?.title ?? '');
+      } catch {
+        hook = '';
+      }
+      // "Did you know": the voice goes on screen word by word, in place of the
+      // title. Without word timings the reel still goes out, with the title.
+      let words: WordTiming[] = [];
+      if (isDidYouKnowSeed(reel.plan_json)) {
+        try {
+          words = await (deps.wordTimings ?? fetchWordTimings)(video);
+          log.info(`reel ${reel.id}: ${words.length} spoken word(s) for the captions`);
+        } catch (err) {
+          log.warn(`reel ${reel.id}: no word captions, using the title instead — ${errorMessage(err)}`);
+        }
+        if (words.length > 0) hook = '';
+      }
+      video = await (
+        deps.normalize ?? ((v: Buffer, h?: string, w?: WordTiming[]) => normalizeForSocial(v, 'ffmpeg', h, w))
+      )(video, hook, words);
+    } catch (err) {
+      log.warn(`reel ${reel.id}: could not re-encode the video, sending it as it came — ${errorMessage(err)}`);
+    }
+  }
+
+  return video;
+}
+
 export async function publishReel(reel: ReelView, deps: ReelDeps): Promise<void> {
   if (publishingNow.has(reel.id)) {
     log.info(`reel ${reel.id} is already being published; not publishing it again`);
@@ -1153,51 +1209,7 @@ async function publishReelOnce(reel: ReelView, deps: ReelDeps): Promise<void> {
 
   updateReel(reel.id, { status: 'publishing', error: null });
 
-  // A studio reel is a file the platform assembled; a one-shot reel is a url
-  // the image service handed back.
-  let video: Buffer;
-  try {
-    video = reel.output_path ? await readFile(reel.output_path) : await deps.download(reel.video_url!);
-  } catch (err) {
-    // Google's video links expire. A dead link is not something a retry of
-    // the publish can fix: forget it, so Retry makes the video again.
-    if (!reel.output_path && /HTTP (403|404|410)/.test(errorMessage(err))) {
-      updateReel(reel.id, { videoUrl: null });
-      throw new Error('The video link has expired. Press Retry to make the video again.');
-    }
-    throw err;
-  }
-
-  // A one-shot reel is Flow's file as it came: re-encoded to the Reels shape
-  // before anyone else sees it (see normalizeForSocial). A file that cannot be
-  // re-encoded still goes out as it is.
-  if (!reel.output_path) {
-    try {
-      let hook = '';
-      try {
-        hook = hookFromTitle((JSON.parse(reel.plan_json || '{}') as Partial<ReelSeed>).article?.title ?? '');
-      } catch {
-        hook = '';
-      }
-      // "Did you know": the voice goes on screen word by word, in place of the
-      // title. Without word timings the reel still goes out, with the title.
-      let words: WordTiming[] = [];
-      if (isDidYouKnowSeed(reel.plan_json)) {
-        try {
-          words = await (deps.wordTimings ?? fetchWordTimings)(video);
-          log.info(`reel ${reel.id}: ${words.length} spoken word(s) for the captions`);
-        } catch (err) {
-          log.warn(`reel ${reel.id}: no word captions, using the title instead — ${errorMessage(err)}`);
-        }
-        if (words.length > 0) hook = '';
-      }
-      video = await (
-        deps.normalize ?? ((v: Buffer, h?: string, w?: WordTiming[]) => normalizeForSocial(v, 'ffmpeg', h, w))
-      )(video, hook, words);
-    } catch (err) {
-      log.warn(`reel ${reel.id}: could not re-encode the video, sending it as it came — ${errorMessage(err)}`);
-    }
-  }
+  const video = await finalVideo(reel, deps);
 
   // Before the Facebook client is built, not after. Building one asks the
   // page for its access token and throws when there is none — which is
@@ -1338,7 +1350,18 @@ async function publishThroughBuffer(
     save();
     log.info(`reel ${reel.id}: video published at ${videoUrl}`);
     // Keep the site's copy as the reel's video: it does not expire like Google's link.
-    if (!reel.output_path) updateReel(reel.id, { videoUrl });
+    if (!reel.output_path) {
+      updateReel(reel.id, { videoUrl });
+      // That copy is already the finished video -- re-encoded, with its hook
+      // or its captions. Marked, so a later publish or preview sends it as it
+      // is instead of drawing a second set of words over the first.
+      try {
+        const seed = JSON.parse(reel.plan_json || '{}') as Record<string, unknown>;
+        setReelStage(reel.id, reel.stage, { planJson: JSON.stringify({ ...seed, finished: true }) });
+      } catch {
+        /* an unreadable plan only costs a second re-encode */
+      }
+    }
   }
 
   // The same video on the recipe page, for readers and for Google.

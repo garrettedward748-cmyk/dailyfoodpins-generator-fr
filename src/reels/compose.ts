@@ -44,6 +44,15 @@ export interface MixedSeed extends ReelSeed {
   clipPath?: string;
 }
 
+/** True once the reel's video_url points at its finished copy on the site, not at Flow's raw clip. */
+export const isFinishedSeed = (planJson: string | null | undefined): boolean => {
+  try {
+    return Boolean((JSON.parse(planJson || '{}') as { finished?: boolean }).finished);
+  } catch {
+    return false;
+  }
+};
+
 /** True for a "Did you know" reel: its voice is written on screen, word by word, before it goes out. */
 export const isDidYouKnowSeed = (planJson: string | null | undefined): boolean => {
   try {

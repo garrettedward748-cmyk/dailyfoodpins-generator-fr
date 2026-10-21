@@ -199,6 +199,11 @@ export function reelDetailPage(
             <div class="card">
               <h2>The video</h2>
               <video src="${reel.video_url}" controls playsinline style="max-width:100%"></video>
+              <p class="help">
+                This is the clip as Flow made it.
+                <a href="/reels/${reel.id}/preview?fresh=1" target="_blank" rel="noopener">Preview it as it will be posted</a>
+                &mdash; re-encoded, with its title or its word-by-word captions. Nothing is sent anywhere.
+              </p>
             </div>
           `
         : raw('')}

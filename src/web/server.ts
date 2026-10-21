@@ -243,7 +243,7 @@ import {
 import { createLogger, errorMessage } from '../lib/logger.js';
 import { TelegramClient } from '../integrations/telegram.js';
 import { syncToken, type SyncResult } from '../reels/tokens.js';
-import { AccountOffError, channelKeys, channelOf, defaultDeps, publishReel, readChannels, startGeneration } from '../reels/engine.js';
+import { AccountOffError, channelKeys, channelOf, defaultDeps, finalVideo, publishReel, readChannels, startGeneration } from '../reels/engine.js';
 import { presenterFor } from '../reels/presenter.js';
 import { loadPrompt } from '../pipeline/prompts.js';
 import {
@@ -2551,6 +2551,36 @@ export function buildServer(
     const reel = getReel(asNumber((request.params as { id: string }).id, 0));
     if (!reel?.output_path || !existsSync(reel.output_path)) return reply.callNotFound();
     return reply.type('video/mp4').send(createReadStream(reel.output_path));
+  });
+
+  /**
+   * The video exactly as publishing would send it -- re-encoded, with its
+   * hook or its word-by-word captions -- without sending it anywhere. Made
+   * once and kept next to the reel's clips; ?fresh=1 makes it again.
+   */
+  app.get('/reels/:id/preview', async (request, reply) => {
+    const reel = getReel(asNumber((request.params as { id: string }).id, 0));
+    if (!reel || (!reel.output_path && !reel.video_url)) return reply.callNotFound();
+    const deps = defaultDeps(settings, encryptionKey);
+    const dir = join(deps.clipsDir, String(reel.id));
+    const file = join(dir, 'preview.mp4');
+    const fresh = asString((request.query as { fresh?: string }).fresh) === '1';
+    if (fresh || !existsSync(file)) {
+      try {
+        const video = await finalVideo(reel, deps);
+        mkdirSync(dir, { recursive: true });
+        await writeFile(file, video);
+      } catch (err) {
+        return reply.code(502).type('text/plain').send(`The preview could not be made: ${errorMessage(err)}`);
+      }
+      // Made again: play it from the plain address, so the player's own
+      // follow-up requests read the file instead of making it once more.
+      if (fresh) return reply.redirect(`/reels/${reel.id}/preview`);
+    }
+    return reply
+      .type('video/mp4')
+      .header('Content-Disposition', `inline; filename="reel-${reel.id}-preview.mp4"`)
+      .send(createReadStream(file));
   });
 
   /** One scene's clip, for the storyboard. */

@@ -44,3 +44,12 @@ describe('the "Did you know" prompt', () => {
     await expect(buildDidYouKnowPrompt({ title: 't', recipe: 'r' }, good)).resolves.toMatch(/Vous saviez que/);
   });
 });
+
+import { isFinishedSeed } from '../src/reels/compose.js';
+
+describe('a reel whose video is already the finished copy', () => {
+  it('is recognised, so it is not re-encoded a second time', () => {
+    expect(isFinishedSeed(JSON.stringify({ didYouKnow: true, finished: true }))).toBe(true);
+    expect(isFinishedSeed(JSON.stringify({ didYouKnow: true }))).toBe(false);
+  });
+});
