@@ -6,6 +6,9 @@ Ultra-realistic professional food video: cinematic macro close-ups, warm light, 
 
 STEAM: none, by default — heavy steam marks a video as generated. Only a dish eaten piping hot from the stove (soup, stew, pasta, stir-fry, a lid lifting) may show a few faint wisps that fade within a second. Never thick clouds, never curls or swirls. Baked goods — muffins, cakes, cookies, bread, pies, bars — never steam. Cold or chilled dishes (cheesecake, no-bake dessert, salad, frosted cake, frozen treat): no steam, no bubbling, no oven — cool, set and creamy.
 
+THE FIRST FRAME
+The video is already moving in its very first frame: a knife, fork or spoon is already cutting, lifting or pouring. Never open on a still shot. The viewer must recognise this dish within the first second.
+
 THE SCENES — 0 to 8 seconds
 The capitalised names after "SCENE n" are notes for you only, NEVER shown on screen.
 {{reelShape}}

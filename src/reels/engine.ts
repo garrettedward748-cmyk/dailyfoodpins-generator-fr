@@ -58,7 +58,7 @@ import { parseCaptionNetworks, withSiteOverrides } from '../core/caption-structu
 import { reelCta } from './cta.js';
 import { planProcess, planReel, PROCESS_SHOTS, type SourceRole } from './plan.js';
 import { filmPending } from './film.js';
-import { assembleMixedReel, assembleProcessReel, assembleReel, lastFrame, normalizeForSocial, type MixedReelInput } from './assemble.js';
+import { assembleMixedReel, assembleProcessReel, assembleReel, hookFromTitle, lastFrame, normalizeForSocial, type MixedReelInput } from './assemble.js';
 import { allMusicUrls, isLocalMusicLine, isMixedSeed, localMusicPath, type MixedSeed, type ReelSeed } from './compose.js';
 import { composeWithRecipe, facebookPost, pickCommentKeyword, parseFacebookLinkMode, parseRecipeInPost, recipeCandidates, recipePostText, type FacebookLinkMode, type RecipeInPost } from './recipe-text.js';
 
@@ -118,7 +118,7 @@ export interface ReelDeps {
   /** Join scene clips into one file. ffmpeg, in production. */
   assemble(clipPaths: string[], outPath: string, ctaText: string): Promise<void>;
   /** Re-encode a raw Flow video for Facebook/Instagram; tests pass a stand-in. */
-  normalize?: (video: Buffer) => Promise<Buffer>;
+  normalize?: (video: Buffer, hook?: string) => Promise<Buffer>;
   /**
    * Put a fresh scene image on the site the reel belongs to, and give back
    * its public url. Flow's own urls expire; the site's do not, and the clip
@@ -1170,7 +1170,13 @@ async function publishReelOnce(reel: ReelView, deps: ReelDeps): Promise<void> {
   // re-encoded still goes out as it is.
   if (!reel.output_path) {
     try {
-      video = await (deps.normalize ?? normalizeForSocial)(video);
+      let hook = '';
+      try {
+        hook = hookFromTitle((JSON.parse(reel.plan_json || '{}') as Partial<ReelSeed>).article?.title ?? '');
+      } catch {
+        hook = '';
+      }
+      video = await (deps.normalize ?? ((v: Buffer, h?: string) => normalizeForSocial(v, 'ffmpeg', h)))(video, hook);
     } catch (err) {
       log.warn(`reel ${reel.id}: could not re-encode the video, sending it as it came — ${errorMessage(err)}`);
     }

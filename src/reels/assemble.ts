@@ -88,7 +88,18 @@ function fontArg(): string {
  * got "Facebook was unable to process the media". A file ffmpeg wrote fresh
  * carries none of that.
  */
-export async function normalizeForSocial(video: Buffer, ffmpeg = 'ffmpeg'): Promise<Buffer> {
+/** How long the hook stays on a one-clip reel, from frame 0. */
+export const HOOK_SECONDS = 3;
+
+/**
+ * The words shown over a one-clip reel's opening: the dish's own name, the
+ * part of the title before any colon or dash.
+ */
+export function hookFromTitle(title: string): string {
+  return title.split(/\s*[:|–—]\s*|\s+-\s+/)[0]!.replace(/\s+/g, ' ').trim().slice(0, 60);
+}
+
+export async function normalizeForSocial(video: Buffer, ffmpeg = 'ffmpeg', hook = ''): Promise<Buffer> {
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const dir = mkdtempSync(join(tmpdir(), 'reelnorm-'));
@@ -96,10 +107,22 @@ export async function normalizeForSocial(video: Buffer, ffmpeg = 'ffmpeg'): Prom
   const output = join(dir, 'out.mp4');
   try {
     writeFileSync(input, video);
+    let vf = 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p';
+    // The hook: the dish's name, on screen from the very first frame, so a
+    // viewer knows what this is before the two-second mark where most leave.
+    const words = hook.trim();
+    if (words) {
+      const file = join(dir, 'hook.txt');
+      writeFileSync(file, wrapWords(words, 18));
+      vf +=
+        `,drawtext=${fontArg()}textfile='${escapeDrawtext(file)}':fontcolor=white:fontsize=78:line_spacing=14:` +
+        `box=1:boxcolor=black@0.45:boxborderw=28:x=(w-text_w)/2:y=h*0.14:` +
+        `enable='between(t,0,${HOOK_SECONDS})'`;
+    }
     await run(ffmpeg, [
       '-y', '-i', input,
       '-map', '0:v:0', '-map', '0:a:0?',
-      '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p',
+      '-vf', vf,
       '-c:v', 'libx264', '-profile:v', 'high', '-preset', 'veryfast', '-crf', '20', '-r', '30',
       '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2',
       '-map_metadata', '-1', '-movflags', '+faststart',
