@@ -60,3 +60,10 @@ def test_with_nowhere_to_go_the_failure_says_to_sign_in(calls, monkeypatch):
     handle("NO_AT_TOKEN", attempts=proc.MAX_RETRIES)
     assert calls[-1][0] == "fail"
     assert "sign in" in calls[-1][1]
+
+
+def test_a_flow_tab_that_reloaded_mid_upload_is_retried(calls):
+    """Chrome's error when the tab navigates under an injected script."""
+    error = "Uploading a reference failed: Frame with ID 0 was removed."
+    handle(error)
+    assert calls == [("requeue", error)]

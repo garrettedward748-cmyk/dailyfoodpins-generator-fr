@@ -100,6 +100,10 @@ RETRYABLE = ("quota", "rate_limit", "exhausted", "resource_exhausted", "429",
              # a page still coming back from a reload, or navigating under the
              # injected fetch. A timeout by another name.
              "no_injection_result", "injection_failed",
+             # Chrome's own words for the same thing: the Flow tab reloaded or
+             # navigated while a script was running in it ("Frame with ID 0
+             # was removed"). The retry runs in the page that replaced it.
+             "frame with id",
              # The Flow page was not ready to sign a request (its `at` token
              # unread) -- typically the first seconds after the browser came
              # up on another account. The retry reloads the tab first.
