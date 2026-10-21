@@ -16,10 +16,24 @@ METHOD SHOT: {{stepA}}
 METHOD SHOT: {{stepB}}
 METHOD SHOT: {{stepC}}
 
+Each photograph is generated on its own, from nothing but its prompt. So
+first work out, from the full recipe, what the food looks like after every
+step: its shape, its size, how many pieces, and everything already on it or
+in it.
+
 For each step:
-- Show the state the step is about — a texture, a shape, a colour, the dish
-  at that moment — close enough to judge it by eye. One still photograph,
-  never what happens before or after.
+- Show the food exactly at that point, close enough to judge it by eye.
+  Everything done in the EARLIER steps is still there — the filling, the
+  fold, the crimped edge, the crumble, the glaze, the dusting — and nothing
+  from a LATER step appears yet. Pastries sprinkled with streusel in step 5
+  still carry that streusel when they are brushed with egg wash in step 6.
+- The shape is the one the method makes, and the same as in the photographs
+  above: if the steps fold squares into half-moons, show half-moons, whatever
+  the title calls the dish.
+- Write that shape, the filling and every topping already added into the
+  prompt in plain words. A prompt that only names the action ("brushing the
+  pastries") gets a picture of some other pastry.
+- One still photograph, never what happens before or after.
 - Only what the recipe actually uses: no ingredient or tool it does not have,
   no alcohol, no pork. No hands. No text in the picture.
 - A serving step shows the dish being served or portioned, not a copy of the

@@ -17,6 +17,27 @@ of the category would be the wrong picture for this recipe.
 {{photoShoot}}
 
 ═══════════════════════════════════════════════════════════════
+ONE DISH, STEP BY STEP
+═══════════════════════════════════════════════════════════════
+
+Each photograph is generated on its own, from nothing but its prompt. So
+before writing any of them, work out what the food looks like after EVERY
+step of the method: its shape, its size, how many pieces, and everything
+already on it or in it.
+
+- A method shot shows the food exactly at that point. Everything done in
+  the EARLIER steps is still there — the filling, the fold, the crimped
+  edge, the crumble, the glaze, the dusting — and nothing from a LATER step
+  appears yet. Pastries sprinkled with streusel in step 5 still carry that
+  streusel when they are brushed with egg wash in step 6.
+- The shape the method makes is the shape in every photograph, the hero and
+  the pin included. If the steps fold squares into half-moons, every shot
+  shows half-moons, whatever the title calls the dish.
+- Write that shape, the filling and every topping already added into each
+  prompt in plain words. A prompt that only names the action ("brushing the
+  pastries") gets a picture of some other pastry.
+
+═══════════════════════════════════════════════════════════════
 CHOOSING THE THREE METHOD SHOTS
 ═══════════════════════════════════════════════════════════════
 
