@@ -1013,14 +1013,29 @@ class WorkerController:
         # alone, every job fails the same way for hours (found that way one
         # night), so on the last try it is marked signed out -- the Google
         # accounts page then says to sign in again -- and the work moves on.
+        #
+        # An account that has never got anything out of Flow is not signed
+        # out: it is a new one whose Labs terms and welcome screens are still
+        # waiting. Said so, because signing in again does not help it.
         if "no_at_token" in lower and job["attempts"] >= MAX_RETRIES:
-            problem = "Signed out of Google: the Flow page has no sign-in token (NO_AT_TOKEN)"
+            never_worked = not accounts.active_has_worked()
+            problem = (
+                f"{accounts.FLOW_SETUP_MARKER}: the Flow page has no sign-in token (NO_AT_TOKEN) on an account that never worked"
+                if never_worked
+                else "Signed out of Google: the Flow page has no sign-in token (NO_AT_TOKEN)"
+            )
             if accounts.rotate(problem) is not None:
-                logger.warning("job %s: Flow page signed out, switching Google account", job_id[:8])
+                logger.warning("job %s: %s, switching Google account", job_id[:8],
+                               "Flow not set up on this account" if never_worked else "Flow page signed out")
                 await jobs.requeue(job_id, error)
                 return
-            error = (f"{error} — the Google account in the platform's browser looks signed out of Flow. "
-                     "Open Browser, sign in to labs.google/flow, then retry (or press Reset on the account under Setup → Google accounts).")
+            error = (
+                f"{error} — this Google account is signed in but Flow is not set up on it yet. "
+                "Open Browser, go to labs.google/flow once, accept the terms, then press Reset on the account under Setup → Google accounts."
+                if never_worked
+                else f"{error} — the Google account in the platform's browser looks signed out of Flow. "
+                "Open Browser, sign in to labs.google/flow, then retry (or press Reset on the account under Setup → Google accounts)."
+            )
 
         if "high_traffic" in lower and job["attempts"] < MAX_RETRIES:
             # Busy servers clear on their own; asking again at once is what

@@ -292,3 +292,16 @@ def test_setting_the_cost_to_zero_ends_limit_rests(isolated):
     assert next(a for a in accounts.list_accounts()["accounts"] if a["id"] == new["id"])["status"] == "cooldown"
     accounts.set_clip_cost(0)
     assert next(a for a in accounts.list_accounts()["accounts"] if a["id"] == new["id"])["status"] == "ok"
+
+
+def test_new_account_without_flow_reads_as_not_set_up(isolated):
+    assert accounts.active_has_worked() is False
+    accounts.rotate(f"{accounts.FLOW_SETUP_MARKER}: NO_AT_TOKEN")
+    acc = next(a for a in accounts.list_accounts()["accounts"] if a["id"] == 1)
+    assert acc["status"] == "signed_out"
+    assert "Flow is not set up" in acc["reason"]
+
+
+def test_an_account_that_worked_once_is_remembered(isolated):
+    accounts.note_success()
+    assert accounts.active_has_worked() is True

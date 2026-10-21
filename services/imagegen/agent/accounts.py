@@ -54,6 +54,13 @@ MAX_ACCOUNTS = int(os.environ.get("MAX_FLOW_ACCOUNTS", "20"))
 CREDIT_MARKERS = ("no video credits", "credits left", "out of credits", "insufficient credit",
                   "quota", "resource_exhausted", "exhausted")
 SIGNED_OUT_MARKERS = ("session_expired", "signed out", "sign in again")
+# A Google account that is signed in but has never got through Flow: Labs'
+# terms and welcome screens are still waiting, so the page has no sign-in
+# token. Read as "signed out" before, which sent people to sign in again --
+# the one thing that does not help.
+FLOW_SETUP_MARKER = "flow not set up"
+FLOW_SETUP_REASON = ("Signed in, but Flow is not set up on it yet — open Browser, go to "
+                     "labs.google/flow once, accept the terms, then press Reset")
 # Google's reCAPTCHA verdict on this account in this browser. Retrying on the
 # same account does not clear it, so a run of them moves the work on.
 UNUSUAL_MARKER = "unusual_activity"
@@ -340,7 +347,9 @@ def rotate(problem: str) -> Optional[int]:
     lower = problem.lower()
     current = next(a for a in data["accounts"] if a["id"] == data["active"])
     current["unusual"] = 0
-    if any(m in lower for m in SIGNED_OUT_MARKERS):
+    if FLOW_SETUP_MARKER in lower:
+        current.update(status="signed_out", until=None, reason=FLOW_SETUP_REASON)
+    elif any(m in lower for m in SIGNED_OUT_MARKERS):
         current.update(status="signed_out", until=None, reason="Signed out of Google — sign in again")
     elif LIMIT_MARKER in lower:
         current.update(status="cooldown", until=_next_reset(current),
@@ -529,9 +538,21 @@ def note_unusual_activity() -> bool:
 def note_success() -> None:
     data = _load()
     current = next((a for a in data["accounts"] if a["id"] == data["active"]), None)
-    if current is not None and current.get("unusual"):
+    if current is not None and (current.get("unusual") or not current.get("worked")):
         current["unusual"] = 0
+        current["worked"] = True
         _save(data)
+
+
+def active_has_worked() -> bool:
+    """Has the account in use ever got something out of Flow?
+
+    Accounts from before this was recorded count as having worked when they
+    have spent credits, so a real sign-out on them still reads as one.
+    """
+    data = _load()
+    current = next((a for a in data["accounts"] if a["id"] == data["active"]), None)
+    return bool(current and (current.get("worked") or current.get("spend")))
 
 
 def other_account() -> Optional[int]:
