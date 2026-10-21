@@ -1,40 +1,29 @@
 Create a 10-second vertical Facebook Reel (9:16) for the recipe "{{seo.title}}".
 
-The attached reference photos show the finished dish: the video must show exactly this food — same colours, same toppings, same plate. Nothing added or swapped.
+The reference photos show the finished dish: show exactly this food — same colours, toppings and plate. Nothing added or swapped.
 
-Use ultra-realistic professional food video, cinematic macro close-ups, warm inviting lighting, shallow depth of field, smooth camera movements, and quick elegant transitions. Make the dish look fresh, rich and irresistible, with the textures true to this recipe.
+Ultra-realistic professional food video: cinematic macro close-ups, warm light, shallow depth of field, smooth camera moves, quick elegant transitions. Fresh, rich, irresistible, textures true to this recipe.
 
-STEAM: none, by default. Heavy steam is the clearest sign a food video was generated rather than filmed. It is allowed only for a dish eaten piping hot straight from the stove — a soup, a stew, pasta, a stir-fry, a pot as its lid comes off — and even then only a few thin, faint wisps that fade within a second, the way a real camera barely catches it in a kitchen. Never thick clouds, never curls or swirls, never steam rising through the whole shot. Baked goods — muffins, cakes, cookies, bread, pies, bars, brownies — have NO steam at all, however freshly baked. A cold or chilled dish — cheesecake, no-bake dessert, salad, frosted cake, frozen treat — has no steam, no bubbling and no oven; show it cool, set and creamy instead.
+STEAM: none by default — heavy steam marks a video as generated. Only a dish eaten piping hot from the stove (soup, stew, pasta, stir-fry, a lid lifting) may show a few faint wisps that fade within a second. Baked goods never steam. Cold or chilled dishes (cheesecake, no-bake dessert, salad, frosted cake, frozen treat): no steam, no bubbling, no oven — cool, set and creamy.
 
-THE SCENES — 0 to 8 seconds, then the final shot
-The names in capitals after "SCENE n" (HOOK, THE MISTAKE, THE FIX, THE RESULT…) are notes for you only. They are NEVER written on screen: no title card, no heading, no label. The only words on screen are the French subtitles and the final title.
+THE SCENES — 0 to 8 seconds
+The capitalised names after "SCENE n" are notes for you only, NEVER shown on screen.
 {{reelShape}}
 
-CLOSING — 8–10 sec, whatever the scenes above say
-The last shot of the video: the finished {{seo.title}}, served and garnished exactly as in the reference photos.
+CLOSING — 8–10 sec
+The finished {{seo.title}}, served and garnished as in the reference photos.
 {{presenter.name}} voiceover, word for word: "{{cta}}"
 Subtitle: "{{cta}}"
 
-LANGUAGE — FRENCH ONLY
-Everything spoken and everything written on screen is in FRENCH (France): the voiceover, every subtitle and the closing line. No English word is spoken or shown, even though these instructions are in English. Every piece of text that appears in the frame — subtitles, titles, numbers' labels, signs, packaging, labels on jars or boxes — is French or has no letters at all; never an English word, anywhere in the picture. Spoken French is natural and warm, first person (« je »), addressing the viewer as « vous ».
+LANGUAGE: FRENCH (France) ONLY for everything spoken or written in the frame — voiceover, subtitles, signs, labels, packaging. Never an English word. Natural, warm, first person (« je »), addressing the viewer as « vous ».
 
-THE OPENING LINE
-The first spoken line is ONE complete French sentence of at most ten words, written about this dish. You may call it by a plain everyday name (« ces muffins », « cette tarte »), but do NOT copy, splice or rearrange words from the recipe title: a title cut into pieces reads as nonsense.
+OPENING LINE: one complete French sentence of at most ten words about this dish. A plain name (« ces muffins ») is fine; never splice words from the recipe title.
 
-SUBTITLES
-Every subtitle is a complete, grammatical French sentence that ends where a sentence ends, except where the scenes above ask for something else on purpose (three words joined with "+", a numbered "1." list). Never a fragment, never trailing off in a comma or a dangling preposition, and never words lifted out of the recipe title and pushed together. Keep each subtitle short (at most ten words) and spell every French word correctly, with its accents: a garbled or misspelled word is worse than a shorter sentence. These are the first words the viewer reads: a broken one is read as a broken video.
+SUBTITLES: each one a complete, correctly spelled French sentence with accents, at most ten words — never a fragment or title words pushed together — except where the scenes ask for "+" words or a "1." list.
 
-VOICE & AUDIO
-The voiceover is {{presenter.name}}.
-{{presenter.voice}}
-Warm, friendly female chef voice speaking natural, native French (France), clear, energetic and inviting delivery, with no English accent.
-Voice perfectly synchronized with subtitles.
-Subtle, realistic cooking and serving sounds that fit this recipe.
-Light, cozy background music.
+VOICE & AUDIO: the voiceover is {{presenter.name}}. {{presenter.voice}}
+Native French, clear and inviting, no English accent, synchronized with the subtitles. Subtle real cooking sounds, light cozy music.
 
-VISUAL DIRECTION
-Premium homemade-food-blog aesthetic, realistic textures, warm kitchen atmosphere, cinematic macro shots, shallow depth of field, smooth transitions, highly appetizing presentation. Keep the food as the visual focus.
+LOOK: premium homemade food blog, warm kitchen, food always the focus. No faces, no talking chef, no distorted hands, no artificial-looking food.
 
-No talking-head chef. No visible faces. No distorted hands. No artificial-looking food.
-
-Final screen text: {{seo.title}}, and nothing else. The closing line is already spoken and subtitled — do not repeat it, and do not add a line of your own telling the viewer where to find the recipe.
+Final screen text: {{seo.title}} and nothing else — do not repeat the closing line or add one of your own.

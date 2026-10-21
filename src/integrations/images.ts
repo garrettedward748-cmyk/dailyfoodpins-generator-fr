@@ -140,7 +140,7 @@ export class ImageClient {
       method: 'POST',
       headers: this.headers(),
       body: JSON.stringify({
-        prompt: input.prompt,
+        prompt: fitVideoPrompt(input.prompt),
         reference_urls: input.referenceUrls,
         ...(input.characterMediaId ? { character_media_id: input.characterMediaId } : {}),
         ...(input.voiceMediaId ? { voice_media_id: input.voiceMediaId } : {}),
@@ -278,4 +278,24 @@ export class ImageClient {
       return { ok: false, error: errorMessage(err) };
     }
   }
+}
+
+/** The video service rejects a prompt longer than this (HTTP 422 string_too_long). */
+export const VIDEO_PROMPT_MAX = 5000;
+
+/**
+ * Keep a video prompt under the service's limit.
+ *
+ * First the free win: trailing spaces and runs of blank lines. Only if it is
+ * still too long is the end cut, at a line break, so no sentence is sent half
+ * written. A cut prompt still films; a rejected one films nothing.
+ */
+export function fitVideoPrompt(prompt: string, max = VIDEO_PROMPT_MAX): string {
+  let out = prompt.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (out.length <= max) return out;
+  const cut = out.slice(0, max);
+  const lastBreak = cut.lastIndexOf('\n');
+  out = (lastBreak > max * 0.8 ? cut.slice(0, lastBreak) : cut).trim();
+  console.warn(`[video] prompt was ${prompt.length} characters; cut to ${out.length} to fit the ${max} limit`);
+  return out;
 }
