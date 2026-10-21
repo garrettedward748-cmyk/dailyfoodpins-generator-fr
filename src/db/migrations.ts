@@ -1,6 +1,7 @@
 import { createLogger } from '../lib/logger.js';
 import type { Db } from './index.js';
 import { RECIPE_CARD_BODY, RECIPE_CARD_NAME } from '../core/pin-design-recipe-card.js';
+import { TITLE_BOX_BODY, TITLE_BOX_NAME } from '../core/pin-design-title-box.js';
 
 const log = createLogger('migrate');
 
@@ -1401,6 +1402,20 @@ export const MIGRATIONS: Migration[] = [
       // A keyword from a Pinterest idea goes to the account the idea came
       // from, not the next in the turn. NULL: the turn, as for any keyword.
       addColumn(db, 'keyword_sites', 'pin_profile_id', 'INTEGER');
+    },
+  },
+  {
+    id: '064-pin-design-title-box',
+    description: 'The white title box pin design (burgundy slab-serif title near the top, domain label at the bottom), added to the designs already there',
+    up(db) {
+      // Same rule as 060: a fresh install gets it with the other defaults.
+      if (!hasTable(db, 'pin_designs')) return;
+      const count = (db.prepare('SELECT COUNT(*) AS n FROM pin_designs').get() as { n: number }).n;
+      if (count === 0) return;
+      const exists = db.prepare('SELECT 1 FROM pin_designs WHERE name = ?').get(TITLE_BOX_NAME);
+      if (exists) return;
+      const next = (db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS p FROM pin_designs').get() as { p: number }).p;
+      db.prepare('INSERT INTO pin_designs (name, body, enabled, position) VALUES (?, ?, 1, ?)').run(TITLE_BOX_NAME, TITLE_BOX_BODY, next);
     },
   },
 ];
