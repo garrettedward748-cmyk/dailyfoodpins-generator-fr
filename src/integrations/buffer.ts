@@ -45,8 +45,12 @@ const log = createLogger('buffer');
 function unknownMetadataField(err: unknown, typeName: string): { field: string; suggestion?: string } | null {
   const message = err instanceof Error ? err.message : String(err);
   const match = new RegExp(`Field "(\\w+)" is not defined by type "${typeName}\\w*"\\.?(?:\\s*Did you mean "(\\w+)"\\?)?`, 'i').exec(message);
-  if (!match) return null;
-  return { field: match[1]!, suggestion: match[2] };
+  if (match) return { field: match[1]!, suggestion: match[2] };
+  // The same refusal in the wording Buffer switched to in October 2026:
+  //   Expected value of type "TikTokPostMetadataInput" not to include unknown field "privacyLevel"
+  const unknown = new RegExp(`type "${typeName}\\w*" not to include unknown field "(\\w+)"`, 'i').exec(message);
+  if (unknown) return { field: unknown[1]! };
+  return null;
 }
 
 /** Whether a GraphQL error is about one field's value type rather than its name. */

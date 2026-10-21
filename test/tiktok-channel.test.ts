@@ -213,3 +213,28 @@ describe('the TikTok video itself', () => {
     ).rejects.toThrow(/channel not connected/);
   });
 });
+
+describe('Buffer refusing a TikTok field in its newer wording', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('drops privacyLevel and sends the video again', async () => {
+    const queries: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body?: string }) => {
+      const query = JSON.parse(String(init.body)).query as string;
+      queries.push(query);
+      if (/privacyLevel:/.test(query)) {
+        return new Response(JSON.stringify({
+          errors: [{ message: 'Expected value of type "TikTokPostMetadataInput" not to include unknown field "privacyLevel", found: { privacyLevel: PUBLIC_TO_EVERYONE, isAiGenerated: true }.' }],
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: { createPost: { post: { id: 'p_9' } } } }), { status: 200 });
+    }));
+
+    const id = await new BufferClient('tok').createTikTokPost({ channelId: 'c_1', text: 'Cookies', videoUrl: 'v' });
+
+    expect(id).toBe('p_9');
+    expect(queries).toHaveLength(2);
+    expect(queries[1]).not.toContain('privacyLevel');
+    expect(queries[1]).toContain('isAiGenerated: true');
+  });
+});

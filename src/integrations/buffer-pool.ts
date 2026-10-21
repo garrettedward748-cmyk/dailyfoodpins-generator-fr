@@ -98,8 +98,18 @@ function refusedEverywhere(accounts: number, domain: string, what: string, lastE
 export const isBufferOutage = (error: unknown): boolean =>
   /http 5\d\d|service (temporarily )?unavailable|bad gateway|gateway time-?out/i.test(errorMessage(error));
 
+/**
+ * Buffer refusing the shape of the request (an unknown field, a wrong type):
+ * every account would refuse it the same way, so it is never a reason to call
+ * an account full. Its text quotes the post back ("isAiGenerated" holds
+ * "rate"), which used to match the markers above and bench an empty account.
+ */
+export const isSchemaError = (error: unknown): boolean =>
+  /graphql error: (expected value of type|field "\w+" is not defined|unknown argument|cannot query field|enum "\w+" cannot represent|.* cannot represent)/i
+    .test(errorMessage(error));
+
 export const isRotatable = (error: unknown): boolean => {
-  if (isBufferOutage(error)) return false;
+  if (isBufferOutage(error) || isSchemaError(error)) return false;
   const text = errorMessage(error).toLowerCase();
   return ROTATE_ON.some((marker) => text.includes(marker));
 };

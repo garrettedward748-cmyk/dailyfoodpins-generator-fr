@@ -4,7 +4,7 @@ The reference photos show the finished dish: show exactly this food — same col
 
 Ultra-realistic professional food video: cinematic macro close-ups, warm light, shallow depth of field, smooth camera moves, quick elegant transitions. Fresh, rich, irresistible, textures true to this recipe.
 
-STEAM: none by default — heavy steam marks a video as generated. Only a dish eaten piping hot from the stove (soup, stew, pasta, stir-fry, a lid lifting) may show a few faint wisps that fade within a second. Baked goods never steam. Cold or chilled dishes (cheesecake, no-bake dessert, salad, frosted cake, frozen treat): no steam, no bubbling, no oven — cool, set and creamy.
+STEAM: none, by default — heavy steam marks a video as generated. Only a dish eaten piping hot from the stove (soup, stew, pasta, stir-fry, a lid lifting) may show a few faint wisps that fade within a second. Never thick clouds, never curls or swirls. Baked goods — muffins, cakes, cookies, bread, pies, bars — never steam. Cold or chilled dishes (cheesecake, no-bake dessert, salad, frosted cake, frozen treat): no steam, no bubbling, no oven — cool, set and creamy.
 
 THE SCENES — 0 to 8 seconds
 The capitalised names after "SCENE n" are notes for you only, NEVER shown on screen.
@@ -17,7 +17,7 @@ Subtitle: "{{cta}}"
 
 LANGUAGE: FRENCH (France) ONLY for everything spoken or written in the frame — voiceover, subtitles, signs, labels, packaging. Never an English word. Natural, warm, first person (« je »), addressing the viewer as « vous ».
 
-OPENING LINE: one complete French sentence of at most ten words about this dish. A plain name (« ces muffins ») is fine; never splice words from the recipe title.
+OPENING LINE: one complete French sentence of at most ten words about this dish. A plain name (« ces muffins ») is fine, but do NOT copy, splice or rearrange words from the recipe title.
 
 SUBTITLES: each one a complete, correctly spelled French sentence with accents, at most ten words — never a fragment or title words pushed together — except where the scenes ask for "+" words or a "1." list.
 

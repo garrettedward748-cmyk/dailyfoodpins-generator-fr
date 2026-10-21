@@ -140,6 +140,8 @@ describe('recognising a refusal worth rotating on', () => {
     // Buffer down: its HTML error page must not read as "queue full".
     'Buffer HTTP 503: <html> <head><title>503 Service Temporarily Unavailable</title></head> <body>fully separate rate limit queue</body>',
     'Buffer HTTP 502: Bad Gateway',
+    // A field Buffer does not know: the post is quoted back ("isAiGenerated" holds "rate").
+    'Buffer GraphQL error: Expected value of type "TikTokPostMetadataInput" not to include unknown field "privacyLevel", found: { privacyLevel: PUBLIC_TO_EVERYONE, isAiGenerated: true }.',
   ])('does not rotate on %s', (message) => {
     // These fail identically on every account. Retrying would only spend five
     // accounts arriving at the same answer.
