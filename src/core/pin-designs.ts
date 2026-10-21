@@ -3,6 +3,7 @@ import { getPromptOverride } from '../db/repos.js';
 import { readShippedPrompt } from '../pipeline/prompts.js';
 import { pickInRotation } from './rotation.js';
 import { RECIPE_CARD_BODY, RECIPE_CARD_NAME } from './pin-design-recipe-card.js';
+import { TITLE_BOX_BODY, TITLE_BOX_NAME } from './pin-design-title-box.js';
 
 /**
  * Pinterest graphic designs, rotated so a site's pins do not all look alike.
@@ -67,6 +68,7 @@ export const DEFAULT_DESIGNS: { name: string; body: string }[] = [
       NO_EXTRA,
   },
   { name: RECIPE_CARD_NAME, body: RECIPE_CARD_BODY },
+  { name: TITLE_BOX_NAME, body: TITLE_BOX_BODY },
 ];
 
 /** The designs, oldest first by position; the defaults are put in the first time this is asked. */
