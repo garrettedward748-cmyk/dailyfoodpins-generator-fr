@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { setPriority } from 'node:os';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -184,6 +185,17 @@ function run(binary: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     let stderr = '';
     const child = spawn(binary, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    // Lowest priority. The container is capped at a few cores, and an encode
+    // takes all of them: at normal priority the web UI waited behind ffmpeg and
+    // every page took seconds. Niced, the UI answers first and the reel only
+    // uses what is left -- it finishes barely later.
+    if (child.pid) {
+      try {
+        setPriority(child.pid, 19);
+      } catch {
+        // Not allowed on this host: the encode runs at normal priority.
+      }
+    }
     child.stderr.on('data', (chunk) => {
       stderr += String(chunk);
       if (stderr.length > 20_000) stderr = stderr.slice(-20_000);
