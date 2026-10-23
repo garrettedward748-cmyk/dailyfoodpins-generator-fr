@@ -3454,6 +3454,14 @@ export function clearHistory(): { runs: number; reels: number } {
   return { runs: Number(runs), reels: Number(reels) };
 }
 
+/** Reels made for a site in the last `hours` hours (discarded ones are gone and do not count). */
+export const reelsCreatedRecently = (siteId: number, hours: number): number =>
+  get<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM reels WHERE site_id = ? AND created_at >= datetime('now', ?)",
+    siteId,
+    `-${Math.max(0, hours)} hours`,
+  )?.n ?? 0;
+
 export const deleteReel = (id: number): void => {
   run('DELETE FROM reels WHERE id = ?', id);
 };

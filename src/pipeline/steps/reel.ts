@@ -5,7 +5,16 @@ import type { PostedRecipe } from '../../integrations/site-api.js';
 import { createLogger, errorMessage } from '../../lib/logger.js';
 import { writeReelCaption } from '../../reels/caption.js';
 import { markReelCaptionStructure, nextCaptionShape } from '../../core/caption-structures.js';
-import { createReel, getReel, pageForSite, presenterForPage, reelsElsewhere, setReelStage, updateReel } from '../../db/repos.js';
+import {
+  createReel,
+  getReel,
+  pageForSite,
+  presenterForPage,
+  reelsCreatedRecently,
+  reelsElsewhere,
+  setReelStage,
+  updateReel,
+} from '../../db/repos.js';
 import {
   buildDidYouKnowPrompt,
   buildReelPrompt,
@@ -55,6 +64,19 @@ export const createReelStep: Step<CreateReelInput, CreateReelOutput> = {
   async run(ctx, input) {
     if (!ctx.settings.getBool('fb_enabled')) {
       return { reelId: null, skipped: 'Facebook reels are off' };
+    }
+
+    // A batch of articles (an import, a catch-up) must not become a batch of
+    // reels: each one costs Flow credits and a slot in every Buffer queue.
+    // Checked before the caption, so a skipped reel costs no model call.
+    const dailyMax = Math.floor(ctx.settings.getNumber('reel_daily_max'));
+    if (dailyMax > 0) {
+      const made = reelsCreatedRecently(ctx.site.id, 24);
+      if (made >= dailyMax) {
+        const skipped = `${ctx.site.domain} already has ${made} reel(s) in the last 24 hours (limit ${dailyMax})`;
+        log.info(`run ${ctx.runId}: no reel — ${skipped}`);
+        return { reelId: null, skipped };
+      }
     }
 
     // The Facebook page the reel is for, when one takes reels. With none, the

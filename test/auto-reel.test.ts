@@ -176,6 +176,49 @@ describe('the create-reel step', () => {
     expect(Object.keys(row)).not.toContain('prompt');
   });
 
+  it('makes no reel once the site has reached its 24-hour reel limit, and still publishes the article', async () => {
+    pageForKeyword();
+    settings.set('reel_daily_max', '2');
+    // Two reels already made for this site today.
+    for (let i = 0; i < 2; i++) {
+      run("INSERT INTO reels (site_id, keyword_id, status) VALUES (?, ?, 'published')", siteId, keywordId);
+    }
+    const world = buildWorld();
+    vi.stubGlobal('fetch', world.fetchStub);
+    const runId = createRun(keywordId, siteId);
+
+    const outcome = await executePipeline(makeContext(runId));
+
+    expect(outcome.status).toBe('published');
+    expect(listReels().filter((r) => r.run_id === runId)).toHaveLength(0);
+    expect(world.videoBodies).toHaveLength(0);
+    expect(reelStep(runId)?.status).toBe('ok');
+  });
+
+  it('counts only the last 24 hours, and 0 means no limit', async () => {
+    pageForKeyword();
+    settings.set('reel_daily_max', '1');
+    run("INSERT INTO reels (site_id, keyword_id, status, created_at) VALUES (?, ?, 'published', datetime('now', '-2 days'))", siteId, keywordId);
+    const world = buildWorld();
+    vi.stubGlobal('fetch', world.fetchStub);
+    const first = createRun(keywordId, siteId);
+    await executePipeline(makeContext(first));
+    expect(listReels().filter((r) => r.run_id === first)).toHaveLength(1);
+  });
+
+  it('makes the reel whatever the count when the limit is 0', async () => {
+    pageForKeyword();
+    settings.set('reel_daily_max', '0');
+    for (let i = 0; i < 20; i++) {
+      run("INSERT INTO reels (site_id, keyword_id, status) VALUES (?, ?, 'published')", siteId, keywordId);
+    }
+    const world = buildWorld();
+    vi.stubGlobal('fetch', world.fetchStub);
+    const runId = createRun(keywordId, siteId);
+    await executePipeline(makeContext(runId));
+    expect(listReels().filter((r) => r.run_id === runId)).toHaveLength(1);
+  });
+
   it('queues a reel for planning, with the article and its images, and a written caption', async () => {
     settings.set('reel_mode', 'scenes');
     const pageId = pageForKeyword();

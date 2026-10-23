@@ -559,6 +559,19 @@ export const SETTING_SPECS: SettingSpec[] = [
       'On: every published article becomes a reel on the Facebook page assigned ' +
       'to its site (Channels → Accounts → Facebook pages). Off: nothing is posted to Facebook.',
   },
+  {
+    key: 'reel_daily_max',
+    label: 'Most automatic reels per site in 24 hours',
+    group: 'facebook',
+    secret: false,
+    default: '10',
+    type: 'number',
+    help:
+      'An article published once this many reels have been made for its site in the last 24 hours ' +
+      'gets no reel: the article, pin and posts go out as usual. Stops a big batch of articles ' +
+      '(an import, a catch-up) from turning into hundreds of reels, Flow credits and a flooded ' +
+      'Buffer queue. A reel can still be made by hand from the Reels page. 0 = no limit.',
+  },
 
   // -- Reels -----------------------------------------------------------------
   // Shown on their own page (Setup → Reels) rather than in the general form:
