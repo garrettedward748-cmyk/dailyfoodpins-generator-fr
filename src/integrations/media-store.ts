@@ -17,8 +17,10 @@ const log = createLogger('media-store');
  * address (Setup -> General -> Public address).
  *
  * Nothing here is meant to last. Once a network has published a post it holds
- * its own copy of the picture, so the files are removed after a few days
- * (Setup -> General -> Keep media for) by `cleanupMedia`, run every hour.
+ * its own copy of the picture, so a file is removed by `cleanupMedia` (run
+ * every hour) once a network has fetched it and it is older than
+ * Setup -> General -> Keep media for; a file never fetched is kept longer,
+ * since its post is still waiting in a queue.
  * Images are re-encoded as JPEG at quality 85 on the way in, which roughly
  * halves what Flow hands back.
  */
@@ -146,16 +148,69 @@ function safePrefix(prefix: string): string {
 }
 
 /**
- * Remove every stored file older than the keep period.
+ * The networks' own fetchers: the request that comes when a post is actually
+ * published, as opposed to Buffer looking at the file when it is queued.
+ * Meta (Facebook, Instagram), Pinterest, TikTok, X and Google.
+ */
+const PUBLISHER_AGENT = /facebookexternalhit|facebookexternalua|facebookcatalog|meta-external|instagram|pinterest|tiktok|bytespider|twitterbot|googlebot|google-youtube/i;
+
+/** Whether a request for a file comes from a network publishing it. */
+export function isPublisherFetch(userAgent: string | undefined): boolean {
+  return PUBLISHER_AGENT.test(String(userAgent ?? ''));
+}
+
+/** Where the "a network has fetched this file" times are kept, beside the files. */
+const DELIVERED_FILE = 'delivered.json';
+
+function readDelivered(): Record<string, number> {
+  try {
+    const parsed = JSON.parse(readFileSync(join(config.dir, DELIVERED_FILE), 'utf8')) as unknown;
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeDelivered(map: Record<string, number>): void {
+  try {
+    mkdirSync(config.dir, { recursive: true });
+    writeFileSync(join(config.dir, DELIVERED_FILE), JSON.stringify(map));
+  } catch (err) {
+    log.warn(`could not record delivered media: ${errorMessage(err)}`);
+  }
+}
+
+/** Record that a network has fetched this file, i.e. its post went out. */
+export function markDelivered(name: string, at = Date.now()): void {
+  if (!isMediaName(name)) return;
+  const map = readDelivered();
+  if (map[name]) return; // the first fetch is the one that counts
+  map[name] = at;
+  writeDelivered(map);
+}
+
+/**
+ * Days a file no network has fetched yet is kept, whatever the keep period:
+ * its post is most likely still waiting in a Buffer queue, and removing the
+ * picture under it is what makes Buffer fail with "update the media URL to be
+ * publicly accessible". Past this it is taken as abandoned.
+ */
+export const UNDELIVERED_MAX_DAYS = 60;
+
+/**
+ * Remove stored files that are no longer needed.
  *
- * By file age rather than by asking each network whether its post went out:
- * Buffer's API has no simple "was this post sent" question, and a free Buffer
- * queue holds ten posts per channel, which goes out within days. A keep period
- * longer than the longest queue is the same guarantee without the guesswork.
+ * Buffer's API has no simple "was this post sent" question, so the files say
+ * it themselves: the network fetches the picture or reel when the post is
+ * published (`markDelivered`, from the /media route). A file is removed once
+ * it is older than the keep period AND a network has fetched it; one that was
+ * never fetched waits up to UNDELIVERED_MAX_DAYS, so a long Buffer queue no
+ * longer loses its pictures after a week.
  */
 export function cleanupMedia(now = Date.now()): { removed: number; bytes: number } {
   const days = Math.max(1, Number(config.keepDays()) || 7);
   const cutoff = now - days * 86_400_000;
+  const abandoned = now - Math.max(days, UNDELIVERED_MAX_DAYS) * 86_400_000;
   let removed = 0;
   let bytes = 0;
 
@@ -166,22 +221,36 @@ export function cleanupMedia(now = Date.now()): { removed: number; bytes: number
     return { removed, bytes };
   }
 
+  const delivered = readDelivered();
+  const present = new Set<string>();
+
   for (const name of names) {
     if (!isMediaName(name)) continue;
     const path = join(config.dir, name);
     try {
       const stat = statSync(path);
-      if (!stat.isFile() || stat.mtimeMs > cutoff) continue;
+      if (!stat.isFile()) continue;
+      const done = Boolean(delivered[name]);
+      const due = done ? stat.mtimeMs <= cutoff : stat.mtimeMs <= abandoned;
+      if (!due) {
+        present.add(name);
+        continue;
+      }
       unlinkSync(path);
       removed += 1;
       bytes += stat.size;
     } catch (err) {
+      present.add(name);
       log.warn(`could not remove ${name}: ${errorMessage(err)}`);
     }
   }
 
+  // Forget the files that are gone, so the record does not grow forever.
+  const kept = Object.fromEntries(Object.entries(delivered).filter(([name]) => present.has(name)));
+  if (Object.keys(kept).length !== Object.keys(delivered).length) writeDelivered(kept);
+
   if (removed > 0) {
-    log.info(`removed ${removed} media file(s) older than ${days} day(s), ${(bytes / 1_048_576).toFixed(1)} MB freed`);
+    log.info(`removed ${removed} media file(s) no longer needed, ${(bytes / 1_048_576).toFixed(1)} MB freed`);
   }
   return { removed, bytes };
 }

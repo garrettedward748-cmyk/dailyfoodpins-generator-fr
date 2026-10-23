@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
@@ -13,7 +13,7 @@ import { executePipeline } from '../src/pipeline/index.js';
 import { PipelineContext } from '../src/pipeline/context.js';
 import { setLogLevel } from '../src/lib/logger.js';
 import { brandName, isSocialOnly, siteAssetUrl, siteKey, sitePostUrl, socialHandle } from '../src/core/social-only.js';
-import { cleanupMedia, configureMediaStore, isMediaName, readLocalMedia, saveMediaImage } from '../src/integrations/media-store.js';
+import { cleanupMedia, configureMediaStore, isMediaName, isPublisherFetch, markDelivered, readLocalMedia, saveMediaImage, UNDELIVERED_MAX_DAYS } from '../src/integrations/media-store.js';
 import { siteApiFor, SocialOnlySiteApi } from '../src/integrations/site-api-for.js';
 import { SiteApiClient } from '../src/integrations/site-api.js';
 import { reelCta } from '../src/reels/cta.js';
@@ -132,7 +132,7 @@ describe('social-only accounts: media kept on the platform', () => {
     await expect(saveMediaImage(Buffer.from([1]), 'image/webp')).rejects.toThrow(/Public address/);
   });
 
-  it('removes files older than the keep period and nothing else', () => {
+  it('removes files older than the keep period once a network has fetched them, and nothing else', () => {
     const old = join(dir, 'img-old.jpg');
     const fresh = join(dir, 'img-fresh.jpg');
     const foreign = join(dir, 'notes.txt');
@@ -142,10 +142,44 @@ describe('social-only accounts: media kept on the platform', () => {
     const eightDaysAgo = (Date.now() - 8 * 86_400_000) / 1000;
     utimesSync(old, eightDaysAgo, eightDaysAgo);
     utimesSync(foreign, eightDaysAgo, eightDaysAgo);
+    markDelivered('img-old.jpg');
+    markDelivered('img-fresh.jpg');
 
     const result = cleanupMedia();
     expect(result.removed).toBe(1);
-    expect(readdirSync(dir).sort()).toEqual(['img-fresh.jpg', 'notes.txt']);
+    expect(readdirSync(dir).filter((n) => n !== 'delivered.json').sort()).toEqual(['img-fresh.jpg', 'notes.txt']);
+  });
+
+  it('keeps a file no network has fetched yet, its post still queued, until it is abandoned', () => {
+    const queued = join(dir, 'img-queued.jpg');
+    const abandoned = join(dir, 'img-abandoned.jpg');
+    writeFileSync(queued, 'x');
+    writeFileSync(abandoned, 'y');
+    const twentyDaysAgo = (Date.now() - 20 * 86_400_000) / 1000;
+    const longAgo = (Date.now() - (UNDELIVERED_MAX_DAYS + 1) * 86_400_000) / 1000;
+    utimesSync(queued, twentyDaysAgo, twentyDaysAgo);
+    utimesSync(abandoned, longAgo, longAgo);
+
+    const result = cleanupMedia();
+    expect(result.removed).toBe(1);
+    expect(readdirSync(dir)).toEqual(['img-queued.jpg']);
+  });
+
+  it('forgets the delivery of files that are gone', () => {
+    const gone = join(dir, 'img-gone.jpg');
+    writeFileSync(gone, 'x');
+    const eightDaysAgo = (Date.now() - 8 * 86_400_000) / 1000;
+    utimesSync(gone, eightDaysAgo, eightDaysAgo);
+    markDelivered('img-gone.jpg');
+    cleanupMedia();
+    expect(JSON.parse(readFileSync(join(dir, 'delivered.json'), 'utf8'))).toEqual({});
+  });
+
+  it('tells a network publishing a file from anything else', () => {
+    expect(isPublisherFetch('facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)')).toBe(true);
+    expect(isPublisherFetch('Pinterestbot/1.0')).toBe(true);
+    expect(isPublisherFetch('Mozilla/5.0 (Macintosh) Safari/605.1.15')).toBe(false);
+    expect(isPublisherFetch(undefined)).toBe(false);
   });
 
   it('only accepts names the store writes', () => {

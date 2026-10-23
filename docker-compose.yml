@@ -14,6 +14,10 @@ services:
       - IMAGE_API_KEY
       - FLOW_PROJECT_ID
       - FB_WEBHOOK_VERIFY_TOKEN
+      # The address Buffer and Facebook fetch social-only media from, e.g.
+      # https://recipenestle.com. Set it in Dokploy so the links never follow
+      # whatever address the platform was last opened at.
+      - PUBLIC_URL
       - PORT=8080
       - HOST=0.0.0.0
       - DB_PATH=/app/data/platform.db

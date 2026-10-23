@@ -12,7 +12,7 @@ import formbody from '@fastify/formbody';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { isSocialOnly, siteKey } from '../core/social-only.js';
-import { isMediaName, MEDIA_TYPES, mediaDir } from '../integrations/media-store.js';
+import { isMediaName, isPublisherFetch, markDelivered, MEDIA_TYPES, mediaDir } from '../integrations/media-store.js';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -6188,6 +6188,15 @@ export function buildServer(
     const path = join(mediaDir(), name);
     if (!existsSync(path)) return reply.status(404).send('Not found');
     const extension = name.split('.').pop() ?? '';
+    // A network fetching the file means its post is going out: from then on
+    // the file may be removed after the keep period (see cleanupMedia).
+    if (isPublisherFetch(request.headers['user-agent'])) {
+      try {
+        markDelivered(name);
+      } catch {
+        // a missed mark only keeps the file longer
+      }
+    }
     // Facebook and Buffer fetch videos in ranges and want the size up front:
     // a chunked stream with no length is "media could not be processed".
     const size = statSync(path).size;

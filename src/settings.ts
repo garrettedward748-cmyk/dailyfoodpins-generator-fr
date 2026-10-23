@@ -70,7 +70,8 @@ export const SETTING_SPECS: SettingSpec[] = [
     secret: false,
     default: process.env.PUBLIC_URL?.trim() ?? '',
     help:
-      'Filled in by itself: the address you open this platform at, as the browser reached it. ' +
+      'Set PUBLIC_URL in the deployment to pin it; otherwise filled in by itself: ' +
+      'the address you open this platform at, as the browser reached it. ' +
       'Social-only accounts (a site added with no domain) serve their pictures and reels from ' +
       'here, so Buffer and Facebook can fetch them. Change it only to use another address; ' +
       'empty it to go back to the automatic one.',
@@ -84,8 +85,8 @@ export const SETTING_SPECS: SettingSpec[] = [
     type: 'number',
     help:
       'Pictures and reels of social-only accounts are deleted from the platform after this many ' +
-      'days: by then the networks have published the posts and hold their own copy. Raise it only ' +
-      'if your Buffer queue holds posts longer than this.',
+      'days, but only once a network has fetched them (the post went out). A file still waiting ' +
+      'in a Buffer queue is kept up to 60 days, so a long queue does not lose its pictures.',
   },
 
   {

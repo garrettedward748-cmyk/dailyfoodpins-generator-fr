@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
@@ -48,4 +48,13 @@ it('sends the length and takes ranges, without a session', async () => {
 
   const past = await app.inject({ method: 'GET', url: '/media/reel-abc.mp4', headers: { range: 'bytes=20-' } });
   expect(past.statusCode).toBe(416);
+});
+
+it('records a network fetching a file as its post going out, and nothing else', async () => {
+  await app.inject({ method: 'GET', url: '/media/reel-abc.mp4', headers: { 'user-agent': 'Mozilla/5.0 Safari' } });
+  expect(existsSync(join(dir, 'delivered.json'))).toBe(false);
+
+  await app.inject({ method: 'GET', url: '/media/reel-abc.mp4', headers: { 'user-agent': 'facebookexternalhit/1.1' } });
+  const delivered = JSON.parse(readFileSync(join(dir, 'delivered.json'), 'utf8')) as Record<string, number>;
+  expect(Object.keys(delivered)).toEqual(['reel-abc.mp4']);
 });
