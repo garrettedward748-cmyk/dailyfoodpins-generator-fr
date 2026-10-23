@@ -3124,6 +3124,9 @@ export function reelsPage(data: ReelsPageData): Html {
           <button type="submit" name="action" value="retry" class="small">Retry selected</button>
           <button type="submit" name="action" value="discard" class="small danger"
                   onclick="var n=document.querySelectorAll('input[name=ids][form=bulk-reels]:checked').length;if(!n){alert('Tick the reels first.');return false}return confirm('Discard '+n+' reel(s)?')">Discard selected</button>
+          <button type="submit" name="action" value="discard_unfinished" class="small danger"
+                  title="Every reel with no video yet, on every page of this list. Reels whose video is made are kept."
+                  onclick="return confirm('Discard every reel still being made (no video yet)? Finished reels are kept and will publish.')">Discard all still being made</button>
         </form>
         <div class="grid tiles">${working.map((r) => reelTile(r, data.fbPages))}</div>`}
 

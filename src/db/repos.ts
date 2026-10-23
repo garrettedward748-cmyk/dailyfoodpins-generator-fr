@@ -3462,6 +3462,18 @@ export const reelsCreatedRecently = (siteId: number, hours: number): number =>
     `-${Math.max(0, hours)} hours`,
   )?.n ?? 0;
 
+/**
+ * Discard every reel still being made (no video yet), and keep every reel
+ * whose video exists, whatever its state: those cost nothing more to publish.
+ * Stops a runaway batch from spending more Flow credits without wasting what
+ * was already made.
+ */
+export const discardUnfinishedReels = (): number =>
+  run(
+    `DELETE FROM reels WHERE status IN ('draft', 'generating')
+       AND COALESCE(video_url, '') = '' AND COALESCE(output_path, '') = ''`,
+  ).changes;
+
 export const deleteReel = (id: number): void => {
   run('DELETE FROM reels WHERE id = ?', id);
 };

@@ -143,6 +143,7 @@ import {
   createReel,
   deleteFbToken,
   deleteReel,
+  discardUnfinishedReels,
   getFbPage,
   getReel,
   getReelByFbVideoId,
@@ -2656,6 +2657,13 @@ export function buildServer(
 
   app.post('/reels/bulk', async (request, reply) => {
     const body = formBody(request);
+    if (asString(body.action) === 'discard_unfinished') {
+      const n = discardUnfinishedReels();
+      return redirect(reply, '/reels', {
+        kind: 'ok',
+        message: `${n} reel(s) still being made were discarded. Reels whose video is finished were kept and will publish.`,
+      });
+    }
     const ids = ([] as unknown[]).concat(body.ids ?? []).map((v) => asNumber(v, 0)).filter((n) => n > 0);
     if (ids.length === 0) return redirect(reply, '/reels', { kind: 'warn', message: 'Tick at least one reel.' });
     if (asString(body.action) === 'discard') {

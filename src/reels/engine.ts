@@ -85,9 +85,15 @@ const log = createLogger('reels');
  * scene under it so a scene can fail and be retried on its own.
  */
 
-/** How long a reel refused for a full Buffer queue waits, and how often it is tried again on its own. */
+/**
+ * How long a reel refused for a full Buffer queue waits, and how often it is
+ * tried again on its own. Its video is already made and paid for, so it keeps
+ * trying for about two weeks rather than one day: a big batch can take that
+ * long to drain through queues that take ten posts a day, and giving up after
+ * four tries left finished reels stranded as "failed".
+ */
 export const AUTO_RETRY_HOURS = 6;
-export const AUTO_RETRY_MAX = 4;
+export const AUTO_RETRY_MAX = 56;
 
 export interface ReelTickResult {
   advanced: number;
