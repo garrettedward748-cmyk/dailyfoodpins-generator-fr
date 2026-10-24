@@ -326,3 +326,38 @@ def test_a_clip_sent_between_two_unusual_answers_does_not_hide_them(isolated):
     assert accounts.note_unusual_activity() is False
     accounts.record_clip()                       # a reel went out on the same account
     assert accounts.note_unusual_activity() is True
+
+
+def test_spent_video_credits_rest_only_video_and_images_go_on(isolated):
+    signed_in(3)
+    accounts.set_capabilities(2, images=True, video=False)
+    accounts.set_capabilities(3, images=True, video=False)
+    # Only #1 makes video; its video credits run out.
+    assert accounts.rotate("no video credits left", kind="video") is None
+    listed = {a["id"]: a for a in accounts.list_accounts()["accounts"]}
+    assert listed[1]["status"] == "ok"                     # still in use for images
+    assert listed[1]["video_reason"] == "Out of video credits"
+    assert accounts.active_kinds() == {"image"}
+    assert accounts.switch_pending() is None
+    assert accounts.ensure_active_can("video") == "all_busy"   # waits, does not fail
+    assert accounts.ensure_active_can("image") == "ok"
+
+
+def test_spent_video_credits_move_video_to_another_video_account(isolated):
+    signed_in(3)
+    accounts.set_capabilities(2, images=True, video=False)
+    assert accounts.rotate("no video credits left", kind="video") == 3
+
+
+def test_an_image_problem_never_moves_to_an_account_not_ticked_for_images(isolated):
+    signed_in(3)
+    accounts.set_capabilities(2, images=False, video=True)
+    assert accounts.rotate("3 jobs in a row failed", kind="image") == 3
+
+
+def test_a_video_rest_ends_on_its_own(isolated, monkeypatch):
+    signed_in(1)
+    accounts.rotate("no video credits left", kind="video")
+    assert accounts.active_kinds() == {"image"}
+    monkeypatch.setattr(accounts, "_now", lambda: 10**12)
+    assert accounts.active_kinds() == {"image", "video"}

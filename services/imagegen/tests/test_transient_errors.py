@@ -49,14 +49,14 @@ def test_after_the_last_attempt_it_fails(calls):
 
 def test_a_page_that_never_gets_its_token_moves_to_the_next_account(calls, monkeypatch):
     problems = []
-    monkeypatch.setattr(proc.accounts, "rotate", lambda p: problems.append(p) or 3)
+    monkeypatch.setattr(proc.accounts, "rotate", lambda p, kind=None: problems.append(p) or 3)
     handle("NO_AT_TOKEN", attempts=proc.MAX_RETRIES)
     assert calls[-1][0] == "requeue"
     assert "signed out" in problems[0].lower()
 
 
 def test_with_nowhere_to_go_the_failure_says_to_sign_in(calls, monkeypatch):
-    monkeypatch.setattr(proc.accounts, "rotate", lambda p: None)
+    monkeypatch.setattr(proc.accounts, "rotate", lambda p, kind=None: None)
     handle("NO_AT_TOKEN", attempts=proc.MAX_RETRIES)
     assert calls[-1][0] == "fail"
     assert "sign in" in calls[-1][1]
@@ -73,7 +73,7 @@ def test_a_run_of_failures_on_one_account_moves_the_job_to_the_next(calls, monke
     problems = []
     monkeypatch.setattr(proc.accounts, "count", lambda: 2)
     monkeypatch.setattr(proc.accounts, "note_failure", lambda: True)
-    monkeypatch.setattr(proc.accounts, "rotate", lambda p: problems.append(p) or 2)
+    monkeypatch.setattr(proc.accounts, "rotate", lambda p, kind=None: problems.append(p) or 2)
     handle("the composer took the prompt but no image appeared in 180s", attempts=proc.MAX_RETRIES)
     assert calls[-1][0] == "requeue"
     assert "in a row" in problems[0]

@@ -170,6 +170,21 @@ def _can(account: dict, kind: str) -> bool:
     return account.get(key, True) is not False
 
 
+def _video_resting(account: dict) -> bool:
+    """Its video credits are spent for now; its images may well still work."""
+    until = account.get("video_until")
+    if until and float(until) <= _now():
+        account.pop("video_until", None)
+        account.pop("video_reason", None)
+        return False
+    return bool(until)
+
+
+def _able(account: dict, kind: str) -> bool:
+    """Ticked for this kind, and not resting from it right now."""
+    return _can(account, kind) and not (kind == "video" and _video_resting(account))
+
+
 def set_capabilities(account_id: int, images: bool, video: bool) -> None:
     data = _load()
     target = next((a for a in data["accounts"] if a["id"] == account_id), None)
@@ -188,7 +203,7 @@ def active_kinds() -> set:
     current = next((a for a in data["accounts"] if a["id"] == data["active"]), None)
     if current is None:
         return {"image", "video"}
-    return {k for k in ("image", "video") if _can(current, k)}
+    return {k for k in ("image", "video") if _able(current, k)}
 
 
 def ensure_active_can(kind: str) -> str:
@@ -205,7 +220,7 @@ def ensure_active_can(kind: str) -> str:
     """
     data = _load()
     current = next((a for a in data["accounts"] if a["id"] == data["active"]), None)
-    if current is not None and _usable(current) and _can(current, kind):
+    if current is not None and _usable(current) and _able(current, kind):
         return "ok"
     if data.get("pending"):
         return "switching"
@@ -220,7 +235,7 @@ def ensure_active_can(kind: str) -> str:
         candidate = data["accounts"][(start + step) % len(ids)]
         if current and candidate["id"] == current["id"]:
             continue
-        if _usable(candidate) and _can(candidate, kind):
+        if _usable(candidate) and _able(candidate, kind):
             data["pending"] = candidate["id"]
             _save(data)
             logger.info("accounts: #%s is not set for %s — switching to #%d",
@@ -235,6 +250,7 @@ def list_accounts() -> dict:
     data = _load()
     for a in data["accounts"]:
         _refresh(a)
+        _video_resting(a)
     return {
         "active": data["active"],
         "pending": data.get("pending"),
@@ -245,6 +261,8 @@ def list_accounts() -> dict:
              "daily_limit": a.get("daily_limit"), "monthly_limit": a.get("monthly_limit"),
              "project_id": a.get("project_id") or "",
              "images": _can(a, "image"), "video": _can(a, "video"),
+             "video_until": a.get("video_until") if _video_resting(a) else None,
+             "video_reason": a.get("video_reason") if _video_resting(a) else None,
              "active": a["id"] == data["active"], "profile": str(_profile_dir(a["id"]))}
             for a in data["accounts"]
         ],
@@ -341,7 +359,7 @@ def mark_ok(account_id: int) -> None:
     _save(data)
 
 
-def rotate(problem: str) -> Optional[int]:
+def rotate(problem: str, kind: Optional[str] = None) -> Optional[int]:
     """The active account has a problem: rest it and queue a switch to the next usable one.
 
     Returns the account switched to, or None when there is nowhere to go (a
@@ -354,6 +372,29 @@ def rotate(problem: str) -> Optional[int]:
 
     lower = problem.lower()
     current = next(a for a in data["accounts"] if a["id"] == data["active"])
+    needs_credits = LIMIT_MARKER in lower or any(m in lower for m in CREDIT_MARKERS)
+
+    # Video credits spent (or the clip limit reached) is about video only:
+    # the same account goes on making images. Resting all of it sent articles
+    # to the back of a 6-hour wait over a reel. Only its video rests, and the
+    # video work moves to another account ticked for video, if there is one.
+    if kind == "video" and needs_credits:
+        until = _next_reset(current) if LIMIT_MARKER in lower else _now() + COOLDOWN_H * 3600
+        current["video_until"] = until
+        current["video_reason"] = ("Reached the credit limit set for it" if LIMIT_MARKER in lower
+                                   else "Out of video credits")
+        for candidate in _others(data, current):
+            if _usable(candidate) and _able(candidate, "video") and _affords(candidate, _clip_cost(data)):
+                data["pending"] = candidate["id"]
+                _save(data)
+                logger.warning("accounts: #%d video %s — switching to #%d for video",
+                               current["id"], current["video_reason"], candidate["id"])
+                return candidate["id"]
+        _save(data)
+        logger.warning("accounts: #%d video %s — no other account can make video; "
+                       "it keeps making images", current["id"], current["video_reason"])
+        return None
+
     current["unusual"] = 0
     current["fails"] = 0
     if FLOW_SETUP_MARKER in lower:
@@ -373,11 +414,9 @@ def rotate(problem: str) -> Optional[int]:
         current.update(status="cooldown", until=_now() + STUCK_COOLDOWN_M * 60,
                        reason="Kept failing: " + problem[:120])
 
-    ids = [a["id"] for a in data["accounts"]]
-    start = ids.index(current["id"])
-    for step in range(1, len(ids)):
-        candidate = data["accounts"][(start + step) % len(ids)]
-        needs_credits = LIMIT_MARKER in lower or any(m in lower for m in CREDIT_MARKERS)
+    for candidate in _others(data, current):
+        if kind and not _able(candidate, kind):
+            continue  # an account not ticked for this work would only bounce it back
         if _usable(candidate) and (not needs_credits or _affords(candidate, _clip_cost(data))):
             data["pending"] = candidate["id"]
             _save(data)
@@ -388,6 +427,13 @@ def rotate(problem: str) -> Optional[int]:
     _save(data)
     logger.warning("accounts: #%d %s — no other account is usable", current["id"], current["reason"])
     return None
+
+
+def _others(data: dict, current: dict) -> list:
+    """Every account but the current one, in order after it."""
+    ids = [a["id"] for a in data["accounts"]]
+    start = ids.index(current["id"])
+    return [data["accounts"][(start + step) % len(ids)] for step in range(1, len(ids))]
 
 
 def apply_pending_switch() -> Optional[int]:
@@ -456,6 +502,8 @@ def reset(account_id: int) -> None:
         raise ValueError("No such account.")
     if target.get("status") != "signed_out":
         target.update(status="ok", until=None, reason=None)
+    target.pop("video_until", None)
+    target.pop("video_reason", None)
     target["unusual"] = 0
     target["reset_at"] = _now()
     _save(data)

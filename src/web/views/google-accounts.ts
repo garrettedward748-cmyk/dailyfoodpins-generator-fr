@@ -16,6 +16,9 @@ export interface GoogleAccountView {
   images?: boolean;
   /** Whether this account is allowed to make video (reels). Default true. */
   video?: boolean;
+  /** When this account's video rest ends (its images go on meanwhile). */
+  video_until?: number | null;
+  video_reason?: string | null;
 }
 
 function restEnds(until: number | null): string {
@@ -91,6 +94,9 @@ export function googleAccountsPage(data: {
                                 ? html`<span class="badge warn">resting</span> <span class="small muted">${restEnds(a.until)}</span>`
                                 : html`<span class="badge error">needs sign-in</span>`}
                             ${a.reason ? html`<div class="small muted">${a.reason}</div>` : raw('')}
+                            ${a.video_until
+                              ? html`<div class="small muted">Video resting, ${restEnds(a.video_until)} — ${a.video_reason ?? ''}. Images go on.</div>`
+                              : raw('')}
                             ${!a.project_id
                               ? html`<div><span class="badge warn">needs project ID</span></div>`
                               : raw('')}

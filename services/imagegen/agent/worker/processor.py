@@ -457,7 +457,7 @@ class WorkerController:
         # The account's own credit limit, when one is set: move on before
         # Google has to refuse the clip.
         if not accounts.active_affords_clip():
-            if accounts.rotate(accounts.LIMIT_MARKER) is not None:
+            if accounts.rotate(accounts.LIMIT_MARKER, kind="video") is not None:
                 logger.warning("job %s: credit limit reached, switching Google account", job_id[:8])
                 await jobs.requeue(job_id, "Credit limit reached on this account; moving to the next one")
                 return
@@ -624,7 +624,7 @@ class WorkerController:
                 # second Google account the job goes back in line for it;
                 # with one, a retry is another upload and another captcha for
                 # the same answer.
-                if accounts.rotate("no video credits left") is not None:
+                if accounts.rotate("no video credits left", kind="video") is not None:
                     logger.warning("job %s: out of video credits, switching Google account", job_id[:8])
                     await jobs.requeue(job_id, "Out of video credits on this account; moving to the next one")
                     return True
@@ -750,7 +750,7 @@ class WorkerController:
         job_id = job["id"]
         problem = (f"Flow accepted the video but nothing appeared in the project after {waited}s "
                    "on this Google account (no status, not in the listing)")
-        if accounts.rotate(problem) is not None:
+        if accounts.rotate(problem, kind="video") is not None:
             logger.warning("job %s: %s — switching Google account", job_id[:8], problem)
             await jobs.requeue(job_id, problem + "; moving to the next account")
             return
@@ -992,7 +992,7 @@ class WorkerController:
         # once every account is resting, rotate() finds nowhere to go and the
         # ordinary retry policy below takes over, so this cannot loop.
         if any(m in lower for m in accounts.CREDIT_MARKERS + accounts.SIGNED_OUT_MARKERS):
-            if accounts.rotate(error) is not None:
+            if accounts.rotate(error, kind=job.get("kind")) is not None:
                 logger.warning("job %s: account problem, switching Google account: %s", job_id[:8], error[:160])
                 await jobs.requeue(job_id, error)
                 return
@@ -1001,7 +1001,7 @@ class WorkerController:
         # help, so a run of these moves the work to the next account. The
         # first one is retried when there is another account to fall back on.
         if accounts.UNUSUAL_MARKER in lower:
-            if accounts.note_unusual_activity() and accounts.rotate(error) is not None:
+            if accounts.note_unusual_activity() and accounts.rotate(error, kind=job.get("kind")) is not None:
                 logger.warning("job %s: unusual activity again, switching Google account", job_id[:8])
                 await jobs.requeue(job_id, error)
                 return
@@ -1025,7 +1025,7 @@ class WorkerController:
                 if never_worked
                 else "Signed out of Google: the Flow page has no sign-in token (NO_AT_TOKEN)"
             )
-            if accounts.rotate(problem) is not None:
+            if accounts.rotate(problem, kind=job.get("kind")) is not None:
                 logger.warning("job %s: %s, switching Google account", job_id[:8],
                                "Flow not set up on this account" if never_worked else "Flow page signed out")
                 await jobs.requeue(job_id, error)
@@ -1061,7 +1061,7 @@ class WorkerController:
         if accounts.count() > 1 and not _about_the_request(lower) and accounts.note_failure():
             problem = (f"{accounts.FAIL_STREAK} jobs in a row failed on this account, "
                        f"last: {error[:120]}")
-            if accounts.rotate(problem) is not None:
+            if accounts.rotate(problem, kind=job.get("kind")) is not None:
                 logger.warning("job %s: %s — switching Google account", job_id[:8], problem)
                 await jobs.requeue(job_id, error + " — moving to the next Google account")
                 return

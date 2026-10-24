@@ -124,7 +124,7 @@ def test_a_video_never_in_the_project_gives_up_early_and_switches_account(monkey
     """One account took every request and made nothing; the others made a clip a minute."""
     client = FakeClient(listing_after=10**6)
     rotated = []
-    monkeypatch.setattr(processor.accounts, "rotate", lambda problem: rotated.append(problem) or 3)
+    monkeypatch.setattr(processor.accounts, "rotate", lambda problem, kind=None: rotated.append(problem) or 3)
 
     job = run(monkeypatch, client)
 
@@ -135,7 +135,7 @@ def test_a_video_never_in_the_project_gives_up_early_and_switches_account(monkey
 
 def test_with_no_other_account_it_fails_with_a_clear_message(monkeypatch, no_waiting):
     client = FakeClient(listing_after=10**6)
-    monkeypatch.setattr(processor.accounts, "rotate", lambda problem: None)
+    monkeypatch.setattr(processor.accounts, "rotate", lambda problem, kind=None: None)
 
     job = run(monkeypatch, client)
 
@@ -154,7 +154,7 @@ def test_a_video_flow_reports_on_is_not_cut_short(monkeypatch, no_waiting):
         return {"done": False, "status": "MEDIA_GENERATION_STATUS_PENDING"}
 
     client.check_operation_batch = pending
-    monkeypatch.setattr(processor.accounts, "rotate", lambda problem: pytest.fail("must not rotate"))
+    monkeypatch.setattr(processor.accounts, "rotate", lambda problem, kind=None: pytest.fail("must not rotate"))
 
     run(monkeypatch, client)
 
