@@ -1,5 +1,5 @@
 import type { Step } from '../engine.js';
-import { HALAL_RULE, halalOnly, haramIn } from '../../core/halal.js';
+import { HALAL_RULE, halalOnly, haramAllIn, haramContexts } from '../../core/halal.js';
 import { NotHalalError } from './duplicate.js';
 import { parseJson, requireFields } from '../json.js';
 import { parseJsonOrRepair } from '../parse-with-repair.js';
@@ -38,12 +38,22 @@ const log = createLogger('content');
 function spyContext(ctx: import('../context.js').PipelineContext) {
   const cookRecipe = (ctx.keyword.cook_recipe ?? '').trim();
   const cookNotes = (ctx.keyword.cook_notes ?? '').trim();
+  // The search results are other people's recipes, and a fig pizza's top
+  // results are fig-and-prosciutto pizzas. Handed over as "use these facts",
+  // they outvoted the one-line halal rule. Named up front instead.
+  const fromResults = haramAllIn([ctx.research?.brief ?? '', cookRecipe, cookNotes].join('\n'));
+  const resultsWarning = fromResults.length
+    ? `THE SOURCES BELOW MENTION ${fromResults.map((w) => w.toUpperCase()).join(', ')} — NOT ALLOWED (Halal only). ` +
+      'Leave them out entirely or use the halal alternative (beef or turkey bacon, turkey ham, beef pepperoni, beef bresaola ' +
+      'or smoked turkey for cured pork, grape or apple juice or broth for alcohol; in French: bacon/lardons/jambon de dinde, jus de raisin), and do not name the forbidden item anywhere.'
+    : '';
   return {
     group: ctx.keyword.seed_keyword,
     title: ctx.keyword.spy_title,
     description: ctx.keyword.spy_description,
     annotation: [
       halalOnly() ? HALAL_RULE : '',
+      resultsWarning,
       // The cook's own recipe outranks everything below it: her ingredients,
       // amounts and steps are the dish. Search results only fill what she left out.
       cookRecipe
@@ -271,27 +281,36 @@ export const generateRecipe: Step<SeoData, RecipeData> = {
     //    these numbers, so a Celsius-first oven or a total shorter than prep
     //    plus cook would be repeated three times over.
     // If either is still wrong the run stops before any image is paid for.
-    let haram = haramIn(parsed);
+    let haram = haramAllIn(parsed);
     let problems = recipeProblems(parsed, style);
 
-    if (haram || problems.length > 0) {
-      if (haram) log.warn(`recipe for “${seo.title}” used “${haram}” despite Halal only: asking for one rewrite`);
+    // Every forbidden word is named, with where it sits: told only the first
+    // one, a rewrite fixed "bacon" and kept the prosciutto in the FAQ.
+    const halalNote = (words: string[]): string =>
+      `YOUR LAST DRAFT USED ${words.map((w) => `“${w}”`).join(', ')}, WHICH IS NOT ALLOWED (Halal only). ` +
+      'Write the recipe again with no alcohol and no pork anywhere — ingredients, steps, notes, tips, FAQ, title, description. ' +
+      'Use the halal alternative (e.g. beef or turkey bacon, turkey ham, beef pepperoni, smoked turkey for cured pork, ' +
+      'grape or apple juice or broth for alcohol) or leave it out. Found here:\n' +
+      haramContexts(parsed, words).map((c) => `- ${c}`).join('\n');
+
+    if (haram.length > 0 || problems.length > 0) {
+      if (haram.length) log.warn(`recipe for “${seo.title}” used ${haram.join(', ')} despite Halal only: asking for a rewrite`);
       if (problems.length > 0) {
         log.warn(`recipe for “${seo.title}” broke ${problems.length} rule(s): ${problems.slice(0, 3).join('; ')}`);
       }
 
-      const notes = [
-        haram
-          ? `YOUR LAST DRAFT USED “${haram}”, WHICH IS NOT ALLOWED. Write the recipe again with no alcohol and no pork ` +
-            'anywhere (ingredients, steps, notes, FAQ, title), using the halal alternative instead.'
-          : '',
-        recipeFeedback(problems),
-      ].filter(Boolean).join('\n\n');
-
+      const notes = [haram.length ? halalNote(haram) : '', recipeFeedback(problems)].filter(Boolean).join('\n\n');
       ({ result, parsed } = await draft(notes));
 
-      haram = haramIn(parsed);
-      if (haram) throw new NotHalalError(seo.title, haram, 'recipe');
+      // Halal gets one more try than the other rules: a recipe that is right in
+      // every other way is not thrown away over one word left in a tip.
+      haram = haramAllIn(parsed);
+      if (haram.length) {
+        log.warn(`recipe for “${seo.title}” still used ${haram.join(', ')}: asking for one last rewrite`);
+        ({ result, parsed } = await draft(halalNote(haram)));
+        haram = haramAllIn(parsed);
+      }
+      if (haram.length) throw new NotHalalError(seo.title, haram[0]!, 'recipe');
 
       problems = recipeProblems(parsed, style);
       if (problems.length > 0) throw new RecipeRulesError(seo.title, problems);

@@ -110,11 +110,64 @@ const ALLOWED_FR = new RegExp(
   'giu',
 );
 
+/**
+ * The halal stand-ins the rule itself asks for, in any spelling: "turkey bacon",
+ * "turkey-bacon", "beef prosciutto", "chicken sausage", "halal beef pepperoni".
+ * Only "turkey bacon"-style pairs written with a space used to pass, so a recipe
+ * that did exactly what it was told failed the check.
+ */
+const ALT_MEAT = '(?:halal|beef|turkey|chicken|veal|lamb|duck|vegan|veggie|vegetarian|plant[\\s\\-‑–]?based|meatless|mushroom|coconut|eggplant|tempeh|smoked turkey|smoked beef|smoked chicken)';
+const ALT_PRODUCT = '(?:bacon(?: bits?| strips?| slices?)?|hams?|pepperonis?|salamis?|chorizos?|prosciutto|pancetta|lardons?|sausages?|breakfast sausages?|italian sausages?|hot dogs?|bologna|mortadella|bratwursts?|kielbasa|andouille|jerky|pastrami|ribs)';
+const ALTERNATIVE = new RegExp(`\\b(?:halal\\s+)?${ALT_MEAT}(?:[\\s\\-‑–]+${ALT_MEAT})?[\\s\\-‑–]+${ALT_PRODUCT}\\b`, 'gi');
+
+/**
+ * A forbidden word named only to say it is not there or is replaced: "no bacon",
+ * "without ham", "instead of wine", "in place of the pancetta", "pork-free".
+ * The rule tells the model to write "beef bacon instead of bacon", and the old
+ * check then refused the recipe for the second word.
+ */
+const LISTED = [...ALCOHOL, ...PORK].map(withPlural).join('|');
+const NAMED_TO_REFUSE = new RegExp(
+  `\\b(?:(?:no|without(?: any)?|instead of(?: the| any)?|in place of(?: the)?|rather than(?: the)?|skip(?:s|ping)? the|swap(?:s|ped)? (?:out )?the|replac(?:e|es|ed|ing) the|free (?:of|from)(?: any)?|never)\\s+(?:pork\\s+|regular\\s+|traditional\\s+|classic\\s+|real\\s+|cured\\s+)?(?:${LISTED})|(?:${LISTED})[\\s\\-‑–]free)\\b`,
+  'gi',
+);
+
+/** French stand-ins: « bacon de dinde », « lardons de volaille », « jambon halal », « chorizo de bœuf ». */
+const ALTERNATIVE_FR = new RegExp(
+  '(?<![\\p{L}\\p{N}_])(?:bacon|jambons?|lardons?|saucissons?|saucisses?|chorizos?|pepperonis?|salamis?|mortadelle|hot-dogs?|poitrine fumée|pancetta|prosciutto)'
+  + '(?:\\s+fum[ée]e?s?)?\\s+(?:halal|(?:de |d\'|à la |au )\\s*(?:dinde|volaille|poulet|bœuf|boeuf|veau|agneau|canard)(?:\\s+halal)?)(?![\\p{L}\\p{N}_])',
+  'giu',
+);
+
+const LISTED_FR = [...ALCOHOL_FR, ...PORK_FR].map(withPlural).join('|');
+/** « sans lardons », « au lieu du vin », « à la place de la pancetta », « remplacez le jambon ». */
+const NAMED_TO_REFUSE_FR = new RegExp(
+  '(?<![\\p{L}\\p{N}_])(?:sans|pas de|pas d\'|aucune? |au lieu (?:du|de la|des|de l\'|de|d\')|à la place (?:du|de la|des|de l\'|de|d\')|'
+  + 'plutôt que (?:du |de la |des |le |la |les |l\')?|rempla[cç](?:ez|er|é|ée|és|ées|ant) (?:le |la |les |l\'))\\s*(?:' + LISTED_FR + ')(?![\\p{L}\\p{N}_])',
+  'giu',
+);
+
+const clean = (text: string): string =>
+  (text ?? '')
+    // The known safe phrases first: « bière sans alcool » is one whole phrase,
+    // and taking « sans alcool » out of it first would leave « bière » behind.
+    .replace(ALLOWED, ' ').replace(ALLOWED_FR, ' ')
+    .replace(ALTERNATIVE, ' ').replace(NAMED_TO_REFUSE, ' ')
+    .replace(ALTERNATIVE_FR, ' ').replace(NAMED_TO_REFUSE_FR, ' ');
+
 /** The first alcohol or pork word in the text, or null. */
 export function haramWord(text: string): string | null {
-  const cleaned = (text ?? '').replace(ALLOWED, ' ').replace(ALLOWED_FR, ' ');
+  const cleaned = clean(text);
   const m = PATTERN.exec(cleaned) ?? PATTERN_FR.exec(cleaned);
   return m ? m[1]!.toLowerCase() : null;
+}
+
+/** Every alcohol or pork word in the text, each once, in order of first use. */
+export function haramWords(text: string): string[] {
+  const cleaned = clean(text);
+  const en = [...cleaned.matchAll(new RegExp(PATTERN.source, 'gi'))].map((m) => m[1]!.toLowerCase());
+  const fr = [...cleaned.matchAll(new RegExp(PATTERN_FR.source, 'giu'))].map((m) => m[1]!.toLowerCase());
+  return [...new Set([...en, ...fr])];
 }
 
 /**
@@ -127,6 +180,32 @@ export function haramIn(content: unknown): string | null {
   const text = typeof content === 'string' ? content : JSON.stringify(content ?? '');
   // Tags and entities carry no words of their own.
   return haramWord(text.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/gi, ' '));
+}
+
+/** Every alcohol or pork word in a written recipe or article (see haramIn). */
+export function haramAllIn(content: unknown): string[] {
+  if (!halalOnly()) return [];
+  const text = typeof content === 'string' ? content : JSON.stringify(content ?? '');
+  return haramWords(text.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/gi, ' '));
+}
+
+/**
+ * Where each word sits in the text, a few words either side: a rewrite told
+ * only "you used bacon" kept missing the one in a FAQ answer or a tip.
+ */
+export function haramContexts(content: unknown, words: string[], max = 6): string[] {
+  const text = (typeof content === 'string' ? content : JSON.stringify(content ?? ''))
+    .replace(/<[^>]+>/g, ' ').replace(/\\[nrt"]/g, ' ').replace(/\s+/g, ' ');
+  const out: string[] = [];
+  for (const word of words) {
+    const re = new RegExp(`(?<![\\p{L}\\p{N}_])${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_])`, 'giu');
+    for (const m of text.matchAll(re)) {
+      if (out.length >= max) return out;
+      const i = m.index ?? 0;
+      out.push(`…${text.slice(Math.max(0, i - 50), i + word.length + 50).trim()}…`);
+    }
+  }
+  return out;
 }
 
 export const isHaram = (text: string): boolean => haramWord(text) !== null;

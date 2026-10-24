@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { all, closeDatabase, openDatabase, run } from '../src/db/index.js';
 import { addPastedKeywords, upsertSite } from '../src/db/repos.js';
 import { addBlogQuestions } from '../src/blog/repo.js';
-import { haramWord, halalOnly } from '../src/core/halal.js';
+import { haramWord, haramWords, halalOnly } from '../src/core/halal.js';
 import { researchKeywords } from '../src/research/keywords.js';
 
 beforeEach(() => openDatabase(':memory:'));
@@ -15,6 +15,18 @@ describe('halal only', () => {
       expect(haramWord(t)).not.toBeNull();
     for (const t of ['Hamburger Buns', 'Gingerbread Cookies', 'Turkey Bacon Wrap', 'Root Beer Float', 'Apple Cider Donuts', 'Graham Cracker Crust', 'Banana Pudding Shooters'])
       expect(haramWord(t)).toBeNull();
+  });
+
+  it('lets the halal stand-ins and "instead of" through, in English and French, and still catches the real thing', () => {
+    for (const t of ['Use turkey bacon instead of bacon', 'beef prosciutto and figs', 'lardons de dinde', 'sans lardons',
+      'au lieu du vin, du jus de raisin', 'remplacez le jambon par de la dinde', 'chorizo de bœuf', 'jambon halal'])
+      expect(haramWord(t)).toBeNull();
+    for (const t of ['pizza au prosciutto', 'quiche lorraine aux lardons', 'un verre de vin blanc', 'crispy bacon on top'])
+      expect(haramWord(t)).not.toBeNull();
+  });
+
+  it('names every forbidden word, not just the first', () => {
+    expect([...haramWords('des lardons, du prosciutto et du vin; encore des lardons')].sort()).toEqual(['lardons', 'prosciutto', 'vin']);
   });
 
   it('is on unless switched off', () => {
