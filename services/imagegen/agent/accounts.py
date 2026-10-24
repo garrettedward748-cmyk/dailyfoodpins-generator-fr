@@ -436,6 +436,34 @@ def _others(data: dict, current: dict) -> list:
     return [data["accounts"][(start + step) % len(ids)] for step in range(1, len(ids))]
 
 
+def leave_resting_active() -> Optional[int]:
+    """The account in use is resting or signed out, and another is ready: move to it.
+
+    rotate() picks the next account at the moment one goes down. When none was
+    ready right then, the resting one stayed in use -- and nothing looked again
+    once the others came back, so jobs kept going to a flagged account for
+    hours with ready accounts beside it. Called on every worker pass.
+
+    Prefers an account that makes the same kinds of work as the one in use,
+    then any ready account that makes at least one of them.
+    """
+    data = _load()
+    current = next((a for a in data["accounts"] if a["id"] == data["active"]), None)
+    if current is None or data.get("pending") or _usable(current):
+        return None
+    kinds = [k for k in ("image", "video") if _can(current, k)] or ["image", "video"]
+    others = [a for a in _others(data, current) if _usable(a)]
+    pick = (next((a for a in others if all(_able(a, k) for k in kinds)), None)
+            or next((a for a in others if any(_able(a, k) for k in kinds)), None))
+    if pick is None:
+        return None
+    data["pending"] = pick["id"]
+    _save(data)
+    logger.warning("accounts: #%d in use while %s — switching to ready #%d",
+                   current["id"], current.get("reason") or current["status"], pick["id"])
+    return pick["id"]
+
+
 def apply_pending_switch() -> Optional[int]:
     """Point the next Chrome start at the pending account. Call only with Chrome stopped."""
     data = _load()

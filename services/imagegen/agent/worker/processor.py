@@ -189,6 +189,10 @@ class WorkerController:
                 waiting = bool(counts.get("PENDING")) and not self.paused
                 await chrome.reconcile(waiting)
 
+                # Never keep sending work to an account that is resting while
+                # another is ready (the switch lands once the browser is free).
+                accounts.leave_resting_active()
+
                 free = MAX_CONCURRENT_REQUESTS - len(self._running)
                 # No new claims while a Google-account switch waits: the switch
                 # needs the browser free, and a steady queue would never let it.

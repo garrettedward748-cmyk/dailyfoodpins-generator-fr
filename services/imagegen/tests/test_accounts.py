@@ -361,3 +361,27 @@ def test_a_video_rest_ends_on_its_own(isolated, monkeypatch):
     assert accounts.active_kinds() == {"image"}
     monkeypatch.setattr(accounts, "_now", lambda: 10**12)
     assert accounts.active_kinds() == {"image", "video"}
+
+
+def test_a_resting_account_left_in_use_moves_once_another_is_ready(isolated, monkeypatch):
+    signed_in(3)
+    accounts.rotate("quota exhausted")           # 1 rests, 2 queued
+    accounts.apply_pending_switch()
+    accounts.set_capabilities(3, images=True, video=False)
+    # 2 is flagged while 1 is still resting: nowhere to go, 2 stays in use.
+    accounts.mark_ok(3)
+    data = accounts._load()
+    for a in data["accounts"]:
+        if a["id"] == 3:
+            a.update(status="cooldown", until=accounts._now() + 600, reason="x")
+    accounts._save(data)
+    assert accounts.rotate("PUBLIC_ERROR_UNUSUAL_ACTIVITY") is None
+    assert accounts.leave_resting_active() is None   # still nobody ready
+    accounts.mark_ok(3)                              # 3 comes back
+    assert accounts.leave_resting_active() == 3
+    assert accounts.leave_resting_active() == None   # already on its way
+
+
+def test_a_working_account_in_use_is_left_alone(isolated):
+    signed_in(2)
+    assert accounts.leave_resting_active() is None
