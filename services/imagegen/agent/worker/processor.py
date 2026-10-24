@@ -1053,8 +1053,30 @@ class WorkerController:
             await jobs.requeue(job_id, error)
             return
 
+        # A run of jobs failing on this account, for any reason Google gave or
+        # none at all, moves the work to the next account -- the way changing
+        # it by hand fixed it. The job that tipped it goes back in line for
+        # that account instead of failing its article.
+        if accounts.count() > 1 and not _about_the_request(lower) and accounts.note_failure():
+            problem = (f"{accounts.FAIL_STREAK} jobs in a row failed on this account, "
+                       f"last: {error[:120]}")
+            if accounts.rotate(problem) is not None:
+                logger.warning("job %s: %s — switching Google account", job_id[:8], problem)
+                await jobs.requeue(job_id, error + " — moving to the next Google account")
+                return
+
         logger.error("job %s FAILED: %s", job_id[:8], error[:300])
         await jobs.fail(job_id, error)
+
+
+# Failures that are about the job itself, not the Google account it ran on:
+# another account would fail them the same way, so they do not count.
+REQUEST_FAULTS = ("empty_prompt", "reference_urls is not valid", "could not fetch reference",
+                  "reference image", "no google account is set")
+
+
+def _about_the_request(lower: str) -> bool:
+    return any(marker in lower for marker in REQUEST_FAULTS)
 
 
 _controller: WorkerController | None = None

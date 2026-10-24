@@ -67,6 +67,14 @@ UNUSUAL_MARKER = "unusual_activity"
 UNUSUAL_STREAK = int(os.environ.get("ACCOUNT_UNUSUAL_STREAK", "2"))
 UNUSUAL_COOLDOWN_M = float(os.environ.get("ACCOUNT_UNUSUAL_COOLDOWN_MINUTES", "120"))
 LIMIT_MARKER = "credit limit reached"
+# Jobs that failed in a row on the account in use, whatever the error said.
+# Google does not always say "out of credits" or "signed out": an account that
+# has quietly stopped making images (the composer takes the prompt and nothing
+# comes back, or the page will not take it at all) fails every job the same
+# way while the next account works at once. Left to the watchdog, that needed
+# five failures inside half an hour -- one article every quarter of an hour
+# never got there, and one account failed every article for a whole day.
+FAIL_STREAK = int(os.environ.get("ACCOUNT_FAIL_STREAK", "3"))
 
 # What one video clip costs in Flow credits, until someone sets it on the page.
 # 0 means clips are not counted at all: no credit limit ever stops an account,
@@ -347,6 +355,7 @@ def rotate(problem: str) -> Optional[int]:
     lower = problem.lower()
     current = next(a for a in data["accounts"] if a["id"] == data["active"])
     current["unusual"] = 0
+    current["fails"] = 0
     if FLOW_SETUP_MARKER in lower:
         current.update(status="signed_out", until=None, reason=FLOW_SETUP_REASON)
     elif any(m in lower for m in SIGNED_OUT_MARKERS):
@@ -535,11 +544,27 @@ def note_unusual_activity() -> bool:
     return current["unusual"] >= UNUSUAL_STREAK
 
 
+def note_failure() -> bool:
+    """Count a failed job on the account in use. True when it is time to move on.
+
+    Any success on the account starts the count over (note_success), so this
+    only fires on an account that has stopped working, not on the odd bad prompt.
+    """
+    data = _load()
+    current = next((a for a in data["accounts"] if a["id"] == data["active"]), None)
+    if current is None:
+        return False
+    current["fails"] = int(current.get("fails") or 0) + 1
+    _save(data)
+    return current["fails"] >= FAIL_STREAK
+
+
 def note_success() -> None:
     data = _load()
     current = next((a for a in data["accounts"] if a["id"] == data["active"]), None)
-    if current is not None and (current.get("unusual") or not current.get("worked")):
+    if current is not None and (current.get("unusual") or current.get("fails") or not current.get("worked")):
         current["unusual"] = 0
+        current["fails"] = 0
         current["worked"] = True
         _save(data)
 

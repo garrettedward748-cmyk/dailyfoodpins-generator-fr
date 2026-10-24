@@ -305,3 +305,17 @@ def test_new_account_without_flow_reads_as_not_set_up(isolated):
 def test_an_account_that_worked_once_is_remembered(isolated):
     accounts.note_success()
     assert accounts.active_has_worked() is True
+
+
+def test_a_run_of_failures_moves_on_and_a_success_starts_over(isolated, monkeypatch):
+    monkeypatch.setattr(accounts, "FAIL_STREAK", 3)
+    signed_in(2)
+    assert accounts.note_failure() is False
+    assert accounts.note_failure() is False
+    accounts.note_success()                      # the account still works
+    assert accounts.note_failure() is False
+    assert accounts.note_failure() is False
+    assert accounts.note_failure() is True
+    assert accounts.rotate("3 jobs in a row failed on this account") == 2
+    listed = {a["id"]: a for a in accounts.list_accounts()["accounts"]}
+    assert listed[1]["status"] == "cooldown" and listed[1]["fails"] == 0

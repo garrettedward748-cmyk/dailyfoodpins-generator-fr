@@ -67,3 +67,21 @@ def test_a_flow_tab_that_reloaded_mid_upload_is_retried(calls):
     error = "Uploading a reference failed: Frame with ID 0 was removed."
     handle(error)
     assert calls == [("requeue", error)]
+
+
+def test_a_run_of_failures_on_one_account_moves_the_job_to_the_next(calls, monkeypatch):
+    problems = []
+    monkeypatch.setattr(proc.accounts, "count", lambda: 2)
+    monkeypatch.setattr(proc.accounts, "note_failure", lambda: True)
+    monkeypatch.setattr(proc.accounts, "rotate", lambda p: problems.append(p) or 2)
+    handle("the composer took the prompt but no image appeared in 180s", attempts=proc.MAX_RETRIES)
+    assert calls[-1][0] == "requeue"
+    assert "in a row" in problems[0]
+
+
+def test_a_fault_in_the_request_does_not_count_against_the_account(calls, monkeypatch):
+    counted = []
+    monkeypatch.setattr(proc.accounts, "count", lambda: 2)
+    monkeypatch.setattr(proc.accounts, "note_failure", lambda: counted.append(1) or True)
+    handle("Could not fetch reference image https://x/y.jpg: 404", attempts=proc.MAX_RETRIES)
+    assert counted == [] and calls[-1][0] == "fail"
