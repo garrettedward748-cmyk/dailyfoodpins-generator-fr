@@ -319,3 +319,10 @@ def test_a_run_of_failures_moves_on_and_a_success_starts_over(isolated, monkeypa
     assert accounts.rotate("3 jobs in a row failed on this account") == 2
     listed = {a["id"]: a for a in accounts.list_accounts()["accounts"]}
     assert listed[1]["status"] == "cooldown" and listed[1]["fails"] == 0
+
+
+def test_a_clip_sent_between_two_unusual_answers_does_not_hide_them(isolated):
+    signed_in(2)
+    assert accounts.note_unusual_activity() is False
+    accounts.record_clip()                       # a reel went out on the same account
+    assert accounts.note_unusual_activity() is True

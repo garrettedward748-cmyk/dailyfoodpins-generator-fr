@@ -508,7 +508,9 @@ def record_clip() -> None:
         spend = [s for s in current.get("spend", []) if s[0] >= cutoff]
         spend.append([_now(), cost])
         current["spend"] = spend
-    current["unusual"] = 0
+    # Not a reset of the unusual-activity streak: a clip Google took is not
+    # one it finished, and resetting here let reels sent between articles
+    # keep a flagged account in use all day. A finished job resets it.
     _save(data)
 
 

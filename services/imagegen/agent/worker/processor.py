@@ -734,6 +734,7 @@ class WorkerController:
                 continue  # in the project, still rendering
 
             await jobs.complete(job_id, found["media_id"], urls["video_url"])
+            accounts.note_success()
             logger.info("job %s COMPLETED", job_id[:8])
             return
 
