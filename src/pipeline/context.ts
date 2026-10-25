@@ -27,6 +27,7 @@ import {
   takes,
 } from '../db/repos.js';
 import { createLogger } from '../lib/logger.js';
+import { run } from '../db/index.js';
 
 const log = createLogger('pipeline-context');
 
@@ -315,6 +316,8 @@ export class PipelineContext {
       apiKey: init.settings.get('image_api_key'),
       pollIntervalMs: init.settings.getNumber('image_poll_interval_seconds') * 1000,
       maxAttempts: init.settings.getNumber('image_poll_max_attempts'),
+      // Waiting on an image is the run still working: keep its lock fresh.
+      onWait: () => run("UPDATE scheduler_lock SET heartbeat_at = datetime('now') WHERE id = 1 AND locked_at IS NOT NULL"),
       projectId: this.projectId.projectId,
       imageModel: init.settings.get('image_model'),
     });

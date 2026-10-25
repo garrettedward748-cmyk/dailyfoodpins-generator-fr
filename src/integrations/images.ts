@@ -31,6 +31,13 @@ export interface ImageClientOptions {
   pollIntervalMs: number;
   maxAttempts: number;
   /**
+   * Called on every poll while a job is still queued or running. An article run
+   * passes the run lock's heartbeat: an image held up behind a reel or an
+   * account switch used to leave the run silent long enough for the stall check
+   * to call it abandoned and fail it, while it was only waiting.
+   */
+  onWait?: () => void;
+  /**
    * The Flow project to generate into, resolved per site.
    *
    * Sent with the request rather than configured on the image service, because
@@ -221,6 +228,11 @@ export class ImageClient {
       }
 
       if (attempt < maxAttempts) {
+        try {
+          this.options.onWait?.();
+        } catch {
+          /* a missed heartbeat is not worth failing the image over */
+        }
         await new Promise((r) => setTimeout(r, pollIntervalMs));
       }
     }

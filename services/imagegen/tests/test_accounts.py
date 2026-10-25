@@ -385,3 +385,27 @@ def test_a_resting_account_left_in_use_moves_once_another_is_ready(isolated, mon
 def test_a_working_account_in_use_is_left_alone(isolated):
     signed_in(2)
     assert accounts.leave_resting_active() is None
+
+
+def test_a_switch_does_not_wait_forever_behind_a_long_job(isolated, monkeypatch):
+    signed_in(2)
+    calls = []
+
+    async def fake_supervisor(action):
+        calls.append(action)
+        return True
+
+    clock = [1000.0]
+    monkeypatch.setattr(chrome.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(chrome, "_supervisor", fake_supervisor)
+    monkeypatch.setattr(chrome, "_wanted_running", True)
+    monkeypatch.setattr(chrome, "_pending_seen", (None, 0.0))
+    monkeypatch.setattr(chrome, "_users", 1)            # a reel's video, polling
+    accounts.rotate("quota")
+
+    assert asyncio.run(chrome.switch_account_if_pending()) is False
+    clock[0] += chrome.SWITCH_MAX_WAIT_S - 1
+    assert asyncio.run(chrome.switch_account_if_pending()) is False
+    clock[0] += 2
+    assert asyncio.run(chrome.switch_account_if_pending()) is True
+    assert calls == ["stop"] and accounts.active_id() == 2

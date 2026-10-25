@@ -88,6 +88,15 @@ _lock = asyncio.Lock()
 # proved it was self-inflicted that way.
 MANUAL_HOLD_S = int(os.environ.get("CHROME_MANUAL_HOLD", "120"))
 
+# The longest a queued account switch waits for the jobs holding the browser.
+# A switch waits for them so it does not cut a request off -- but nothing new is
+# claimed meanwhile, and a reel's video job polls for up to twenty minutes. An
+# article's image that set off the switch sat behind it all that time. Past
+# this, the switch goes ahead: a job cut off goes back in the queue (Chrome
+# gone reads as "not connected", which is retried) and runs on the new account.
+SWITCH_MAX_WAIT_S = int(os.environ.get("ACCOUNT_SWITCH_MAX_WAIT", "240"))
+_pending_seen: tuple = (None, 0.0)  # (account id, when first seen pending)
+
 
 def hold_manually(seconds: int = MANUAL_HOLD_S) -> None:
     """Keep Chrome up for someone using the Browser page by hand."""
@@ -203,12 +212,23 @@ async def switch_account_if_pending() -> bool:
     usual ensure_running then starts it there. Never under a job: a switch
     mid-generation would kill the request the bearer token is riding on.
     """
-    global _wanted_running, _idle_since
-    if not accounts.switch_pending() or _users > 0:
+    global _wanted_running, _idle_since, _pending_seen
+    pending = accounts.switch_pending()
+    if not pending:
+        _pending_seen = (None, 0.0)
+        return False
+    if _pending_seen[0] != pending:
+        _pending_seen = (pending, time.monotonic())
+    waited = time.monotonic() - _pending_seen[1]
+    overdue = waited >= SWITCH_MAX_WAIT_S
+    if _users > 0 and not overdue:
         return False
     async with _lock:
-        if _users > 0:
+        if _users > 0 and not overdue:
             return False
+        if _users > 0:
+            logger.warning("Chrome: account switch waited %ds for %d job(s) — switching anyway; "
+                           "they go back in the queue", int(waited), _users)
         if _wanted_running:
             logger.info("Chrome: stopping to switch Google account")
             if not await _supervisor("stop"):
