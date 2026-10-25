@@ -105,7 +105,15 @@ export class BufferClient {
     return org.id;
   }
 
-  async getChannels(organizationId: string): Promise<BufferChannel[]> {
+  /** Every organization this token can reach (a Buffer account can belong to several). */
+  async getOrganizationIds(): Promise<string[]> {
+    const data = await this.graphql<{
+      account: { organizations: { id: string }[] };
+    }>('query GetOrganizations { account { organizations { id } } }');
+    return (data.account?.organizations ?? []).map((o) => o.id);
+  }
+
+  private async channelsOf(organizationId: string): Promise<BufferChannel[]> {
     const data = await this.graphql<{
       channels: {
         id: string;
@@ -124,6 +132,41 @@ export class BufferClient {
       service: (c.service ?? '').toLowerCase(),
       boards: c.metadata?.boards ?? [],
     }));
+  }
+
+  /**
+   * The channels of this organization first, then those of every other
+   * organization the token reaches.
+   *
+   * Only the first organization was read, so a channel connected in a second
+   * one -- a TikTok added in another workspace of the same Buffer login -- was
+   * reported as missing ("has no TikTok channel") while Buffer showed it
+   * connected. The first organization's channels still come first, so an
+   * account that picks "the first channel" picks what it always did.
+   */
+  async getChannels(organizationId: string): Promise<BufferChannel[]> {
+    const first = await this.channelsOf(organizationId);
+    let others: string[] = [];
+    try {
+      others = (await this.getOrganizationIds()).filter((id) => id !== organizationId);
+    } catch {
+      return first;
+    }
+    const seen = new Set(first.map((c) => c.id));
+    const all = [...first];
+    for (const id of others) {
+      try {
+        for (const c of await this.channelsOf(id)) {
+          if (!seen.has(c.id)) {
+            seen.add(c.id);
+            all.push(c);
+          }
+        }
+      } catch {
+        /* an organization this token cannot read adds nothing */
+      }
+    }
+    return all;
   }
 
   /**

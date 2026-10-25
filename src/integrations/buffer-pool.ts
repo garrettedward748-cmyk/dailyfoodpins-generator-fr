@@ -524,7 +524,7 @@ export class BufferPool {
       try {
         const channels = await client.getChannels(await client.getOrganizationId());
         const facebook = channels.filter((c) => c.service === 'facebook');
-        if (facebook.length === 0) throw new BufferError(`Buffer account "${account.label}" has no Facebook channel.`);
+        if (facebook.length === 0) throw new BufferError(`Buffer account "${account.label}" has no Facebook channel (it has: ${[...new Set(channels.map((c) => c.service))].join(', ') || 'none'}).`);
         const picked = pickChannel(facebook, this.site.pinUsername, this.site.profileId !== undefined, 'Facebook', account.label, this.site.otherNetworkName);
         channelId = picked.id;
         page = picked.name;
@@ -569,7 +569,7 @@ export class BufferPool {
       try {
         const channels = await client.getChannels(await client.getOrganizationId());
         const instagram = channels.filter((c) => c.service === 'instagram');
-        if (instagram.length === 0) throw new BufferError(`Buffer account "${account.label}" has no Instagram channel.`);
+        if (instagram.length === 0) throw new BufferError(`Buffer account "${account.label}" has no Instagram channel (it has: ${[...new Set(channels.map((c) => c.service))].join(', ') || 'none'}).`);
         const picked = pickChannel(instagram, this.site.pinUsername, this.site.profileId !== undefined, 'Instagram', account.label, this.site.otherNetworkName);
         channelId = picked.id;
         page = picked.name;
@@ -613,7 +613,7 @@ export class BufferPool {
       try {
         const channels = await client.getChannels(await client.getOrganizationId());
         const youtube = channels.filter((c) => c.service === 'youtube');
-        if (youtube.length === 0) throw new BufferError(`Buffer account "${account.label}" has no YouTube channel.`);
+        if (youtube.length === 0) throw new BufferError(`Buffer account "${account.label}" has no YouTube channel (it has: ${[...new Set(channels.map((c) => c.service))].join(', ') || 'none'}).`);
         const picked = pickChannel(youtube, this.site.pinUsername, this.site.profileId !== undefined, 'YouTube', account.label, this.site.otherNetworkName);
         channelId = picked.id;
         page = picked.name;
@@ -656,7 +656,7 @@ export class BufferPool {
       try {
         const channels = await client.getChannels(await client.getOrganizationId());
         const tiktok = channels.filter((c) => c.service === 'tiktok');
-        if (tiktok.length === 0) throw new BufferError(`Buffer account "${account.label}" has no TikTok channel.`);
+        if (tiktok.length === 0) throw new BufferError(`Buffer account "${account.label}" has no TikTok channel (it has: ${[...new Set(channels.map((c) => c.service))].join(', ') || 'none'}).`);
         const picked = pickChannel(tiktok, this.site.pinUsername, this.site.profileId !== undefined, 'TikTok', account.label, this.site.otherNetworkName);
         channelId = picked.id;
         page = picked.name;
