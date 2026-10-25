@@ -1202,9 +1202,34 @@ export function buildServer(
     const timezone = settings.get('timezone');
     const now = new Date();
     const views = loadSiteViews(localDateKey(now, timezone), timezone);
+    // "Can run now?" used to look at the site alone, so a site with no keyword
+    // it could run -- none linked, or every one held back after failures -- said
+    // "yes" and then never got an article while another site took every slot.
+    const keywordsBySite = new Map(
+      all<{ site_id: number; ready: number; held: number }>(
+        `SELECT ks.site_id,
+                SUM(CASE WHEN ks.blocked_at IS NULL THEN 1 ELSE 0 END) AS ready,
+                SUM(CASE WHEN ks.blocked_at IS NOT NULL THEN 1 ELSE 0 END) AS held
+           FROM keyword_sites ks JOIN keywords k ON k.id = ks.keyword_id
+          WHERE ks.status = 'go' AND k.status = 'go'
+          GROUP BY ks.site_id`,
+      ).map((r) => [r.site_id, r]),
+    );
     const eligibility = views.map((site) => {
       const verdict = evaluateSite(site, { now, timezone });
-      return { domain: site.domain, eligible: verdict.eligible, reason: verdict.reason };
+      const kw = keywordsBySite.get(site.id);
+      if (verdict.eligible && !(kw && kw.ready > 0)) {
+        const held = kw?.held ?? 0;
+        return {
+          domain: site.domain,
+          eligible: false,
+          reason: held > 0
+            ? `No keyword it can run: all ${held} linked keyword(s) are held back after failures — unblock them on Home`
+            : 'No keyword is linked to this site — add keywords for it under Content → Keywords',
+        };
+      }
+      const note = kw && kw.held > 0 ? ` · ${kw.held} keyword(s) held back` : '';
+      return { domain: site.domain, eligible: verdict.eligible, reason: `${verdict.reason}${note}` };
     });
     return page(
       reply,
