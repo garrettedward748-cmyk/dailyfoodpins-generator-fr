@@ -508,11 +508,12 @@ export const SETTING_SPECS: SettingSpec[] = [
     label: 'Run timeout (minutes)',
     group: 'schedule',
     secret: false,
-    default: '10',
+    default: '45',
     type: 'number',
     help:
-      'The longest a whole run may take before it is stopped. Normal runs take 4 ' +
-      'to 6 minutes.',
+      'The longest a whole run may take before it is marked failed. An article with ' +
+      'several step photos takes 10 to 25 minutes. A run past this is not started over ' +
+      'beside a new one: the next article waits until it has really stopped.',
   },
 
   // -- Collage ---------------------------------------------------------------

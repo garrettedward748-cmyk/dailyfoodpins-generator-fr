@@ -63,6 +63,20 @@ export class ImageGenerationError extends Error {
   }
 }
 
+/**
+ * A dropped connection to the image service, not an answer from it: Node's
+ * "fetch failed", a reset, a timeout. Seen when the service restarts or is busy
+ * starting Chrome -- one of these used to fail the whole article mid-images.
+ */
+export function isNetworkBlip(err: unknown): boolean {
+  if (err instanceof ImageGenerationError) return false;
+  const text = `${(err as Error)?.name ?? ''} ${(err as Error)?.message ?? ''} ${String((err as { cause?: unknown })?.cause ?? '')}`.toLowerCase();
+  return /fetch failed|econnreset|econnrefused|etimedout|socket hang up|other side closed|timeouterror|aborterror|network/.test(text);
+}
+
+/** How long the service may be unreachable before an image is given up on. */
+const BLIP_TOLERANCE_MS = 3 * 60_000;
+
 const TERMINAL_FAILURES = new Set(['FAILED', 'ERROR', 'CANCELLED', 'CANCELED', 'REJECTED']);
 
 export class ImageClient {
@@ -91,6 +105,24 @@ export class ImageClient {
     prompt: string,
     orientation = 'VERTICAL',
     options: { referenceUrls?: string[] } = {},
+  ): Promise<string> {
+    // The service unreachable for a moment is retried, not a failed article.
+    const started = Date.now();
+    for (;;) {
+      try {
+        return await this.submitOnce(prompt, orientation, options);
+      } catch (err) {
+        if (!isNetworkBlip(err) || Date.now() - started > BLIP_TOLERANCE_MS) throw err;
+        log.warn(`image service unreachable (${(err as Error).message}); trying again in 10s`);
+        await new Promise((r) => setTimeout(r, 10_000));
+      }
+    }
+  }
+
+  private async submitOnce(
+    prompt: string,
+    orientation: string,
+    options: { referenceUrls?: string[] },
   ): Promise<string> {
     const response = await fetch(this.url('/v1/generate'), {
       method: 'POST',
@@ -194,8 +226,24 @@ export class ImageClient {
     const { maxAttempts, pollIntervalMs } = this.options;
     let lastNote: string | null = null;
 
+    let unreachableSince: number | null = null;
+
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const job = await this.poll(jobId);
+      let job: ImageJob;
+      try {
+        job = await this.poll(jobId);
+        unreachableSince = null;
+      } catch (err) {
+        // The job lives in the service, not in this connection: a poll that
+        // could not get through is asked again, for a few minutes, before the
+        // image is given up on.
+        if (!isNetworkBlip(err)) throw err;
+        unreachableSince ??= Date.now();
+        if (Date.now() - unreachableSince > BLIP_TOLERANCE_MS) throw err;
+        log.warn(`polling job ${jobId}: service unreachable (${(err as Error).message}); asking again`);
+        await new Promise((r) => setTimeout(r, Math.max(pollIntervalMs, 5_000)));
+        continue;
+      }
       const status = (job.status ?? '').toUpperCase();
 
       if (status === 'COMPLETED') {

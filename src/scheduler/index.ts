@@ -432,7 +432,21 @@ export async function tick(
       shareImages: getLinkShare(keyword.id, site.id),
       mode,
     });
-    const outcome = await withRunTimeout(executePipeline(ctx), settings, runId);
+    const work = executePipeline(ctx);
+    let outcome: Awaited<typeof work>;
+    try {
+      outcome = await withRunTimeout(work, settings, runId);
+    } catch (err) {
+      // The run cannot be interrupted: it is awaiting somebody else's network
+      // call. Freeing the lock here started the next article beside it -- two
+      // runs fighting over the image service until the first broke mid-images.
+      // It is marked failed, and the lock is kept until it has really stopped
+      // (each of its steps is bounded by the step timeout).
+      markRunFailed(runId, errorMessage(err), 'timeout');
+      log.warn(`run ${runId}: ${errorMessage(err)} — waiting for it to stop before starting another`);
+      await work.catch(() => undefined);
+      throw err;
+    }
 
     const detail =
       outcome.status === 'failed'
