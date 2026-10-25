@@ -63,9 +63,13 @@ const ALCOHOL_FR = [
   'alcool', 'alcools', 'alcoolisée?s?', 'vin', 'vins', 'bière', 'bières', 'rhum', 'whisky', 'whiskey', 'vodka', 'gin',
   'tequila', 'cognac', 'armagnac', 'calvados', 'brandy', 'champagne', 'prosecco', 'crémant', 'liqueurs?', 'amaretto',
   'kirsch', 'kirsch', 'grand marnier', 'cointreau', 'limoncello', 'porto', 'xérès', 'madère', 'marsala', 'cidre', 'cidres',
-  'pastis', 'anisette', 'absinthe', 'saké', 'mirin', 'sangria', 'mojitos?', 'eau-de-vie', 'eaux-de-vie', 'digestif',
-  'bourbon', 'vermouth', 'martini', 'baileys', 'amer', 'rosé', 'vin cuit', 'vin chaud', 'vin blanc', 'vin rouge',
-  'merlot', 'chardonnay', 'cabernet', 'sauvignon', 'pinot', 'muscat', 'cacha[cç]a', 'spiritueux', 'vinasse',
+  'pastis', 'anisette', 'absinthe', 'saké', 'mirin', 'sangria', 'mojitos?', 'eau-de-vie', 'eaux-de-vie', 
+  'bourbon', 'vermouth', 'martini', 'baileys', '(?:du|un|le|de|verre de) rosé', 'vin cuit', 'vin chaud', 'vin blanc', 'vin rouge',
+  'merlot', 'chardonnay', 'cabernet', 'sauvignon', 'pinot', 'cacha[cç]a', 'spiritueux', 'vinasse',
+  // Not listed, though they can name a drink: « amer » (bitter), « digestif »
+  // (as in biscuits digestifs), « muscat » (a table grape), « rosé » alone (poivre
+  // rosé) -- each is far more often an ordinary word in a recipe. « vin muscat »
+  // and « vin rosé » are still caught by « vin ».
 ];
 
 /** French pork and what is made from it. Words that are also "halal" in a halal version are freed by ALLOWED_FR. */
@@ -81,7 +85,16 @@ const PORK_FR = [
 /** A listed word also matches its plural ("rums", "hogs"): plain words get an optional "s". */
 const withPlural = (word: string): string => (/[?|()\[\\]/.test(word) || word.endsWith('s') ? word : `${word}s?`);
 
-const PATTERN = new RegExp(`\\b(${[...ALCOHOL, ...PORK].map(withPlural).join('|')})\\b`, 'i');
+/**
+ * Whole words only, where "whole" counts accented letters as letters. With \\b,
+ * "idéale" and "céréales" held the English "ale" and "pigé" held "pig", because
+ * \\b treats é as a break -- and French recipes failed Halal only over beer
+ * they never mentioned.
+ */
+const PATTERN = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(${[...ALCOHOL, ...PORK].map(withPlural).join('|')})(?![\\p{L}\\p{N}_])`,
+  'iu',
+);
 
 /** Safe words that contain a listed one ("hamburger", "ginger", "rumble" are fine; \b handles most). */
 const ALLOWED = /\b(turkey bacon|beef bacon|chicken bacon|halal bacon|turkey ham|beef ham|halal pepperoni|beef pepperoni|turkey pepperoni|beef salami|halal salami|beef chorizo|chicken chorizo|root beer|ginger ale|ginger beer|butterbeer|hamburgers?|gingerbread|gingers?|graham|hamantaschen|piggyback|apple cider vinegar|cider vinegar|wine vinegar|bourbon vanilla|madagascar bourbon|vanilla bourbon|sparkling (?:apple )?cider|non[\s\-‑–]?alcoholic|alcohol[\s\-‑–]?free|(?:no|zero|0%|without(?: (?:the use of|any|adding|added))?|free (?:of|from)(?: any)?|minus(?: the)?|skip(?:s|ping)? (?:the )?|instead of|in place of|never any|not a drop of|no added|nothing) alcohol|alcohol(?: is)? not (?:needed|required|used)|virgin (?:mojito|colada|margarita|daiquiri|mary)|for (?:the |your |its |their |our )?sake|\w+['’]s? sake|shot glass(?:es)?|espresso shots?|a shot of espresso|pork-free|no pork)\b/gi;
@@ -165,7 +178,7 @@ export function haramWord(text: string): string | null {
 /** Every alcohol or pork word in the text, each once, in order of first use. */
 export function haramWords(text: string): string[] {
   const cleaned = clean(text);
-  const en = [...cleaned.matchAll(new RegExp(PATTERN.source, 'gi'))].map((m) => m[1]!.toLowerCase());
+  const en = [...cleaned.matchAll(new RegExp(PATTERN.source, 'giu'))].map((m) => m[1]!.toLowerCase());
   const fr = [...cleaned.matchAll(new RegExp(PATTERN_FR.source, 'giu'))].map((m) => m[1]!.toLowerCase());
   return [...new Set([...en, ...fr])];
 }
