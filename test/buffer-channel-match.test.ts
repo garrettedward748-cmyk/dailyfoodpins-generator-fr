@@ -143,3 +143,14 @@ describe('the Buffer name of an account', () => {
     expect(bufferChannelName({ channel_name: 'ArbmomRecipes', buffer_channel: '  ' })).toBe('ArbmomRecipes');
   });
 });
+
+describe('an account with no channel for the network', () => {
+  it('is reported as missing the channel, not as a full queue', async () => {
+    const { pool } = poolNamed('', PAGES); // Facebook pages only, no TikTok
+    const error = await pool.createTikTokVideo({ text: 'Truffles', videoUrl: 'https://s.com/v.mp4' } as never)
+      .then(() => null, (e: Error) => e);
+    expect(error!.message).toMatch(/has no TikTok channel/);
+    expect(isBufferExhausted(error)).toBe(false);
+  });
+});
+

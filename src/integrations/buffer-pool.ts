@@ -82,8 +82,23 @@ const isPageNameError = (message: string): boolean => /^No \w+ page named "/.tes
  * exactly that, never as "full", so nothing holds the site back or retries it
  * for hours waiting for a queue that was never the problem.
  */
-function refusedEverywhere(accounts: number, domain: string, what: string, lastError: string): BufferError {
+function refusedEverywhere(
+  accounts: number,
+  domain: string,
+  what: string,
+  lastError: string,
+  sawFull = true,
+): BufferError {
   if (isPageNameError(lastError)) return new BufferError(lastError);
+  // No account so much as tried: none has the channel (no TikTok connected, a
+  // page that is not there). That is setup, not a full queue -- called "full"
+  // before, with an empty Buffer, and retried for a month to no purpose.
+  if (!sawFull) {
+    return new BufferError(
+      `No Buffer account for ${domain} can take the ${what}: ${lastError} ` +
+        'Connect that channel in Buffer, or switch this network off for the site.',
+    );
+  }
   return new BufferError(
     `${BUFFER_EXHAUSTED}: all ${accounts} Buffer account(s) for ${domain} refused the ${what}. Last reason: ${lastError}`,
   );
@@ -396,6 +411,7 @@ export class BufferPool {
       boardName,
     };
     let lastError = '';
+    let sawFull = false; // an account turned the post itself down, not just had no channel
 
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
@@ -407,10 +423,9 @@ export class BufferPool {
           destination = await this.resolveDestination(boardName);
         } catch (err) {
           lastError = errorMessage(err);
+          // Not full: it has no matching channel or board. Benching it for six
+          // hours stopped it posting to the networks it does have.
           log.warn(`Buffer account "${account.label}" has no usable channel`, lastError);
-          if (account.id > 0) {
-            markBufferAccountFull(account.id, lastError, new Date(Date.now() + FULL_FOR_MS));
-          }
           continue;
         }
       }
@@ -431,6 +446,7 @@ export class BufferPool {
         // will not fetch — fails the same way on every account. Retrying it
         // five times would only spend five accounts saying so.
         if (!isRotatable(err)) throw err;
+        sawFull = true;
 
         log.warn(
           `Buffer account "${account.label}" refused the post, moving to the next: ${lastError}`,
@@ -441,7 +457,7 @@ export class BufferPool {
       }
     }
 
-    throw refusedEverywhere(this.accounts.length, this.site.domain, 'post', lastError);
+    throw refusedEverywhere(this.accounts.length, this.site.domain, 'post', lastError, sawFull);
   }
 
   /**
@@ -457,6 +473,7 @@ export class BufferPool {
       throw new BufferError(`No Buffer account is configured for ${this.site.domain}. Add one under Channels → Pinterest.`);
     }
     let lastError = '';
+    let sawFull = false; // an account turned the post itself down, not just had no channel
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
       let destination: BufferDestination;
@@ -478,11 +495,12 @@ export class BufferPool {
       } catch (err) {
         lastError = errorMessage(err);
         if (!isRotatable(err)) throw err;
+        sawFull = true;
         log.warn(`Buffer account "${account.label}" refused the video pin, moving to the next: ${lastError}`);
         if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + FULL_FOR_MS));
       }
     }
-    throw refusedEverywhere(this.accounts.length, this.site.domain, 'video pin', lastError);
+    throw refusedEverywhere(this.accounts.length, this.site.domain, 'video pin', lastError, sawFull);
   }
 
   /**
@@ -497,6 +515,7 @@ export class BufferPool {
       throw new BufferError(`No Buffer account is configured for ${this.site.domain}. Add one under Channels → Facebook.`);
     }
     let lastError = '';
+    let sawFull = false; // an account turned the post itself down, not just had no channel
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
       const client = new BufferClient(account.token);
@@ -521,11 +540,12 @@ export class BufferPool {
       } catch (err) {
         lastError = errorMessage(err);
         if (!isRotatable(err)) throw err;
+        sawFull = true;
         log.warn(`Buffer account "${account.label}" refused the Facebook post, moving to the next: ${lastError}`);
         if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + FULL_FOR_MS));
       }
     }
-    throw refusedEverywhere(this.accounts.length, this.site.domain, 'Facebook post', lastError);
+    throw refusedEverywhere(this.accounts.length, this.site.domain, 'Facebook post', lastError, sawFull);
   }
 
   /** Schedule an Instagram post or reel, moving down the accounts while Buffer refuses. */
@@ -540,6 +560,7 @@ export class BufferPool {
       throw new BufferError(`No Buffer account is configured for ${this.site.domain}. Add one under Channels → Facebook.`);
     }
     let lastError = '';
+    let sawFull = false; // an account turned the post itself down, not just had no channel
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
       const client = new BufferClient(account.token);
@@ -564,11 +585,12 @@ export class BufferPool {
       } catch (err) {
         lastError = errorMessage(err);
         if (!isRotatable(err)) throw err;
+        sawFull = true;
         log.warn(`Buffer account "${account.label}" refused the Instagram ${input.type}, moving to the next: ${lastError}`);
         if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + FULL_FOR_MS));
       }
     }
-    throw refusedEverywhere(this.accounts.length, this.site.domain, `Instagram ${input.type}`, lastError);
+    throw refusedEverywhere(this.accounts.length, this.site.domain, `Instagram ${input.type}`, lastError, sawFull);
   }
 
   /** A YouTube Short, through whichever account still has room for one. */
@@ -582,6 +604,7 @@ export class BufferPool {
       throw new BufferError(`No Buffer account is configured for ${this.site.domain}. Add one under Channels → Accounts.`);
     }
     let lastError = '';
+    let sawFull = false; // an account turned the post itself down, not just had no channel
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
       const client = new BufferClient(account.token);
@@ -606,11 +629,12 @@ export class BufferPool {
       } catch (err) {
         lastError = errorMessage(err);
         if (!isRotatable(err)) throw err;
+        sawFull = true;
         log.warn(`Buffer account "${account.label}" refused the YouTube Short, moving to the next: ${lastError}`);
         if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + FULL_FOR_MS));
       }
     }
-    throw refusedEverywhere(this.accounts.length, this.site.domain, 'YouTube Short', lastError);
+    throw refusedEverywhere(this.accounts.length, this.site.domain, 'YouTube Short', lastError, sawFull);
   }
 
   /** A TikTok video, through whichever account still has room for one. */
@@ -623,6 +647,7 @@ export class BufferPool {
       throw new BufferError(`No Buffer account is configured for ${this.site.domain}. Add one under Channels → Accounts.`);
     }
     let lastError = '';
+    let sawFull = false; // an account turned the post itself down, not just had no channel
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
       const client = new BufferClient(account.token);
@@ -647,11 +672,12 @@ export class BufferPool {
       } catch (err) {
         lastError = errorMessage(err);
         if (!isRotatable(err)) throw err;
+        sawFull = true;
         log.warn(`Buffer account "${account.label}" refused the TikTok video, moving to the next: ${lastError}`);
         if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + FULL_FOR_MS));
       }
     }
-    throw refusedEverywhere(this.accounts.length, this.site.domain, 'TikTok video', lastError);
+    throw refusedEverywhere(this.accounts.length, this.site.domain, 'TikTok video', lastError, sawFull);
   }
 
   async createReel(input: {
@@ -667,6 +693,7 @@ export class BufferPool {
     }
 
     let lastError = '';
+    let sawFull = false; // an account turned the post itself down, not just had no channel
 
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
@@ -715,6 +742,7 @@ export class BufferPool {
         // fails identically on every account. Spending five accounts to hear
         // the same refusal five times helps nobody.
         if (!isRotatable(err)) throw err;
+        sawFull = true;
 
         log.warn(
           `Buffer account "${account.label}" refused the reel, moving to the next: ${lastError}`,
@@ -725,7 +753,7 @@ export class BufferPool {
       }
     }
 
-    throw refusedEverywhere(this.accounts.length, this.site.domain, 'reel', lastError);
+    throw refusedEverywhere(this.accounts.length, this.site.domain, 'reel', lastError, sawFull);
   }
 
   async healthCheck(): Promise<{ ok: boolean; error?: string }> {
