@@ -14,8 +14,14 @@ import { get } from '../db/index.js';
  */
 
 export interface Supply {
-  /** Keyword-and-site pairs that could run: keyword go, link go, site active. */
+  /** Keyword-and-site pairs that could run: keyword go, link go, site active, not held back. */
   readyPairs: number;
+  /**
+   * Pairs that would be ready but are held back after failing repeatedly. The
+   * scheduler skips them, so they used to be counted as "left" while nothing
+   * ran: "23 pairs left" with every one of them held back.
+   */
+  heldBack: number;
   /** Articles the active sites would publish in a day at their current targets. */
   dailyDemand: number;
   /** Days of work left, or null when nothing is configured to consume it. */
@@ -34,6 +40,20 @@ export function readSupply(): Supply {
          JOIN keywords k ON k.id = ks.keyword_id
          JOIN sites s    ON s.id = ks.site_id
         WHERE ks.status = 'go'
+          AND ks.blocked_at IS NULL
+          AND k.status  = 'go'
+          AND s.status  = 'active'
+          AND s.daily_target > 0`,
+    )?.n ?? 0;
+
+  const heldBack =
+    get<{ n: number }>(
+      `SELECT COUNT(*) AS n
+         FROM keyword_sites ks
+         JOIN keywords k ON k.id = ks.keyword_id
+         JOIN sites s    ON s.id = ks.site_id
+        WHERE ks.status = 'go'
+          AND ks.blocked_at IS NOT NULL
           AND k.status  = 'go'
           AND s.status  = 'active'
           AND s.daily_target > 0`,
@@ -55,12 +75,17 @@ export function readSupply(): Supply {
         ? 'low'
         : 'ok';
 
-  return { readyPairs, dailyDemand, daysRemaining, level };
+  return { readyPairs, heldBack, dailyDemand, daysRemaining, level };
 }
 
 /** One sentence an operator can act on, or null when there is nothing to say. */
 export function supplyWarning(supply: Supply): string | null {
   if (supply.level === 'ok') return null;
+
+  if (supply.level === 'empty' && supply.heldBack > 0) {
+    return `Nothing can run: all ${supply.heldBack} remaining keyword-site pair(s) are held back after failing repeatedly. ` +
+      'Unblock them (Home) once the cause is fixed, or add keywords.';
+  }
 
   if (supply.level === 'empty') {
     return supply.dailyDemand === 0
@@ -72,6 +97,7 @@ export function supplyWarning(supply: Supply): string | null {
   const rounded = days < 1 ? days.toFixed(1) : String(Math.floor(days));
   return (
     `Only ${supply.readyPairs} keyword-site pair(s) left, about ${rounded} day(s) ` +
-    `at ${supply.dailyDemand} article(s) a day. Add more before it runs dry.`
+    `at ${supply.dailyDemand} article(s) a day. Add more before it runs dry.` +
+    (supply.heldBack > 0 ? ` ${supply.heldBack} more are held back after failures.` : '')
   );
 }

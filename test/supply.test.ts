@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { closeDatabase, openDatabase } from '../src/db/index.js';
-import { insertKeyword, setLink, upsertSite } from '../src/db/repos.js';
+import { blockLink, insertKeyword, setLink, unblockAllLinks, upsertSite } from '../src/db/repos.js';
 import { readSupply, supplyWarning } from '../src/core/supply.js';
 
 const KEY = randomBytes(32);
@@ -28,6 +28,19 @@ describe('how much work is left', () => {
 
   afterEach(() => {
     closeDatabase();
+  });
+
+  it('does not count a held-back pair as left, and says how many are held back', () => {
+    const s = site('a.com');
+    const k1 = insertKeyword({ seed_keyword: 'chicken', status: 'go' });
+    const k2 = insertKeyword({ seed_keyword: 'beef', status: 'go' });
+    setLink(k1, s, 'go');
+    setLink(k2, s, 'go');
+    blockLink(k1, s, 'failed 3 times');
+    blockLink(k2, s, 'failed 3 times');
+    expect(readSupply()).toMatchObject({ readyPairs: 0, heldBack: 2, level: 'empty' });
+    expect(unblockAllLinks()).toBe(2);
+    expect(readSupply()).toMatchObject({ readyPairs: 2, heldBack: 0 });
   });
 
   it('reports empty when there is nothing at all', () => {

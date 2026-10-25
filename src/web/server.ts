@@ -117,6 +117,8 @@ import {
   listBufferAccounts,
   loadKeywordViews,
   unblockLink,
+  unblockAllLinks,
+  listBlockedPairs,
   upsertBufferAccount,
   setPinterestPublishing,
   setInstagramPublishing,
@@ -667,6 +669,28 @@ export function buildServer(
           action: 'Check',
         });
       }
+    }
+
+    // Held-back pairs are skipped by the scheduler and were shown nowhere: a
+    // day of failures for one outside cause (a Google account) held back the
+    // keywords one by one until nothing could run, with no word on the page.
+    const blocked = listBlockedPairs();
+    if (blocked.length > 0) {
+      const sample = blocked.slice(0, 3).map((b) => `"${b.seedKeyword}"`).join(', ');
+      items.push({
+        kind: readSupply().readyPairs === 0 ? 'warn' : 'info',
+        text:
+          `${blocked.length} keyword(s) held back after failing repeatedly (${sample}${blocked.length > 3 ? ', …' : ''}). ` +
+          `Last reason: ${blocked[0]!.blockedReason.slice(0, 140)}`,
+        href: `/keywords/${blocked[0]!.keywordId}`,
+        action: 'See one',
+        post: {
+          url: '/keywords/unblock-all',
+          label: 'Unblock all',
+          fields: {},
+          confirm: `Put these ${blocked.length} keyword(s) back in the running?`,
+        },
+      });
     }
 
     const held = listHeldRuns(20);
@@ -4642,6 +4666,14 @@ export function buildServer(
    * Clearing that is a person's call — they either fixed what was wrong or
    * decided it is worth another go — so there is no automatic expiry.
    */
+  app.post('/keywords/unblock-all', async (_request, reply) => {
+    const n = unblockAllLinks();
+    return redirect(reply, '/', {
+      kind: 'ok',
+      message: `${n} keyword-site pair(s) back in the running. They are offered again from the next check.`,
+    });
+  });
+
   app.post('/keywords/:id/unblock/:siteId', async (request, reply) => {
     const params = request.params as { id: string; siteId: string };
     const keywordId = asNumber(params.id, 0);

@@ -1116,6 +1116,14 @@ export const unblockLink = (keywordId: number, siteId: number): void => {
   );
 };
 
+/** Put every held-back pair back in the running. Returns how many. */
+export const unblockAllLinks = (): number =>
+  run(
+    `UPDATE keyword_sites
+        SET blocked_at = NULL, blocked_reason = NULL, updated_at = datetime('now')
+      WHERE blocked_at IS NOT NULL`,
+  ).changes;
+
 export interface BlockedPair {
   keywordId: number;
   siteId: number;
