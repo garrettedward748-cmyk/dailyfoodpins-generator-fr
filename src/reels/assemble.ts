@@ -5,6 +5,15 @@ import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 /**
+ * Every reel leaves tagged and converted as standard HD video (BT.709, limited
+ * range). Built from photos and Flow clips, the output carried mixed colour
+ * tags -- an SD matrix, HD primaries and the sRGB transfer of a still image --
+ * and Facebook refused such reels through Buffer ("unable to process the
+ * media") while taking the same reel with clean tags.
+ */
+const BT709 = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv'];
+
+/**
  * Join the scene clips into the reel.
  *
  * One ffmpeg run: every clip scaled and padded to 1080x1920 at 30 fps with
@@ -26,7 +35,7 @@ export async function assembleReel(
     .map(
       (_, i) =>
         `[${i}:v]scale=1080:1920:force_original_aspect_ratio=decrease,` +
-        `pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v${i}];` +
+        `pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[v${i}];` +
         `[${i}:a]aresample=48000,aformat=channel_layouts=stereo[a${i}]`,
     )
     .join(';');
@@ -49,7 +58,7 @@ export async function assembleReel(
     '-y', ...inputs,
     '-filter_complex', `${norm};${concat}${text}`,
     '-map', '[vout]', '-map', '[ac]',
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+    '-c:v', 'libx264', ...BT709, '-preset', 'veryfast', '-crf', '20',
     '-c:a', 'aac', '-b:a', '160k',
     '-movflags', '+faststart',
     outPath,
@@ -140,7 +149,7 @@ export async function normalizeForSocial(
   const output = join(dir, 'out.mp4');
   try {
     writeFileSync(input, video);
-    let vf = 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p';
+    let vf = 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p';
     // The hook: the dish's name, on screen from the very first frame, so a
     // viewer knows what this is before the two-second mark where most leave.
     const words = hook.trim();
@@ -165,7 +174,7 @@ export async function normalizeForSocial(
       '-y', '-i', input,
       '-map', '0:v:0', '-map', '0:a:0?',
       '-vf', vf,
-      '-c:v', 'libx264', '-profile:v', 'high', '-preset', 'veryfast', '-crf', '20', '-r', '30',
+      '-c:v', 'libx264', ...BT709, '-profile:v', 'high', '-preset', 'veryfast', '-crf', '20', '-r', '30',
       '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2',
       '-map_metadata', '-1', '-movflags', '+faststart',
       output,
@@ -280,7 +289,7 @@ export async function assembleMixedReel(input: MixedReelInput, outPath: string, 
   const parts: string[] = [];
   const hook = input.hook.trim();
   parts.push(
-    `[0:v]${fill},fps=30,format=yuv420p,trim=0:${clipLen},setpts=PTS-STARTPTS` +
+    `[0:v]${fill},fps=30,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,trim=0:${clipLen},setpts=PTS-STARTPTS` +
       (hook ? `,${title(textFile('hook', hook, 20), 76, 'h*0.14', 0.3, Math.min(3.8, clipLen - 0.5))}` : '') +
       '[s0]',
   );
@@ -292,13 +301,13 @@ export async function assembleMixedReel(input: MixedReelInput, outPath: string, 
     parts.push(
       `[${i + 1}:v]scale=1350:2400:force_original_aspect_ratio=increase,crop=1350:2400,` +
         `zoompan=z='${zoom}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30,` +
-        `setsar=1,format=yuv420p,trim=0:${MIX.step},setpts=PTS-STARTPTS` +
+        `setsar=1,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,trim=0:${MIX.step},setpts=PTS-STARTPTS` +
         (caption ? `,${title(textFile(`step${i + 1}`, caption, 18), 80, 'h*0.14', 0.25, MIX.step)}` : '') +
         `[s${i + 1}]`,
     );
   });
   parts.push(
-    `[${n + 1}:v]${fill},boxblur=24:2,eq=brightness=-0.18,fps=30,format=yuv420p,trim=0:${MIX.end},setpts=PTS-STARTPTS,` +
+    `[${n + 1}:v]${fill},boxblur=24:2,eq=brightness=-0.18,fps=30,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,trim=0:${MIX.end},setpts=PTS-STARTPTS,` +
       `drawtext=${font}${textFile('cta', input.cta.trim() || 'La recette complète dans la légende', 16)}:fontcolor=white:fontsize=92:` +
       `line_spacing=18:box=1:boxcolor=black@0.35:boxborderw=40:x=(w-text_w)/2:y=(h-text_h)/2-120:` +
       `alpha='min(1,t/0.4)'[s${n + 1}]`,
@@ -336,7 +345,7 @@ export async function assembleMixedReel(input: MixedReelInput, outPath: string, 
     '-filter_complex', parts.join(';'),
     '-map', '[vout]', '-map', '[aout]',
     '-t', total.toFixed(3),
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-r', '30',
+    '-c:v', 'libx264', ...BT709, '-preset', 'veryfast', '-crf', '20', '-r', '30',
     '-c:a', 'aac', '-b:a', '160k',
     '-movflags', '+faststart',
     outPath,
@@ -431,7 +440,7 @@ export async function assembleProcessReel(
     total += len;
     parts.push(
       `[${i}:v]trim=${start.toFixed(3)}:${end.toFixed(3)},setpts=PTS-STARTPTS,` +
-        `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,format=yuv420p[v${i}]`,
+        `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[v${i}]`,
     );
     parts.push(
       probes[i]!.hasAudio
@@ -454,7 +463,7 @@ export async function assembleProcessReel(
   args.push(
     '-filter_complex', parts.join(';'),
     '-map', '[vout]', '-map', '[aout]',
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-r', '30',
+    '-c:v', 'libx264', ...BT709, '-preset', 'veryfast', '-crf', '20', '-r', '30',
     '-c:a', 'aac', '-b:a', '160k',
     '-movflags', '+faststart',
     outPath,
