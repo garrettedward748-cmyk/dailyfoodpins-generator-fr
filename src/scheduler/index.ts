@@ -438,14 +438,14 @@ export async function tick(
       outcome = await withRunTimeout(work, settings, runId);
     } catch (err) {
       // The run cannot be interrupted: it is awaiting somebody else's network
-      // call. Freeing the lock here started the next article beside it -- two
-      // runs fighting over the image service until the first broke mid-images.
-      // It is marked failed, and the lock is kept until it has really stopped
-      // (each of its steps is bounded by the step timeout).
-      markRunFailed(runId, errorMessage(err), 'timeout');
-      log.warn(`run ${runId}: ${errorMessage(err)} — waiting for it to stop before starting another`);
-      await work.catch(() => undefined);
-      throw err;
+      // call, and every one of its steps is already bounded by the step
+      // timeout. Freeing the lock here started the next article beside it; and
+      // marking it failed while it went on made it make every picture and then
+      // refuse to publish at the last step ("stopped before its article
+      // reached the site"). So past the run timeout it is only noted: the run
+      // keeps the lock and ends as whatever it really ends as.
+      log.warn(`run ${runId}: ${errorMessage(err)} — still working, letting it finish`);
+      outcome = await work;
     }
 
     const detail =
