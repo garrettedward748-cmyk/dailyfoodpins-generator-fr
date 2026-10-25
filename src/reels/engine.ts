@@ -316,15 +316,24 @@ function profilePool(
           off: !linked.enabled || !takes(linked, 'reels'),
         };
       }
-      // No account of this network shares the page's Buffer token: the page's
-      // own Buffer account, and its one channel of the network.
-      return {
-        pool: new BufferPool(
-          { id: site.id, domain: site.domain, pinUsername: bufferChannelName(page), platform, profileId: page.id, otherNetworkName: true },
-          key,
-        ),
-        off: false,
-      };
+      // No account of this network shares the page's Buffer token. If the site
+      // has an account of its own for this network, with its own token (a
+      // TikTok connected in a second Buffer), that is where it goes -- below.
+      // Before, the page's Buffer was used regardless, and a TikTok in another
+      // Buffer was never tried: "has no TikTok channel", every time.
+      const ownAccount = listBufferAccounts(site.id, key).some(
+        (a) => a.enabled && a.token.trim() !== '' && listProfiles(site.id, platform).some((p) => p.id === a.profileId),
+      );
+      if (!ownAccount) {
+        // None at all: the page's own Buffer account, and its one channel of the network.
+        return {
+          pool: new BufferPool(
+            { id: site.id, domain: site.domain, pinUsername: bufferChannelName(page), platform, profileId: page.id, otherNetworkName: true },
+            key,
+          ),
+          off: false,
+        };
+      }
     }
   }
   // A reel goes to an account that takes reels: its own Reels tick (Pinterest,
