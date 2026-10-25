@@ -52,7 +52,12 @@ MAX_ACCOUNTS = int(os.environ.get("MAX_FLOW_ACCOUNTS", "20"))
 
 # Error text that means "this account, not this request": worth moving on for.
 CREDIT_MARKERS = ("no video credits", "credits left", "out of credits", "insufficient credit",
-                  "quota", "resource_exhausted", "exhausted")
+                  "not enough credit", "user_quota_reached", "credit limit")
+# Google's words for "slow down", not "empty": RESOURCE_EXHAUSTED, a 429, a
+# per-minute quota. Read as out of credits before, which rested the account for
+# six hours, images and all -- seen on an account with 720 credits left.
+RATE_MARKERS = ("resource_exhausted", "exhausted", "quota", "rate_limit", "rate limit", "429")
+RATE_COOLDOWN_M = float(os.environ.get("ACCOUNT_RATE_COOLDOWN_MINUTES", "30"))
 SIGNED_OUT_MARKERS = ("session_expired", "signed out", "sign in again")
 # A Google account that is signed in but has never got through Flow: Labs'
 # terms and welcome screens are still waiting, so the page has no sign-in
@@ -409,7 +414,10 @@ def rotate(problem: str, kind: Optional[str] = None) -> Optional[int]:
                        reason="Google flagged unusual activity")
     elif any(m in lower for m in CREDIT_MARKERS):
         current.update(status="cooldown", until=_now() + COOLDOWN_H * 3600,
-                       reason="Out of credits or quota")
+                       reason="Out of credits")
+    elif any(m in lower for m in RATE_MARKERS):
+        current.update(status="cooldown", until=_now() + RATE_COOLDOWN_M * 60,
+                       reason="Google asked to slow down (rate limit) — short rest")
     else:
         current.update(status="cooldown", until=_now() + STUCK_COOLDOWN_M * 60,
                        reason="Kept failing: " + problem[:120])

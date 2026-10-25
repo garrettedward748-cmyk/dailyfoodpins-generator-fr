@@ -995,7 +995,7 @@ class WorkerController:
         # Google account, when there is one. The job goes back in line for it;
         # once every account is resting, rotate() finds nowhere to go and the
         # ordinary retry policy below takes over, so this cannot loop.
-        if any(m in lower for m in accounts.CREDIT_MARKERS + accounts.SIGNED_OUT_MARKERS):
+        if any(m in lower for m in accounts.CREDIT_MARKERS + accounts.RATE_MARKERS + accounts.SIGNED_OUT_MARKERS):
             if accounts.rotate(error, kind=job.get("kind")) is not None:
                 logger.warning("job %s: account problem, switching Google account: %s", job_id[:8], error[:160])
                 await jobs.requeue(job_id, error)

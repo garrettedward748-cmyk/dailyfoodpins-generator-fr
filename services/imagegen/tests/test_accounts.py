@@ -409,3 +409,18 @@ def test_a_switch_does_not_wait_forever_behind_a_long_job(isolated, monkeypatch)
     clock[0] += 2
     assert asyncio.run(chrome.switch_account_if_pending()) is True
     assert calls == ["stop"] and accounts.active_id() == 2
+
+
+def test_a_rate_limit_is_a_short_rest_not_out_of_credits(isolated):
+    signed_in(2)
+    assert accounts.rotate("RESOURCE_EXHAUSTED: quota exceeded, try later") == 2
+    a1 = {a["id"]: a for a in accounts.list_accounts()["accounts"]}[1]
+    assert "rate limit" in a1["reason"]
+    assert a1["until"] - accounts._now() <= accounts.RATE_COOLDOWN_M * 60 + 1
+
+
+def test_user_quota_reached_is_out_of_credits(isolated):
+    signed_in(2)
+    accounts.rotate("PUBLIC_ERROR_USER_QUOTA_REACHED")
+    a1 = {a["id"]: a for a in accounts.list_accounts()["accounts"]}[1]
+    assert a1["reason"] == "Out of credits"
