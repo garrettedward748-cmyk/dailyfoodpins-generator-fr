@@ -135,7 +135,7 @@ export const DEFAULT_CAPTION_STRUCTURES: { name: string; body: string }[] = [
 export const CAPTION_KEYS: ReadonlySet<string> = new Set([
   'caption_networks', 'caption_fb_link', 'caption_fb_recipe', 'caption_fb_post_recipe', 'caption_fb_post_link',
   'caption_ig_post_recipe', 'caption_pin_recipe', 'caption_yt_recipe', 'caption_ig_recipe', 'caption_tt_recipe',
-  'caption_yt_link_recipe', 'caption_yt_link_site', 'caption_extra_link',
+  'caption_yt_link_recipe', 'caption_yt_link_site', 'caption_extra_link', 'caption_fb_reel_title',
 ]);
 
 const CUSTOM = '_custom';

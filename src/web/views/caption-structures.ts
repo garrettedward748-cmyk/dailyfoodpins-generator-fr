@@ -21,6 +21,8 @@ export interface CaptionExtras {
   tiktokRecipe: RecipeInPost;
   youtubeRecipeLine: boolean;
   youtubeSiteLine: boolean;
+  /** Facebook reels: the title is sent with the video (Buffer's video metadata). */
+  facebookReelTitle?: boolean;
   /** More posts: whether the recipe link goes in ('setup' follows the settings above). */
   extraLink: 'setup' | 'yes' | 'no';
   /** 0 is the default every site follows; otherwise the site this page is for. */
@@ -254,6 +256,12 @@ export function captionStructuresPage(
             <label class="inline-check"><input type="checkbox" name="yt_link_site" value="1" ${extras.youtubeSiteLine ? raw('checked') : raw('')} /> <code>More recipes:</code> and the site's address</label>
           </div>
           <div class="help">Links in a Short's description cannot be tapped, but Google reads them.</div>
+        </div>
+
+        <div class="field" style="margin:14px 0 0">
+          <label class="inline-check"><input type="checkbox" name="fb_reel_title" value="1" ${extras.facebookReelTitle !== false ? raw('checked') : raw('')} /> Facebook reels: send the title with the video</label>
+          <div class="help">The name Facebook shows for the video in the page's library. Untick it for a site whose reels Facebook refuses
+            ("unable to process the media") while the same video uploaded by hand in Buffer goes out: that upload has no title.</div>
         </div>
 
         <p class="help" style="margin-bottom:0">${on} of ${structures.length} structure(s) on.

@@ -760,6 +760,14 @@ export const SETTING_SPECS: SettingSpec[] = [
     default: 'true',
   },
   {
+    key: 'caption_fb_reel_title',
+    label: 'Facebook: send the reel\'s title with the video',
+    group: 'reels',
+    secret: false,
+    hidden: true,
+    default: 'true',
+  },
+  {
     key: 'caption_yt_link_site',
     label: 'YouTube: "More recipes:" line in the description',
     group: 'reels',

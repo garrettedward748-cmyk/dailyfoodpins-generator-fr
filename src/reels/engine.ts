@@ -434,7 +434,8 @@ export function defaultDeps(settings: Settings, key: Buffer): ReelDeps {
 
       const { pool, off } = profilePool(site, input.runId, 'facebook', key, input.profileId);
       if (off) return null;
-      const scheduled = await pool.createReel(input);
+      const withTitle = withSiteOverrides(settings, input.siteId).getBool('caption_fb_reel_title');
+      const scheduled = await pool.createReel({ ...input, title: withTitle ? input.title : undefined });
       input.onPage?.(scheduled.page);
 
       return scheduled.postId;

@@ -60,6 +60,23 @@ function badMetadataValue(err: unknown, field: string): boolean {
     && /(cannot represent|expected type|invalid value|enum|of type "Int")/i.test(message);
 }
 
+/**
+ * A reel's title as plain text Facebook takes: one kind of space (French
+ * typography puts no-break spaces before ":" and "?"), no emoji, no control or
+ * invisible characters, composed accents, at most 100 characters.
+ */
+export function cleanVideoTitle(title: string): string {
+  return title
+    .normalize('NFC')
+    .replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF]/g, '')
+    .replace(/[\p{Extended_Pictographic}\uFE0F]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 100)
+    .trim();
+}
+
 export class BufferClient {
   constructor(private readonly token: string) {}
 
@@ -261,7 +278,7 @@ export class BufferClient {
     title?: string;
   }): Promise<string> {
     const q = (value: string): string => JSON.stringify(value ?? '');
-    const name = (input.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 100);
+    const name = cleanVideoTitle(input.title ?? '');
     const videoMeta = name ? `\n            metadata: { title: ${q(name)} }` : '';
 
     const firstComment =

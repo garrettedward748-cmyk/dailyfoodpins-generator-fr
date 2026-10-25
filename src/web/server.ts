@@ -5214,6 +5214,7 @@ export function buildServer(
           tiktokRecipe: parseRecipeInPost(view.get('caption_tt_recipe')),
           youtubeRecipeLine: view.getBool('caption_yt_link_recipe'),
           youtubeSiteLine: view.getBool('caption_yt_link_site'),
+          facebookReelTitle: view.getBool('caption_fb_reel_title'),
           extraLink: linkChoice === 'yes' || linkChoice === 'no' ? linkChoice : 'setup',
           site,
           sites: listSites().map((x) => ({ id: x.id, domain: x.domain, custom: isCaptionCustom(x.id) })),
@@ -5301,6 +5302,7 @@ export function buildServer(
     put('caption_fb_link', parseFacebookLinkMode(asString(form.fb_link)));
     put('caption_yt_link_recipe', 'yt_link_recipe' in form ? 'true' : 'false');
     put('caption_yt_link_site', 'yt_link_site' in form ? 'true' : 'false');
+    put('caption_fb_reel_title', 'fb_reel_title' in form ? 'true' : 'false');
     const extra = asString(form.extra_link);
     put('caption_extra_link', extra === 'yes' || extra === 'no' ? extra : 'setup');
 
