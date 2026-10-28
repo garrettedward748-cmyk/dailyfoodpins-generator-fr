@@ -3000,6 +3000,42 @@ export function pageForSite(siteId: number, need?: 'posts' | 'reels' | 'collage'
 }
 
 /**
+ * The Facebook page an article's reel goes to: in rotation, the page of the
+ * account the article's own photo post went to (saved on the run under
+ * "facebook"), so a pizza reel and its pizza photo land on the same page.
+ * Before this the reel had its own turn (pageForSite) next to the post's
+ * account turn, and the two drifted apart -- the reel on page 1, the photo
+ * on page 2. Falls back to the reel turn when the run has no Facebook account
+ * yet, when that account's page has Reels unticked or is off, or when the
+ * site posts to all (every page gets the reel then anyway).
+ */
+export function reelPageForRun(runId: number | null, siteId: number): FbPageRow | undefined {
+  if (runId && !postsToAll(siteId, 'facebook')) {
+    let chosen: Record<string, number> = {};
+    try {
+      chosen = JSON.parse(get<{ p: string }>('SELECT profiles_json AS p FROM runs WHERE id = ?', runId)?.p || '{}');
+    } catch {
+      chosen = {};
+    }
+    const profileId = chosen.facebook;
+    if (profileId) {
+      const page = get<FbPageRow>(
+        `SELECT p.* FROM fb_pages p
+          WHERE p.profile_id = ? AND p.site_id = ? AND p.enabled = 1 AND p.reels = 1
+            AND ${CARD_RULE}
+          ORDER BY (p.page_id = ?) DESC, p.id DESC
+          LIMIT 1`,
+        profileId,
+        siteId,
+        `profile:${profileId}`,
+      );
+      if (page) return page;
+    }
+  }
+  return pageForSite(siteId, 'reels');
+}
+
+/**
  * The Facebook pages a site's articles reach, and whether any of them takes
  * posts, and whether any takes reels -- what the site's Facebook card says.
  */

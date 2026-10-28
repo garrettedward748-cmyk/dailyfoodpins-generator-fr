@@ -8,8 +8,8 @@ import { markReelCaptionStructure, nextCaptionShape } from '../../core/caption-s
 import {
   createReel,
   getReel,
-  pageForSite,
   presenterForPage,
+  reelPageForRun,
   reelsCreatedRecently,
   reelsElsewhere,
   setReelStage,
@@ -82,7 +82,9 @@ export const createReelStep: Step<CreateReelInput, CreateReelOutput> = {
     // The Facebook page the reel is for, when one takes reels. With none, the
     // reel is still made when another network takes it (Pinterest, Instagram,
     // YouTube, TikTok) -- those go out through Buffer, so only on that route.
-    const page = pageForSite(ctx.site.id, 'reels') ?? null;
+    // In rotation, the page the article's photo post went to, so the reel and
+    // the photo of the same dish land on the same page (reelPageForRun).
+    const page = reelPageForRun(ctx.runId ?? null, ctx.site.id) ?? null;
     if (!page) {
       const elsewhere = reelsElsewhere(ctx.site as Parameters<typeof reelsElsewhere>[0]);
       const viaBuffer = ctx.settings.get('reel_publisher') === 'buffer';
