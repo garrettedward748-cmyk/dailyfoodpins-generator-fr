@@ -3660,7 +3660,8 @@ export const presenterForPage = (pageRowId: number): PresenterRow | undefined =>
 export function reelsToRetryForFullBuffer(waitHours: number, maxRetries: number): ReelView[] {
   return all<ReelView>(
     `${REEL_VIEW_SQL} WHERE r.status = 'failed'
-        AND (r.error LIKE '%All Buffer accounts are full%' OR r.error LIKE '%Scheduled posts limit reached%')
+        AND (r.error LIKE '%All Buffer accounts are full%' OR r.error LIKE '%Scheduled posts limit reached%'
+             OR r.error LIKE '%RATE_LIMIT_EXCEEDED%')
         AND (COALESCE(r.video_url, '') <> '' OR COALESCE(r.output_path, '') <> '')
         AND COALESCE(r.auto_retries, 0) < ?
         AND r.updated_at <= datetime('now', ?)`,

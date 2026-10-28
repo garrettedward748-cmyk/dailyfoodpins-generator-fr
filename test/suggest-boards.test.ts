@@ -19,6 +19,7 @@ const boards = vi.hoisted(() => ({ names: [] as string[] }));
 vi.mock('../src/integrations/buffer.js', async (orig) => ({
   ...(await orig<typeof import('../src/integrations/buffer.js')>()),
   BufferClient: class {
+    static forget() {}
     async getOrganizationId() { return 'org'; }
     async getChannels() { return [{ id: 'c', name: 'arbmom', service: 'pinterest', boards: boards.names.map((name, i) => ({ serviceId: String(i), name })) }]; }
   },

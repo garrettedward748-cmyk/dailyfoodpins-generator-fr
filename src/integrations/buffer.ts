@@ -77,8 +77,51 @@ export function cleanVideoTitle(title: string): string {
     .trim();
 }
 
+/**
+ * Buffer counts every API request against a limit over 30 days (HTTP 429,
+ * RATE_LIMIT_EXCEEDED). Once over it, every request of that token is refused,
+ * even reading its channels.
+ */
+export const isBufferRateLimit = (message: string): boolean =>
+  /http 429|rate_limit_exceeded|too many requests/i.test(message);
+
+/**
+ * How long a token's organizations and channels (with their boards) are kept.
+ *
+ * Before this every post asked Buffer for them first: the organization, the
+ * channels, the organizations again, the channels of each other one -- three
+ * or four requests before the one that posts, for every network and every
+ * reel. That is what spent tokens' 30-day API allowance. "Pick from Buffer"
+ * and a failed post forget the token's entry, so a channel connected or
+ * reconnected in Buffer is seen at once there.
+ */
+const LOOKUP_TTL_MS = 60 * 60 * 1000;
+const lookups = new Map<string, { at: number; value: unknown }>();
+
 export class BufferClient {
   constructor(private readonly token: string) {}
+
+  /** Off under the test runner, whose fetch mocks change between tests with the same token. */
+  static caching = !process.env.VITEST;
+
+  /** Forget a token's organizations and channels: the next lookup asks Buffer. */
+  static forget(token?: string): void {
+    if (!token) {
+      lookups.clear();
+      return;
+    }
+    for (const key of [...lookups.keys()]) if (key.startsWith(`${token}\u0000`)) lookups.delete(key);
+  }
+
+  private async cached<T>(what: string, load: () => Promise<T>): Promise<T> {
+    if (!BufferClient.caching) return load();
+    const key = `${this.token}\u0000${what}`;
+    const hit = lookups.get(key);
+    if (hit && Date.now() - hit.at < LOOKUP_TTL_MS) return hit.value as T;
+    const value = await load();
+    lookups.set(key, { at: Date.now(), value });
+    return value;
+  }
 
   private async graphql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
     const response = await fetch(ENDPOINT, {
@@ -105,10 +148,11 @@ export class BufferClient {
     return json.data;
   }
 
-  async getOrganizationId(): Promise<string> {
-    const data = await this.graphql<{
-      account: { organizations: { id: string; name: string }[] };
-    }>(`query GetOrganizations {
+  private organizations(): Promise<{ id: string; name: string }[]> {
+    return this.cached('organizations', async () => {
+      const data = await this.graphql<{
+        account: { organizations: { id: string; name: string }[] };
+      }>(`query GetOrganizations {
   account {
     organizations {
       id
@@ -116,21 +160,26 @@ export class BufferClient {
     }
   }
 }`);
+      return data.account?.organizations ?? [];
+    });
+  }
 
-    const org = data.account?.organizations?.[0];
+  async getOrganizationId(): Promise<string> {
+    const org = (await this.organizations())[0];
     if (!org) throw new BufferError('No Buffer organization found for this token');
     return org.id;
   }
 
   /** Every organization this token can reach (a Buffer account can belong to several). */
   async getOrganizationIds(): Promise<string[]> {
-    const data = await this.graphql<{
-      account: { organizations: { id: string }[] };
-    }>('query GetOrganizations { account { organizations { id } } }');
-    return (data.account?.organizations ?? []).map((o) => o.id);
+    return (await this.organizations()).map((o) => o.id);
   }
 
-  private async channelsOf(organizationId: string): Promise<BufferChannel[]> {
+  private channelsOf(organizationId: string): Promise<BufferChannel[]> {
+    return this.cached(`channels:${organizationId}`, () => this.loadChannelsOf(organizationId));
+  }
+
+  private async loadChannelsOf(organizationId: string): Promise<BufferChannel[]> {
     const data = await this.graphql<{
       channels: {
         id: string;

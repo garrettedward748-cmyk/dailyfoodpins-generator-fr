@@ -1,4 +1,4 @@
-import { BufferClient, BufferError, type BufferChannel } from './buffer.js';
+import { BufferClient, BufferError, isBufferRateLimit, type BufferChannel } from './buffer.js';
 import {
   listBufferAccounts,
   markBufferAccountFull,
@@ -30,6 +30,19 @@ const log = createLogger('buffer-pool');
 
 /** How long a refused account sits out. Long enough to cover the day's runs. */
 const FULL_FOR_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * How long a token over Buffer's API limit (HTTP 429) sits out. Buffer counts
+ * over 30 days and does not say when it frees up, so it is asked once a day:
+ * one request, not the three or four of every post and every retry.
+ */
+const LIMITED_FOR_MS = 24 * 60 * 60 * 1000;
+
+const sitOutFor = (message: string): number => (isBufferRateLimit(message) ? LIMITED_FOR_MS : FULL_FOR_MS);
+
+/** Benched for Buffer's API limit and not due yet: not asked at all. */
+const limitedNow = (account: BufferAccount): boolean =>
+  !!account.fullUntil && account.fullUntil > new Date() && isBufferRateLimit(account.lastError ?? '');
 
 /**
  * Rejections that mean "not through this account" rather than "not at all".
@@ -97,6 +110,15 @@ function refusedEverywhere(
     return new BufferError(
       `No Buffer account for ${domain} can take the ${what}: ${lastError} ` +
         'Connect that channel in Buffer, or switch this network off for the site.',
+    );
+  }
+  if (isBufferRateLimit(lastError)) {
+    // Kept under BUFFER_EXHAUSTED so the reel is retried on its own and the
+    // run waits, exactly as for a full queue -- the wait costs no request.
+    return new BufferError(
+      `${BUFFER_EXHAUSTED}: Buffer's API limit is reached on all ${accounts} Buffer account(s) for ${domain} ` +
+        '(HTTP 429, counted over 30 days); each one is asked again once a day. ' +
+        `Add a token from another Buffer account to keep posting. Last reason: ${lastError}`,
     );
   }
   return new BufferError(
@@ -309,7 +331,23 @@ export class BufferPool {
         `No Buffer account is configured for ${this.site.domain}. Add one under Channels → Pinterest or Facebook.`,
       );
     }
+    if (limitedNow(account)) {
+      throw new BufferError(
+        `${BUFFER_EXHAUSTED}: Buffer account "${account.label}" for ${this.site.domain} is over Buffer's API limit ` +
+          `until ${account.fullUntil!.toISOString()}. Last reason: ${account.lastError ?? ''}`,
+      );
+    }
     return new BufferClient(account.token);
+  }
+
+  /**
+   * A lookup refused for Buffer's API limit: the token sits out a day, and it
+   * counts as the account refusing (sawFull), not as a channel missing.
+   */
+  private noteLimit(account: BufferAccount, message: string): boolean {
+    if (!isBufferRateLimit(message)) return false;
+    if (account.id > 0) markBufferAccountFull(account.id, message, new Date(Date.now() + LIMITED_FOR_MS));
+    return true;
   }
 
   async getOrganizationId(): Promise<string> {
@@ -415,6 +453,12 @@ export class BufferPool {
 
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
+      if (limitedNow(account)) {
+        lastError = account.lastError ?? 'Buffer API limit reached (HTTP 429)';
+        sawFull = true;
+        log.info(`Buffer account "${account.label}" is over Buffer's API limit until ${account.fullUntil!.toISOString()}; not asking it`);
+        continue;
+      }
 
       // Every account after the first needs its own channel and board: the
       // ones resolved for the previous account do not exist here.
@@ -425,6 +469,7 @@ export class BufferPool {
           lastError = errorMessage(err);
           // Not full: it has no matching channel or board. Benching it for six
           // hours stopped it posting to the networks it does have.
+          if (this.noteLimit(account, lastError)) sawFull = true;
           log.warn(`Buffer account "${account.label}" has no usable channel`, lastError);
           continue;
         }
@@ -441,6 +486,7 @@ export class BufferPool {
         return { postId, account: account.label, destination };
       } catch (err) {
         lastError = errorMessage(err);
+        if (!isBufferRateLimit(lastError)) BufferClient.forget(account.token);
 
         // A rejection this pool cannot fix — a malformed post, an image Buffer
         // will not fetch — fails the same way on every account. Retrying it
@@ -452,7 +498,7 @@ export class BufferPool {
           `Buffer account "${account.label}" refused the post, moving to the next: ${lastError}`,
         );
         if (account.id > 0) {
-          markBufferAccountFull(account.id, lastError, new Date(Date.now() + FULL_FOR_MS));
+          markBufferAccountFull(account.id, lastError, new Date(Date.now() + sitOutFor(lastError)));
         }
       }
     }
@@ -476,11 +522,18 @@ export class BufferPool {
     let sawFull = false; // an account turned the post itself down, not just had no channel
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
+      if (limitedNow(account)) {
+        lastError = account.lastError ?? 'Buffer API limit reached (HTTP 429)';
+        sawFull = true;
+        log.info(`Buffer account "${account.label}" is over Buffer's API limit until ${account.fullUntil!.toISOString()}; not asking it`);
+        continue;
+      }
       let destination: BufferDestination;
       try {
         destination = await this.resolveDestination(preferBoard);
       } catch (err) {
         lastError = errorMessage(err);
+        if (this.noteLimit(account, lastError)) sawFull = true;
         log.warn(`Buffer account "${account.label}" has no usable Pinterest channel`, lastError);
         continue;
       }
@@ -494,10 +547,11 @@ export class BufferPool {
         return { postId, account: account.label, destination };
       } catch (err) {
         lastError = errorMessage(err);
+        if (!isBufferRateLimit(lastError)) BufferClient.forget(account.token);
         if (!isRotatable(err)) throw err;
         sawFull = true;
         log.warn(`Buffer account "${account.label}" refused the video pin, moving to the next: ${lastError}`);
-        if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + FULL_FOR_MS));
+        if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + sitOutFor(lastError)));
       }
     }
     throw refusedEverywhere(this.accounts.length, this.site.domain, 'video pin', lastError, sawFull);
@@ -518,6 +572,12 @@ export class BufferPool {
     let sawFull = false; // an account turned the post itself down, not just had no channel
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
+      if (limitedNow(account)) {
+        lastError = account.lastError ?? 'Buffer API limit reached (HTTP 429)';
+        sawFull = true;
+        log.info(`Buffer account "${account.label}" is over Buffer's API limit until ${account.fullUntil!.toISOString()}; not asking it`);
+        continue;
+      }
       const client = new BufferClient(account.token);
       let channelId = '';
       let page = '';
@@ -530,6 +590,7 @@ export class BufferPool {
         page = picked.name;
       } catch (err) {
         lastError = errorMessage(err);
+        if (this.noteLimit(account, lastError)) sawFull = true;
         log.warn(`Buffer account "${account.label}" has no usable Facebook channel`, lastError);
         continue;
       }
@@ -539,10 +600,11 @@ export class BufferPool {
         return { postId, account: account.label, page };
       } catch (err) {
         lastError = errorMessage(err);
+        if (!isBufferRateLimit(lastError)) BufferClient.forget(account.token);
         if (!isRotatable(err)) throw err;
         sawFull = true;
         log.warn(`Buffer account "${account.label}" refused the Facebook post, moving to the next: ${lastError}`);
-        if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + FULL_FOR_MS));
+        if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + sitOutFor(lastError)));
       }
     }
     throw refusedEverywhere(this.accounts.length, this.site.domain, 'Facebook post', lastError, sawFull);
@@ -563,6 +625,12 @@ export class BufferPool {
     let sawFull = false; // an account turned the post itself down, not just had no channel
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
+      if (limitedNow(account)) {
+        lastError = account.lastError ?? 'Buffer API limit reached (HTTP 429)';
+        sawFull = true;
+        log.info(`Buffer account "${account.label}" is over Buffer's API limit until ${account.fullUntil!.toISOString()}; not asking it`);
+        continue;
+      }
       const client = new BufferClient(account.token);
       let channelId = '';
       let page = '';
@@ -575,6 +643,7 @@ export class BufferPool {
         page = picked.name;
       } catch (err) {
         lastError = errorMessage(err);
+        if (this.noteLimit(account, lastError)) sawFull = true;
         log.warn(`Buffer account "${account.label}" has no usable Instagram channel`, lastError);
         continue;
       }
@@ -584,10 +653,11 @@ export class BufferPool {
         return { postId, account: account.label, page };
       } catch (err) {
         lastError = errorMessage(err);
+        if (!isBufferRateLimit(lastError)) BufferClient.forget(account.token);
         if (!isRotatable(err)) throw err;
         sawFull = true;
         log.warn(`Buffer account "${account.label}" refused the Instagram ${input.type}, moving to the next: ${lastError}`);
-        if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + FULL_FOR_MS));
+        if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + sitOutFor(lastError)));
       }
     }
     throw refusedEverywhere(this.accounts.length, this.site.domain, `Instagram ${input.type}`, lastError, sawFull);
@@ -607,6 +677,12 @@ export class BufferPool {
     let sawFull = false; // an account turned the post itself down, not just had no channel
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
+      if (limitedNow(account)) {
+        lastError = account.lastError ?? 'Buffer API limit reached (HTTP 429)';
+        sawFull = true;
+        log.info(`Buffer account "${account.label}" is over Buffer's API limit until ${account.fullUntil!.toISOString()}; not asking it`);
+        continue;
+      }
       const client = new BufferClient(account.token);
       let channelId = '';
       let page = '';
@@ -619,6 +695,7 @@ export class BufferPool {
         page = picked.name;
       } catch (err) {
         lastError = errorMessage(err);
+        if (this.noteLimit(account, lastError)) sawFull = true;
         log.warn(`Buffer account "${account.label}" has no usable YouTube channel`, lastError);
         continue;
       }
@@ -628,10 +705,11 @@ export class BufferPool {
         return { postId, account: account.label, page };
       } catch (err) {
         lastError = errorMessage(err);
+        if (!isBufferRateLimit(lastError)) BufferClient.forget(account.token);
         if (!isRotatable(err)) throw err;
         sawFull = true;
         log.warn(`Buffer account "${account.label}" refused the YouTube Short, moving to the next: ${lastError}`);
-        if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + FULL_FOR_MS));
+        if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + sitOutFor(lastError)));
       }
     }
     throw refusedEverywhere(this.accounts.length, this.site.domain, 'YouTube Short', lastError, sawFull);
@@ -650,6 +728,12 @@ export class BufferPool {
     let sawFull = false; // an account turned the post itself down, not just had no channel
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
+      if (limitedNow(account)) {
+        lastError = account.lastError ?? 'Buffer API limit reached (HTTP 429)';
+        sawFull = true;
+        log.info(`Buffer account "${account.label}" is over Buffer's API limit until ${account.fullUntil!.toISOString()}; not asking it`);
+        continue;
+      }
       const client = new BufferClient(account.token);
       let channelId = '';
       let page = '';
@@ -662,6 +746,7 @@ export class BufferPool {
         page = picked.name;
       } catch (err) {
         lastError = errorMessage(err);
+        if (this.noteLimit(account, lastError)) sawFull = true;
         log.warn(`Buffer account "${account.label}" has no usable TikTok channel`, lastError);
         continue;
       }
@@ -671,10 +756,11 @@ export class BufferPool {
         return { postId, account: account.label, page };
       } catch (err) {
         lastError = errorMessage(err);
+        if (!isBufferRateLimit(lastError)) BufferClient.forget(account.token);
         if (!isRotatable(err)) throw err;
         sawFull = true;
         log.warn(`Buffer account "${account.label}" refused the TikTok video, moving to the next: ${lastError}`);
-        if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + FULL_FOR_MS));
+        if (account.id > 0) markBufferAccountFull(account.id, lastError, new Date(Date.now() + sitOutFor(lastError)));
       }
     }
     throw refusedEverywhere(this.accounts.length, this.site.domain, 'TikTok video', lastError, sawFull);
@@ -697,6 +783,12 @@ export class BufferPool {
 
     for (; this.index < this.accounts.length; this.index++) {
       const account = this.accounts[this.index]!;
+      if (limitedNow(account)) {
+        lastError = account.lastError ?? 'Buffer API limit reached (HTTP 429)';
+        sawFull = true;
+        log.info(`Buffer account "${account.label}" is over Buffer's API limit until ${account.fullUntil!.toISOString()}; not asking it`);
+        continue;
+      }
       const client = new BufferClient(account.token);
 
       let channelId = '';
@@ -726,6 +818,7 @@ export class BufferPool {
         }
       } catch (err) {
         lastError = errorMessage(err);
+        if (this.noteLimit(account, lastError)) sawFull = true;
         log.warn(`Buffer account "${account.label}" has no usable Facebook channel`, lastError);
         continue;
       }
@@ -737,6 +830,7 @@ export class BufferPool {
         return { postId, account: account.label, channelId, page: pageName };
       } catch (err) {
         lastError = errorMessage(err);
+        if (!isBufferRateLimit(lastError)) BufferClient.forget(account.token);
 
         // A video Buffer will not fetch, or a reel over its length limit,
         // fails identically on every account. Spending five accounts to hear
@@ -748,7 +842,7 @@ export class BufferPool {
           `Buffer account "${account.label}" refused the reel, moving to the next: ${lastError}`,
         );
         if (account.id > 0) {
-          markBufferAccountFull(account.id, lastError, new Date(Date.now() + FULL_FOR_MS));
+          markBufferAccountFull(account.id, lastError, new Date(Date.now() + sitOutFor(lastError)));
         }
       }
     }

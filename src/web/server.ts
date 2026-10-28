@@ -1649,6 +1649,7 @@ export function buildServer(
   async function profileBoards(profile: ChannelProfile): Promise<{ channel: string; token: string; names: string[] } | null> {
     const token = listBufferAccounts(profile.site_id, encryptionKey).find((a) => a.profileId === profile.id && a.enabled && a.token);
     if (!token) return null;
+    BufferClient.forget(token.token); // a person asking: what Buffer has now
     const client = new BufferClient(token.token);
     const channels = (await client.getChannels(await client.getOrganizationId()))
       .filter((c) => c.service === '' || c.service === 'pinterest');
@@ -1674,6 +1675,7 @@ export function buildServer(
     const token = listBufferAccounts(profile.site_id, encryptionKey).find((a) => a.profileId === profile.id && a.enabled && a.token);
     if (!token) return reply.code(409).send({ error: 'Add a Buffer token to this account first.' });
     try {
+      BufferClient.forget(token.token); // a person asking: what Buffer has now
       const client = new BufferClient(token.token);
       const channels = (await client.getChannels(await client.getOrganizationId()))
         .filter((c) => c.service === '' || c.service === profile.platform);
