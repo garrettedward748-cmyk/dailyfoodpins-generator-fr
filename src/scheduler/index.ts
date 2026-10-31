@@ -40,6 +40,7 @@ import { getCompletedStep } from '../db/repos.js';
 import type { Settings } from '../settings.js';
 import { createLogger, errorMessage } from '../lib/logger.js';
 import { backfillNativeFeedPostIds, backfillNativeVideoIds, defaultDeps, tickReels } from '../reels/engine.js';
+import { retryFailedBufferReels } from '../reels/buffer-failed.js';
 
 const log = createLogger('scheduler');
 
@@ -947,6 +948,27 @@ export class Scheduler {
     }
     this.maybeBackfillFbVideoIds();
     this.maybeBackfillFbPostIds();
+    this.maybeRetryFailedBufferReels();
+  }
+
+  private lastFailedCheck = Date.now() - 2 * 3_600_000; // the first check comes about an hour after start
+
+  /**
+   * Reels Buffer took and then could not publish (Facebook failing the media
+   * for a moment), found and sent again once. Every three hours, not every
+   * tick: each check is a request per Buffer token, and Buffer counts them.
+   */
+  private maybeRetryFailedBufferReels(): void {
+    const THREE_HOURS = 3 * 3_600_000;
+    if (Date.now() - this.lastFailedCheck < THREE_HOURS) return;
+    this.lastFailedCheck = Date.now();
+
+    void retryFailedBufferReels(this.settings, this.encryptionKey, defaultDeps(this.settings, this.encryptionKey)).then(
+      (result) => {
+        if (result.failed > 0) log.info(`Buffer failures: ${result.failed} found, ${result.retried} reel(s) sent again`);
+      },
+      (err) => log.error('the Buffer failure check threw', errorMessage(err)),
+    );
   }
 
   private lastVideoBackfill = 0;

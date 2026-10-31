@@ -164,6 +164,45 @@ export class BufferClient {
     });
   }
 
+  /**
+   * Posts Buffer could not publish (status "error"), newest Buffer lists first.
+   * Facebook sometimes fails a reel for a moment ("unable to process the
+   * media", "an unknown error") and the very same post goes out on a retry;
+   * this is how the platform finds them without a person opening Buffer.
+   */
+  async failedPosts(organizationId: string, first = 50): Promise<{ id: string; channelId: string; message: string }[]> {
+    const data = await this.graphql<{
+      posts: { edges: { node: { id: string; channelId: string; error?: { message?: string } | null } }[] };
+    }>(`query FailedPosts {
+  posts(first: ${Math.max(1, Math.min(100, first))}, input: { organizationId: ${JSON.stringify(organizationId)}, filter: { status: [error] } }) {
+    edges {
+      node {
+        id
+        channelId
+        error { message }
+      }
+    }
+  }
+}`);
+    return (data.posts?.edges ?? []).map((e) => ({
+      id: e.node.id,
+      channelId: e.node.channelId,
+      message: e.node.error?.message?.trim() || 'Buffer could not publish it',
+    }));
+  }
+
+  /** Remove a post from Buffer (a failed one once it has been sent again). True when Buffer confirms. */
+  async deletePost(id: string): Promise<boolean> {
+    const data = await this.graphql<{ deletePost: { id?: string; message?: string } }>(`mutation DeletePost {
+  deletePost(input: { id: ${JSON.stringify(id)} }) {
+    ... on DeletePostSuccess { id }
+    ... on MutationError { message }
+  }
+}`);
+    if (data.deletePost?.message) throw new BufferError(`Buffer did not delete the post: ${data.deletePost.message}`);
+    return Boolean(data.deletePost?.id);
+  }
+
   async getOrganizationId(): Promise<string> {
     const org = (await this.organizations())[0];
     if (!org) throw new BufferError('No Buffer organization found for this token');

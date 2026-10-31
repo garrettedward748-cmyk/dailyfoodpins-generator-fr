@@ -3657,6 +3657,17 @@ export const presenterForPage = (pageRowId: number): PresenterRow | undefined =>
  * long enough ago for Buffer to have published some, and not retried on their
  * own too often yet. They have their video; publishing is all that is left.
  */
+/** Reels sent to Buffer in the last `days` days: the ones a failed Buffer post can belong to. */
+export function reelsPublishedSince(days: number): ReelView[] {
+  return all<ReelView>(
+    `${REEL_VIEW_SQL} WHERE r.status = 'published'
+        AND COALESCE(r.channels_json, '') <> ''
+        AND r.updated_at >= datetime('now', ?)
+      ORDER BY r.updated_at DESC`,
+    `-${Math.max(1, Math.floor(days))} days`,
+  );
+}
+
 export function reelsToRetryForFullBuffer(waitHours: number, maxRetries: number): ReelView[] {
   return all<ReelView>(
     `${REEL_VIEW_SQL} WHERE r.status = 'failed'
