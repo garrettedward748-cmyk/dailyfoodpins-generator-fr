@@ -38,7 +38,7 @@ For each step:
   no alcohol, no pork. No hands. No text in the picture.
 - A serving step shows the dish being served or portioned, not a copy of the
   hero.
-- End each with: Editorial food blog photography, 3:2.
+- End each with: Candid home-cooked food photo taken on a phone, 3:2.
 - The recipe is in French. Write every prompt in plain English, because the
   image model reads English: describe the dish and its ingredients in English
   (keep a well-known dish name such as msemen or tajine).

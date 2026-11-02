@@ -2,6 +2,7 @@ import { createLogger } from '../lib/logger.js';
 import type { Db } from './index.js';
 import { RECIPE_CARD_BODY, RECIPE_CARD_NAME } from '../core/pin-design-recipe-card.js';
 import { TITLE_BOX_BODY, TITLE_BOX_NAME } from '../core/pin-design-title-box.js';
+import { REAL_BANNER_BODY, REAL_BANNER_NAME, REAL_CORNER_BODY, REAL_CORNER_NAME } from '../core/pin-design-real-photo.js';
 
 const log = createLogger('migrate');
 
@@ -1416,6 +1417,21 @@ export const MIGRATIONS: Migration[] = [
       if (exists) return;
       const next = (db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS p FROM pin_designs').get() as { p: number }).p;
       db.prepare('INSERT INTO pin_designs (name, body, enabled, position) VALUES (?, ?, 1, ?)').run(TITLE_BOX_NAME, TITLE_BOX_BODY, next);
+    },
+  },
+  {
+    id: '065-pin-designs-real-photo',
+    description: 'The two real home photo pin designs (title banner, corner title with bottom strip), added to the designs already there',
+    up(db) {
+      // Same rule as 060: a fresh install gets them with the other defaults.
+      if (!hasTable(db, 'pin_designs')) return;
+      const count = (db.prepare('SELECT COUNT(*) AS n FROM pin_designs').get() as { n: number }).n;
+      if (count === 0) return;
+      for (const [name, body] of [[REAL_BANNER_NAME, REAL_BANNER_BODY], [REAL_CORNER_NAME, REAL_CORNER_BODY]] as const) {
+        if (db.prepare('SELECT 1 FROM pin_designs WHERE name = ?').get(name)) continue;
+        const next = (db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS p FROM pin_designs').get() as { p: number }).p;
+        db.prepare('INSERT INTO pin_designs (name, body, enabled, position) VALUES (?, ?, 1, ?)').run(name, body, next);
+      }
     },
   },
 ];

@@ -77,7 +77,7 @@ hero
 - The finished dish as it is eaten, with one portion torn, cut or lifted to
   show the inside. This is the picture that appears at the top of the
   article, in every listing and in search results.
-- End it with: Editorial food blog photography, 4:3.
+- End it with: Candid home-cooked food photo taken on a phone, 4:3.
 
 step_a, step_b, step_c
 - One photograph of each chosen moment, in step order. Show the state the
@@ -85,7 +85,7 @@ step_a, step_b, step_c
   it by eye. No hands.
 - Each must be visibly a different composition from the other two and from
   the hero: change the angle, the distance, or what is in the frame.
-- End each with: Editorial food blog photography, 3:2.
+- End each with: Candid home-cooked food photo taken on a phone, 3:2.
 
 pin_title
 - The words printed on the Pinterest graphic, written in French. 2 to 6 words,
@@ -101,6 +101,6 @@ pin
 - State that the top third of the frame is clean, uncluttered background with
   room for a text overlay, and that the dish sits in the lower two thirds.
 - Do NOT write the title into this prompt; it is added separately.
-- End it with: Editorial food blog photography, 2:3.
+- End it with: Candid home-cooked food photo taken on a phone, 2:3.
 
 Output ONLY the JSON object. Start with { and end with }.

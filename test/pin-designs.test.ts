@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { closeDatabase, openDatabase, run } from '../src/db/index.js';
+import { closeDatabase, getDb, openDatabase, run } from '../src/db/index.js';
+import { MIGRATIONS } from '../src/db/migrations.js';
 import { createRun, insertKeyword, upsertSite } from '../src/db/repos.js';
 import {
   addPinDesign, designProblems, listPinDesigns, markRunPinDesign, pickPinDesign, savePinDesign, siteDesignHistory, type PinDesign,
 } from '../src/core/pin-designs.js';
+import { REAL_BANNER_BODY, REAL_BANNER_NAME, REAL_CORNER_BODY, REAL_CORNER_NAME } from '../src/core/pin-design-real-photo.js';
 
 const KEY = randomBytes(32);
 const d = (id: number, enabled = 1): PinDesign => ({ id, name: `d${id}`, body: '{{imagePrompts.pin}} {{pinTitle}} {{site.domain}}', enabled: enabled as 0 | 1, position: id });
@@ -13,12 +15,34 @@ describe('pin designs', () => {
   beforeEach(() => openDatabase(':memory:'));
   afterEach(() => closeDatabase());
 
-  it('starts with eight designs, the first being the old template, each carrying the three fields', () => {
+  it('starts with ten designs, the first being the old template, each carrying the three fields', () => {
     const designs = listPinDesigns();
-    expect(designs).toHaveLength(8);
+    expect(designs).toHaveLength(10);
     expect(designs[0]!.body).toContain('{{pinTitle}}');
     expect(designs.every((x) => designProblems(x.body).length === 0)).toBe(true);
-    expect(listPinDesigns()).toHaveLength(8); // not seeded twice
+    expect(listPinDesigns()).toHaveLength(10); // not seeded twice
+  });
+
+  it('the two real home photo designs ask for an imperfect, unstaged dish', () => {
+    for (const body of [REAL_BANNER_BODY, REAL_CORNER_BODY]) {
+      expect(designProblems(body)).toEqual([]);
+      expect(body).toContain('crumpled used napkin');
+      expect(body).toContain('home cook');
+    }
+    const names = listPinDesigns().map((x) => x.name);
+    expect(names).toContain(REAL_BANNER_NAME);
+    expect(names).toContain(REAL_CORNER_NAME);
+  });
+
+  it('the migration adds the two real home photo designs once to an install that has its designs', () => {
+    listPinDesigns();
+    run("DELETE FROM pin_designs WHERE name LIKE 'Real home photo%'");
+    const migration = MIGRATIONS.find((m) => m.id === '065-pin-designs-real-photo')!;
+    migration.up(getDb());
+    migration.up(getDb());
+    const names = listPinDesigns().map((x) => x.name);
+    expect(names.filter((n) => n === REAL_BANNER_NAME)).toHaveLength(1);
+    expect(names.filter((n) => n === REAL_CORNER_NAME)).toHaveLength(1);
   });
 
   it('never repeats one of the last three, prefers the least used, and differs by site', () => {
