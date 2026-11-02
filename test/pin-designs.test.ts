@@ -45,6 +45,15 @@ describe('pin designs', () => {
     expect(names.filter((n) => n === REAL_CORNER_NAME)).toHaveLength(1);
   });
 
+  it('only the two real home photo designs are on, on a fresh install and after the migration', () => {
+    const on = () => listPinDesigns().filter((x) => x.enabled).map((x) => x.name).sort();
+    expect(on()).toEqual([REAL_CORNER_NAME, REAL_BANNER_NAME].sort());
+    run('UPDATE pin_designs SET enabled = 1');
+    MIGRATIONS.find((m) => m.id === '066-pin-designs-real-photo-only')!.up(getDb());
+    expect(on()).toEqual([REAL_CORNER_NAME, REAL_BANNER_NAME].sort());
+    expect(listPinDesigns()).toHaveLength(10);
+  });
+
   it('never repeats one of the last three, prefers the least used, and differs by site', () => {
     const all = [d(1), d(2), d(3), d(4), d(5)];
     expect(pickPinDesign(all, [1, 2, 3], {}, 0)!.id).toBe(4);

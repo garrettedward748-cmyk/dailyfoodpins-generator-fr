@@ -80,7 +80,9 @@ export function listPinDesigns(): PinDesign[] {
   if (rows.length > 0) return rows;
   const old = getPromptOverride('pin-graphic.template.txt') ?? readShippedPrompt('pin-graphic.template.txt');
   DEFAULT_DESIGNS.forEach((d, i) => {
-    run('INSERT INTO pin_designs (name, body, enabled, position) VALUES (?, ?, 1, ?)', d.name, i === 0 ? old.trim() : d.body, i);
+    // Only the two real home photo designs start on; the others stay listed, switched off.
+    const on = d.name === REAL_BANNER_NAME || d.name === REAL_CORNER_NAME ? 1 : 0;
+    run('INSERT INTO pin_designs (name, body, enabled, position) VALUES (?, ?, ?, ?)', d.name, i === 0 ? old.trim() : d.body, on, i);
   });
   return all<PinDesign>('SELECT id, name, body, enabled, position FROM pin_designs ORDER BY position, id');
 }

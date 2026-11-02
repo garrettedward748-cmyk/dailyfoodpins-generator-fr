@@ -1434,6 +1434,14 @@ export const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    id: '066-pin-designs-real-photo-only',
+    description: 'Switch off every pin design except the two real home photo ones; the others stay listed and can be switched back on',
+    up(db) {
+      if (!hasTable(db, 'pin_designs')) return;
+      db.prepare('UPDATE pin_designs SET enabled = 0 WHERE name NOT IN (?, ?)').run(REAL_BANNER_NAME, REAL_CORNER_NAME);
+    },
+  },
 ];
 
 /* -- The runner ----------------------------------------------------------- */
