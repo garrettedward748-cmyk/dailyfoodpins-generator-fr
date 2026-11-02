@@ -1,6 +1,5 @@
 import { emptyState, html, raw, timeAgo, type Html } from './layout.js';
 import type { BufferAccount, ChannelProfile, FbPageRow, ProfilePlatform } from '../../db/repos.js';
-import { isBufferRateLimit } from '../../integrations/buffer.js';
 
 /**
  * Channels -> Accounts: one card per site, and under it every network with
@@ -81,7 +80,7 @@ function tokens(site: AccountsSiteView, profile: ChannelProfile): Html {
         <input type="checkbox" form="buffer-${t.id}" name="enabled" value="1" ${t.enabled ? raw('checked') : raw('')} /> in use</label>
       <div class="account-state">
         ${full
-          ? html`<span class="badge warn" title="${t.lastError ?? ''}">${isBufferRateLimit(t.lastError ?? '') ? 'rate limited' : 'queue full'}</span>`
+          ? html`<span class="badge warn" title="${t.lastError ?? ''}">queue full</span>`
           : t.enabled ? html`<span class="badge ok">ready</span>` : html`<span class="badge muted">out</span>`}
         <span class="muted small">${t.lastUsedAt ? html`used ${timeAgo(t.lastUsedAt)}` : 'never used'}</span>
       </div>

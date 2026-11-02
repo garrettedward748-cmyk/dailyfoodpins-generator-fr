@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeDatabase, openDatabase } from '../src/db/index.js';
 import { listBufferAccounts, upsertBufferAccount, upsertSite } from '../src/db/repos.js';
 import { BufferClient } from '../src/integrations/buffer.js';
-import { BufferPool, isBufferExhausted } from '../src/integrations/buffer-pool.js';
+import { BUFFER_API_LIMIT, BufferPool, isBufferExhausted } from '../src/integrations/buffer-pool.js';
 import { setLogLevel } from '../src/lib/logger.js';
 
 /**
@@ -66,32 +66,47 @@ describe("Buffer's API limit", () => {
     expect(calls.filter((c) => !c.endsWith('post')).length).toBeLessThanOrEqual(2);
   });
 
-  it('a token over the limit sits out a day, the next token posts, and it is not asked again', async () => {
+  it('a token over the limit is never marked full: the next token posts, and it is asked again next time', async () => {
     const siteId = seedSite();
     upsertBufferAccount({ siteId, label: 'A', token: 'tok-a', enabled: true }, KEY);
     upsertBufferAccount({ siteId, label: 'B', token: 'tok-b', enabled: true }, KEY);
-    const calls = buffer(new Set(['tok-a']));
+    const limited = new Set(['tok-a']);
+    buffer(limited);
 
     const first = await new BufferPool({ id: siteId, domain: 'd.com', pinUsername: '' }, KEY).createVideoPin(pin, 'Desserts');
     expect(first.account).toBe('B');
     const a = listBufferAccounts(siteId, KEY).find((x) => x.label === 'A')!;
-    expect(a.fullUntil!.getTime()).toBeGreaterThan(Date.now() + 20 * 60 * 60 * 1000);
+    expect(a.fullUntil).toBeNull();
+    expect(a.lastError).toBeNull();
 
-    const before = calls.filter((c) => c.startsWith('tok-a')).length;
-    await new BufferPool({ id: siteId, domain: 'd.com', pinUsername: '' }, KEY).createVideoPin(pin, 'Desserts');
-    expect(calls.filter((c) => c.startsWith('tok-a')).length).toBe(before);
+    limited.clear();
+    const second = await new BufferPool({ id: siteId, domain: 'd.com', pinUsername: '' }, KEY).createVideoPin(pin, 'Desserts');
+    expect(second.account).toBe('A');
   });
 
-  it('every token over the limit: a wait the reel retries on its own, not "connect that channel"', async () => {
+  it('the lookups a run starts with move to the next token too, with its own organization', async () => {
+    const siteId = seedSite();
+    upsertBufferAccount({ siteId, label: 'A', token: 'tok-a', enabled: true }, KEY);
+    upsertBufferAccount({ siteId, label: 'B', token: 'tok-b', enabled: true }, KEY);
+    buffer(new Set(['tok-a']));
+    const pool = new BufferPool({ id: siteId, domain: 'd.com', pinUsername: '' }, KEY);
+    const org = await pool.getOrganizationId();
+    expect(org).toBe('org-tok-b');
+    expect((await pool.getChannels(org))[0]!.id).toBe('ch-tok-b');
+    const dest = await new BufferPool({ id: siteId, domain: 'd.com', pinUsername: '' }, KEY).resolveDestination('Desserts');
+    expect(dest.channelId).toBe('ch-tok-b');
+  });
+
+  it('every token over the limit: says so, is not "full" and not "connect that channel"', async () => {
     const siteId = seedSite();
     upsertBufferAccount({ siteId, label: 'A', token: 'tok-a', enabled: true }, KEY);
     buffer(new Set(['tok-a']));
     const err = await new BufferPool({ id: siteId, domain: 'd.com', pinUsername: '' }, KEY).createVideoPin(pin, 'Desserts').catch((e) => e);
-    expect(isBufferExhausted(err)).toBe(true);
-    expect(String(err.message)).toMatch(/API limit/);
+    expect(String(err.message)).toContain(BUFFER_API_LIMIT);
+    expect(isBufferExhausted(err)).toBe(false);
     expect(String(err.message)).not.toMatch(/Connect that channel/);
-
-    const again = await new BufferPool({ id: siteId, domain: 'd.com', pinUsername: '' }, KEY).createVideoPin(pin, 'Desserts').catch((e) => e);
-    expect(isBufferExhausted(again)).toBe(true);
+    expect(listBufferAccounts(siteId, KEY)[0]!.fullUntil).toBeNull();
+    const lookup = await new BufferPool({ id: siteId, domain: 'd.com', pinUsername: '' }, KEY).getOrganizationId().catch((e) => e);
+    expect(String(lookup.message)).toContain(BUFFER_API_LIMIT);
   });
 });

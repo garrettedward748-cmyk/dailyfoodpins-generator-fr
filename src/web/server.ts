@@ -270,7 +270,7 @@ import {
 import { reelCta } from '../reels/cta.js';
 import { FORMATS } from '../reels/formats.js';
 import { backupsPage } from './views/backups.js';
-import { BufferClient, isBufferRateLimit } from '../integrations/buffer.js';
+import { BufferClient } from '../integrations/buffer.js';
 import { askPrompt } from '../llm/ask.js';
 import {
   addPinIdeas, analyseExport, deletePinIdeas, dismissPinIdeas, lastPinReport, listPinIdeas, waitingPinIdeas, type PinIdea, type PinIdeasStage,
@@ -1672,14 +1672,9 @@ export function buildServer(
     const id = asNumber((request.params as { id: string }).id, 0);
     const profile = getProfile(id);
     if (!profile) return reply.code(404).send({ error: 'Account not found' });
-    const now = new Date();
-    const limited = (a: { fullUntil: Date | null; lastError: string | null }): boolean =>
-      !!a.fullUntil && a.fullUntil > now && isBufferRateLimit(a.lastError ?? '');
-    // Every token of this account, one over Buffer's request limit last: such a
-    // token is refused even reading its channels, and the next may still answer.
+    // Every token of this account: the next may answer when one is over a limit.
     const tokens = listBufferAccounts(profile.site_id, encryptionKey)
-      .filter((a) => a.profileId === profile.id && a.enabled && a.token)
-      .sort((a, b) => Number(limited(a)) - Number(limited(b)));
+      .filter((a) => a.profileId === profile.id && a.enabled && a.token);
     if (tokens.length === 0) return reply.code(409).send({ error: 'Add a Buffer token to this account first.' });
     let lastError = '';
     for (const account of tokens) {

@@ -1442,6 +1442,15 @@ export const MIGRATIONS: Migration[] = [
       db.prepare('UPDATE pin_designs SET enabled = 0 WHERE name NOT IN (?, ?)').run(REAL_BANNER_NAME, REAL_CORNER_NAME);
     },
   },
+  {
+    id: '067-buffer-limit-no-bench',
+    description: 'Tokens set aside for Buffer API limit (HTTP 429) are back in use: that limit no longer marks a token full',
+    up(db) {
+      if (!hasTable(db, 'buffer_accounts')) return;
+      db.prepare(`UPDATE buffer_accounts SET full_until = NULL, last_error = NULL
+        WHERE last_error LIKE '%RATE_LIMIT_EXCEEDED%' OR last_error LIKE '%HTTP 429%' OR last_error LIKE '%too many requests%'`).run();
+    },
+  },
 ];
 
 /* -- The runner ----------------------------------------------------------- */

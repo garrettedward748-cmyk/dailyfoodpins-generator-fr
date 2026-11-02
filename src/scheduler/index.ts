@@ -30,7 +30,7 @@ import { isTransient, planRetry, type RetryPolicy } from '../core/retry.js';
 import { announceNotices } from '../core/notices.js';
 import { localDateKey, selectTask } from '../core/selector.js';
 import { RESEARCH_UNAVAILABLE } from '../pipeline/steps/research.js';
-import { isBufferExhausted } from '../integrations/buffer-pool.js';
+import { BUFFER_API_LIMIT, isBufferExhausted } from '../integrations/buffer-pool.js';
 import type { Decision } from '../core/types.js';
 import { articleTitle, executePipeline, PipelineContext } from '../pipeline/index.js';
 import { runStep } from '../pipeline/engine.js';
@@ -138,6 +138,15 @@ function considerRetry(
   // move for hours and then give up for good.
   if (siteId && isBufferExhausted(error)) {
     return holdForBufferQueue(runId, siteId, settings);
+  }
+
+  // Every Buffer token answered 429 this attempt. The limit may pass in minutes,
+  // so no long hold and no spent attempt: the same step is asked again in an hour.
+  if (error.includes(BUFFER_API_LIMIT)) {
+    scheduleRetry(runId, new Date(Date.now() + 60 * 60_000).toISOString());
+    run('UPDATE runs SET attempts = MAX(attempts - 1, 0) WHERE id = ?', runId);
+    log.info(`run ${runId}: every Buffer token is over an API limit, trying again in 1 hour`);
+    return 'Buffer API limit on every token: trying again in 1 hour.';
   }
 
   // No Google research yet (every Serper key and web search failed): not a
