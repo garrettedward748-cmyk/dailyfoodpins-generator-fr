@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { closeDatabase, get, openDatabase, run } from '../src/db/index.js';
-import { firstProfile, getProfile, listBufferAccounts, listProfiles, updateProfile, upsertBufferAccount, upsertSite } from '../src/db/repos.js';
+import { bufferChannelNames, firstProfile, getProfile, listBufferAccounts, listProfiles, updateProfile, upsertBufferAccount, upsertSite } from '../src/db/repos.js';
 import { BufferPool } from '../src/integrations/buffer-pool.js';
 import { BufferClient } from '../src/integrations/buffer.js';
 import { runMigrations } from '../src/db/migrations.js';
@@ -125,6 +125,24 @@ describe('the channel pages', () => {
     const page = await app.inject({ method: 'GET', url: '/accounts', headers: { cookie } });
     expect(page.body).toContain('Pick from Buffer');
     vi.restoreAllMocks();
+  });
+
+  it('saves several names on Buffer, in order, without the empty boxes, and shows a box for each', async () => {
+    const id = site();
+    const fb = firstProfile(id, 'facebook');
+    const res = await app.inject({
+      method: 'POST', url: `/accounts/profile/${fb.id}`,
+      headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' },
+      payload: 'channel_name=x&enabled=1&buffer_channel=First&buffer_channel=&buffer_channel=Second',
+    });
+    expect(res.statusCode).toBeLessThan(400);
+    const saved = firstProfile(id, 'facebook');
+    expect(saved.buffer_channel).toBe('First\nSecond');
+    expect(bufferChannelNames(saved)).toEqual(['First', 'Second']);
+    const page = await app.inject({ method: 'GET', url: '/accounts', headers: { cookie } });
+    expect(page.body).toContain('value="First"');
+    expect(page.body).toContain('value="Second"');
+    expect(page.body).toContain('+ Add a name');
   });
 
   it('"Pick from Buffer" moves on from a token over its limit, and says so when none answers', async () => {

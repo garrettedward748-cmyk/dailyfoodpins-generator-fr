@@ -48,6 +48,7 @@ import {
   type SiteRow,
   getRun,
   bufferChannelName,
+  bufferChannelNames,
   listBufferAccounts,
   listProfiles,
   takes,
@@ -310,7 +311,7 @@ function profilePool(
       if (linked) {
         return {
           pool: new BufferPool(
-            { id: site.id, domain: site.domain, pinUsername: bufferChannelName(linked), platform, profileId: linked.id },
+            { id: site.id, domain: site.domain, pinUsername: bufferChannelName(linked), moreNames: bufferChannelNames(linked).slice(1), platform, profileId: linked.id },
             key,
           ),
           off: !linked.enabled || !takes(linked, 'reels'),
@@ -344,6 +345,7 @@ function profilePool(
       id: site.id,
       domain: site.domain,
       pinUsername: profile ? bufferChannelName(profile) : site.pin_username,
+      moreNames: profile ? bufferChannelNames(profile).slice(1) : [],
       platform,
       profileId: profile?.id,
     },

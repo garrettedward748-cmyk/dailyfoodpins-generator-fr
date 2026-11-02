@@ -219,7 +219,7 @@ export function exportUsername(text: string): string {
 }
 
 /** A Pinterest account's username: the name on Buffer when it is set, else the username field. */
-const usernameOf = (p: Pick<ChannelProfile, 'channel_name' | 'buffer_channel'>): string => (p.channel_name || p.buffer_channel || '').trim();
+const usernameOf = (p: Pick<ChannelProfile, 'channel_name' | 'buffer_channel'>): string => (p.channel_name || p.buffer_channel || '').split('\n')[0]!.trim();
 
 /**
  * Which of the site's Pinterest accounts an export is for. The username in
@@ -235,7 +235,7 @@ export function exportAccount(
   const accounts = listProfiles(siteId, 'pinterest');
   const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
   const byFile = detected
-    ? accounts.find((p) => same(p.channel_name, detected) || same(p.buffer_channel ?? '', detected))
+    ? accounts.find((p) => same(p.channel_name, detected) || (p.buffer_channel ?? '').split('\n').some((n) => same(n, detected)))
     : undefined;
   const picked = pickedId ? accounts.find((p) => p.id === pickedId) : undefined;
   if (byFile) {

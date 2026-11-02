@@ -93,10 +93,12 @@ export const resolveBufferTarget: Step<SeoData, BufferTarget> = {
       boardMap: site.pin_board_map ?? '',
     };
     const byPinUsername = boards.username.trim().toLowerCase();
+    // The first of the account's names that this Buffer has; a later name is tried when posting fails.
+    const wanted = ('usernames' in boards && boards.usernames?.length ? boards.usernames : [boards.username])
+      .map((n) => n.trim().toLowerCase())
+      .filter(Boolean);
     const channel =
-      (byPinUsername
-        ? channels.find((c) => c.name.toLowerCase() === byPinUsername)
-        : undefined) ?? channels[0]!;
+      wanted.map((n) => channels.find((c) => c.name.toLowerCase() === n)).find(Boolean) ?? channels[0]!;
 
     if (channels.length > 1 && !byPinUsername) {
       log.warn(

@@ -24,6 +24,7 @@ import {
   type SiteRow,
   type KeywordRow,
   bufferChannelName,
+  bufferChannelNames,
   takes,
 } from '../db/repos.js';
 import { createLogger } from '../lib/logger.js';
@@ -151,6 +152,7 @@ export class PipelineContext {
         id: this.site.id,
         domain: this.site.domain,
         pinUsername: profile ? bufferChannelName(profile) : this.site.pin_username,
+        moreNames: profile ? bufferChannelNames(profile).slice(1) : [],
         platform,
         profileId: profile?.id,
       },
@@ -263,11 +265,11 @@ export class PipelineContext {
   }
 
   /** The Pinterest username and boards of this run's Pinterest account (the site's own before accounts existed). */
-  get pinBoards(): { username: string; defaultBoard: string; boardMap: string } {
+  get pinBoards(): { username: string; usernames?: string[]; defaultBoard: string; boardMap: string } {
     const profile = this.profile('pinterest');
     const site = this.site as { pin_username: string; pin_default_board?: string; pin_board_map?: string };
     return profile
-      ? { username: bufferChannelName(profile), defaultBoard: profile.default_board, boardMap: profile.board_map }
+      ? { username: bufferChannelName(profile), usernames: bufferChannelNames(profile), defaultBoard: profile.default_board, boardMap: profile.board_map }
       : { username: site.pin_username, defaultBoard: site.pin_default_board ?? '', boardMap: site.pin_board_map ?? '' };
   }
   readonly telegram: TelegramClient;

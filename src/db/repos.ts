@@ -199,7 +199,19 @@ function syncSiteKinds(siteId: number, platform: 'pinterest' | 'instagram'): voi
 
 /** The name to look for among Buffer's channels: its own field when filled, else the account's name. */
 export const bufferChannelName = (profile: Pick<ChannelProfile, 'channel_name' | 'buffer_channel'>): string =>
-  (profile.buffer_channel ?? '').trim() || profile.channel_name;
+  bufferChannelNames(profile)[0] ?? '';
+
+/**
+ * Every name to try on Buffer, in order: "Name on Buffer" holds one per line,
+ * and a post goes on to the next when it could not go out on the one before.
+ */
+export function bufferChannelNames(profile: Pick<ChannelProfile, 'channel_name' | 'buffer_channel'>): string[] {
+  const names = (profile.buffer_channel ?? '').split('\n').map((n) => n.trim()).filter(Boolean);
+  const unique = names.filter((n, i) => names.findIndex((x) => x.toLowerCase() === n.toLowerCase()) === i);
+  if (unique.length > 0) return unique;
+  const own = (profile.channel_name ?? '').trim();
+  return own ? [own] : [];
+}
 
 export const listProfiles = (siteId: number, platform?: ProfilePlatform): ChannelProfile[] =>
   platform

@@ -195,6 +195,7 @@ import {
   type FbPageRow,
   insertEvent,
   bufferChannelName,
+  bufferChannelNames,
 } from '../db/repos.js';
 import { all, get, run as runSql } from '../db/index.js';
 import { FacebookClient } from '../integrations/facebook.js';
@@ -1605,7 +1606,7 @@ export function buildServer(
     updateProfile(id, {
       channel_name: channelName,
       // Absent from the form (an older page, a script): left as it was.
-      ...('buffer_channel' in body ? { buffer_channel: asString(body.buffer_channel).trim().slice(0, 200) } : {}),
+      ...('buffer_channel' in body ? { buffer_channel: (Array.isArray(body.buffer_channel) ? body.buffer_channel : [body.buffer_channel]).map((n) => asString(n).trim().slice(0, 200)).filter(Boolean).join('\n') } : {}),
       enabled: 'enabled' in body ? 1 : 0,
     });
     // A Facebook account is the page it posts as: Posts and Reels live on
@@ -1654,7 +1655,9 @@ export function buildServer(
     const channels = (await client.getChannels(await client.getOrganizationId()))
       .filter((c) => c.service === '' || c.service === 'pinterest');
     const username = bufferChannelName(profile).trim().toLowerCase();
-    const channel = username ? channels.find((c) => c.name.toLowerCase() === username) : channels[0];
+    const channel = username
+      ? bufferChannelNames(profile).map((n) => channels.find((c) => c.name.toLowerCase() === n.toLowerCase())).find(Boolean)
+      : channels[0];
     if (!channel) {
       throw new Error(username
         ? `no Pinterest profile named "${bufferChannelName(profile).trim()}" on the Buffer token ${token.label || ''}; it has: ${channels.map((c) => c.name).join(', ') || '(none)'}`
@@ -3958,7 +3961,7 @@ export function buildServer(
       report: lastPinReport(x.id),
       waiting: waitingPinIdeas(x.id),
       running: pinIdeasRunning.has(x.id),
-      accounts: listProfiles(x.id, 'pinterest').map((p) => ({ id: p.id, username: (p.channel_name || p.buffer_channel || '').trim(), label: p.label })),
+      accounts: listProfiles(x.id, 'pinterest').map((p) => ({ id: p.id, username: (p.channel_name || p.buffer_channel || '').split('\n')[0]!.trim(), label: p.label })),
       progress: (() => {
         const p = pinIdeasRunning.get(x.id);
         return p ? { stage: p.stage, done: p.done, total: p.total, seconds: Math.round((Date.now() - p.started) / 1000) } : null;

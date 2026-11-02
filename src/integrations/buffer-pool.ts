@@ -177,6 +177,8 @@ export interface BufferPoolSite {
    * its name. See pickChannel.
    */
   otherNetworkName?: boolean;
+  /** Further names on Buffer for this account, tried in order after `pinUsername`. */
+  moreNames?: string[];
 }
 
 /**
@@ -252,6 +254,10 @@ export interface BufferDestination {
 export class BufferPool {
   private readonly accounts: BufferAccount[];
   private index = 0;
+  /** Which of the account's names on Buffer is being tried. */
+  private nameIndex = 0;
+  /** This try is on a later name: ids resolved for the name before do not apply. */
+  private movedName = false;
 
   constructor(
     private readonly site: BufferPoolSite,
@@ -304,6 +310,39 @@ export class BufferPool {
 
   get size(): number {
     return this.accounts.length;
+  }
+
+  private get channelName(): string {
+    return this.nameIndex === 0 ? this.site.pinUsername : (this.site.moreNames ?? [])[this.nameIndex - 1] ?? '';
+  }
+
+  /**
+   * The first name the post goes out on ends it. Otherwise the next name is
+   * tried, on every token again; with none left, the error says what was tried
+   * and keeps the wording the scheduler reads. Buffer being down or refusing the
+   * shape of the request would fail every name alike, so those stop at once.
+   */
+  async acrossNames<T>(attempt: () => Promise<T>): Promise<T> {
+    const more = this.site.moreNames ?? [];
+    if (more.length === 0) return attempt();
+    const start = this.nameIndex;
+    const errors: unknown[] = [];
+    for (let i = start; i <= more.length; i++) {
+      this.nameIndex = i;
+      this.movedName = i > start;
+      if (i > start) this.index = 0;
+      try {
+        return await attempt();
+      } catch (err) {
+        if (isBufferOutage(err) || isSchemaError(err)) throw err;
+        errors.push(err);
+        log.warn(`Buffer: could not post as "${this.channelName}", trying the next name: ${errorMessage(err).slice(0, 200)}`);
+      }
+    }
+    this.movedName = false;
+    const worst = errors.find((e) => isBufferExhausted(e)) ?? errors.find((e) => errorMessage(e).includes(BUFFER_API_LIMIT)) ?? errors[errors.length - 1];
+    const tried = [this.site.pinUsername, ...more].map((n) => `"${n}"`).join(', ');
+    throw new BufferError(`Not published on Buffer: tried ${tried}. ${errorMessage(worst)}`);
   }
 
   /** Which account is in use, for logs and for the run's step detail. */
@@ -411,8 +450,8 @@ export class BufferPool {
       );
     }
 
-    const wanted = this.site.pinUsername.trim().toLowerCase();
-    const channel = pickChannel(channels, this.site.pinUsername, this.site.profileId !== undefined, 'Pinterest', 'this account');
+    const wanted = this.channelName.trim().toLowerCase();
+    const channel = pickChannel(channels, this.channelName, this.site.profileId !== undefined, 'Pinterest', 'this account');
 
     if (channels.length > 1 && !wanted) {
       log.warn(
@@ -480,7 +519,7 @@ export class BufferPool {
 
       // Every account after the first needs its own channel and board: the
       // ones resolved for the previous account do not exist here.
-      if (this.index > 0) {
+      if (this.index > 0 || this.movedName) {
         try {
           destination = await this.resolveOnCurrent(boardName);
         } catch (err) {
@@ -589,7 +628,7 @@ export class BufferPool {
         const channels = await client.getChannels(await client.getOrganizationId());
         const facebook = channels.filter((c) => c.service === 'facebook');
         if (facebook.length === 0) throw new BufferError(`Buffer account "${account.label}" has no Facebook channel (it has: ${[...new Set(channels.map((c) => c.service))].join(', ') || 'none'}).`);
-        const picked = pickChannel(facebook, this.site.pinUsername, this.site.profileId !== undefined, 'Facebook', account.label, this.site.otherNetworkName);
+        const picked = pickChannel(facebook, this.channelName, this.site.profileId !== undefined, 'Facebook', account.label, this.site.otherNetworkName);
         channelId = picked.id;
         page = picked.name;
       } catch (err) {
@@ -636,7 +675,7 @@ export class BufferPool {
         const channels = await client.getChannels(await client.getOrganizationId());
         const instagram = channels.filter((c) => c.service === 'instagram');
         if (instagram.length === 0) throw new BufferError(`Buffer account "${account.label}" has no Instagram channel (it has: ${[...new Set(channels.map((c) => c.service))].join(', ') || 'none'}).`);
-        const picked = pickChannel(instagram, this.site.pinUsername, this.site.profileId !== undefined, 'Instagram', account.label, this.site.otherNetworkName);
+        const picked = pickChannel(instagram, this.channelName, this.site.profileId !== undefined, 'Instagram', account.label, this.site.otherNetworkName);
         channelId = picked.id;
         page = picked.name;
       } catch (err) {
@@ -682,7 +721,7 @@ export class BufferPool {
         const channels = await client.getChannels(await client.getOrganizationId());
         const youtube = channels.filter((c) => c.service === 'youtube');
         if (youtube.length === 0) throw new BufferError(`Buffer account "${account.label}" has no YouTube channel (it has: ${[...new Set(channels.map((c) => c.service))].join(', ') || 'none'}).`);
-        const picked = pickChannel(youtube, this.site.pinUsername, this.site.profileId !== undefined, 'YouTube', account.label, this.site.otherNetworkName);
+        const picked = pickChannel(youtube, this.channelName, this.site.profileId !== undefined, 'YouTube', account.label, this.site.otherNetworkName);
         channelId = picked.id;
         page = picked.name;
       } catch (err) {
@@ -727,7 +766,7 @@ export class BufferPool {
         const channels = await client.getChannels(await client.getOrganizationId());
         const tiktok = channels.filter((c) => c.service === 'tiktok');
         if (tiktok.length === 0) throw new BufferError(`Buffer account "${account.label}" has no TikTok channel (it has: ${[...new Set(channels.map((c) => c.service))].join(', ') || 'none'}).`);
-        const picked = pickChannel(tiktok, this.site.pinUsername, this.site.profileId !== undefined, 'TikTok', account.label, this.site.otherNetworkName);
+        const picked = pickChannel(tiktok, this.channelName, this.site.profileId !== undefined, 'TikTok', account.label, this.site.otherNetworkName);
         channelId = picked.id;
         page = picked.name;
       } catch (err) {
@@ -786,11 +825,11 @@ export class BufferPool {
           );
         }
 
-        const page = pickChannel(facebook, this.site.pinUsername, this.site.profileId !== undefined, 'Facebook', account.label, this.site.otherNetworkName);
+        const page = pickChannel(facebook, this.channelName, this.site.profileId !== undefined, 'Facebook', account.label, this.site.otherNetworkName);
         channelId = page.id;
         pageName = page.name;
 
-        if (facebook.length > 1 && !this.site.pinUsername.trim()) {
+        if (facebook.length > 1 && !this.channelName.trim()) {
           log.warn(
             `Buffer account "${account.label}" has ${facebook.length} Facebook channels; ` +
               `using "${page.name}". Name the page on the account to choose another.`,
@@ -832,4 +871,13 @@ export class BufferPool {
     if (this.accounts.length === 0) return { ok: false, error: 'No Buffer account configured' };
     return this.client().healthCheck();
   }
+}
+
+// The calls that post, and the one that picks a destination, each go through
+// the account's names; the methods themselves deal with one name at a time.
+for (const method of ['resolveDestination', 'createPost', 'createVideoPin', 'createFacebookPost', 'createInstagramPost', 'createYouTubeShort', 'createTikTokVideo', 'createReel'] as const) {
+  const one = BufferPool.prototype[method] as (...args: unknown[]) => Promise<unknown>;
+  (BufferPool.prototype as unknown as Record<string, unknown>)[method] = function (this: BufferPool, ...args: unknown[]) {
+    return this.acrossNames(() => one.apply(this, args));
+  };
 }

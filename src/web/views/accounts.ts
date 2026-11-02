@@ -196,12 +196,15 @@ function profileCard(site: AccountsSiteView, profile: ChannelProfile, only: bool
         </div>
         <div class="field" style="margin:0;min-width:240px">
           <label>Name on Buffer</label>
-          <input type="text" name="buffer_channel" id="bc-${profile.id}" value="${profile.buffer_channel}" placeholder="as Buffer shows it" />
+          <div id="bn-${profile.id}" style="display:grid;gap:6px">
+            ${(profile.buffer_channel ? profile.buffer_channel.split('\n') : ['']).map((name, i) => html`<input type="text" name="buffer_channel" ${i === 0 ? raw(`id="bc-${profile.id}"`) : raw('')} value="${name}" placeholder="as Buffer shows it" />`)}
+          </div>
+          <button type="button" class="small" style="margin-top:6px" onclick="addBufferName(${profile.id})">+ Add a name</button>
         </div>
         <div class="field" style="margin:0">
           <label>&nbsp;</label>
           <select id="bs-${profile.id}" style="display:none" aria-label="Pick from Buffer"
-                  onchange="if(this.value){document.getElementById('bc-${profile.id}').value=this.value;this.form.requestSubmit();}"></select>
+                  onchange="if(this.value){fillBufferName(${profile.id},this.value);this.form.requestSubmit();}"></select>
           <button type="button" class="small" id="bb-${profile.id}"
                   onclick="pickBufferChannel(${profile.id})">Pick from Buffer</button>
         </div>
@@ -229,7 +232,7 @@ function profileCard(site: AccountsSiteView, profile: ChannelProfile, only: bool
           : raw('')}
         <button type="submit" class="small" style="margin-bottom:4px">Save</button>
       </form>
-      <div class="help">${ch.help} <strong>Name on Buffer</strong>: fill it only when Buffer shows this account under a different name than the one above; the one above then stays yours, for remembering the account.</div>
+      <div class="help">${ch.help} <strong>Name on Buffer</strong>: with several names, each post tries them in order and stops at the first that publishes; if none does, the run shows the Buffer error. Clear a box and save to remove a name. Fill it only when Buffer shows this account under a different name than the one above; the one above then stays yours, for remembering the account.</div>
 
       ${profile.platform === 'pinterest'
         ? html`<form method="post" action="/accounts/profile/${profile.id}/boards" style="margin-top:12px">
@@ -433,6 +436,23 @@ export function accountsPage(data: AccountsPageData): Html {
               target.scrollIntoView();
             }
           })();
+          // "Name on Buffer": another box, and where a picked name goes (the last empty box, else the first).
+          function addBufferName(id) {
+            var box = document.getElementById('bn-' + id);
+            var input = document.createElement('input');
+            input.type = 'text';
+            input.name = 'buffer_channel';
+            input.placeholder = 'as Buffer shows it';
+            box.appendChild(input);
+            input.focus();
+          }
+          function fillBufferName(id, name) {
+            var inputs = document.getElementById('bn-' + id).querySelectorAll('input');
+            for (var i = inputs.length - 1; i >= 0; i--) {
+              if (!inputs[i].value.trim()) { inputs[i].value = name; return; }
+            }
+            inputs[0].value = name;
+          }
           // "Pick from Buffer": the pages on this account's Buffer, as a list to choose from.
           function pickBufferChannel(id) {
             var button = document.getElementById('bb-' + id);

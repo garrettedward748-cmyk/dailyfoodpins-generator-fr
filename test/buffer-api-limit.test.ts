@@ -109,4 +109,53 @@ describe("Buffer's API limit", () => {
     const lookup = await new BufferPool({ id: siteId, domain: 'd.com', pinUsername: '' }, KEY).getOrganizationId().catch((e) => e);
     expect(String(lookup.message)).toContain(BUFFER_API_LIMIT);
   });
+
+  describe('several names on Buffer', () => {
+    function channels(fail: Set<string>) {
+      const posted: string[] = [];
+      globalThis.fetch = vi.fn(async (_url: string, init: RequestInit) => {
+        const query = String(init.body);
+        const json = (data: unknown) => new Response(JSON.stringify({ data }), { status: 200 });
+        if (query.includes('GetOrganizations')) return json({ account: { organizations: [{ id: 'org', name: 'o' }] } });
+        if (query.includes('GetChannelsWithBoards')) {
+          return json({ channels: ['one', 'two', 'three'].map((n) => ({ id: n, name: n, service: 'pinterest', metadata: { boards: [{ serviceId: `b-${n}`, name: 'Desserts' }] } })) });
+        }
+        const on = (JSON.parse(query).query as string).match(/channelId: "(\w+)"/)?.[1] ?? '';
+        posted.push(on);
+        if (fail.has(on)) return json({ createPost: { message: 'Scheduled posts limit reached' } });
+        return json({ createPost: { post: { id: `post-${on}` } } });
+      }) as unknown as typeof fetch;
+      return posted;
+    }
+    const names = (siteId: number) => new BufferPool({ id: siteId, domain: 'd.com', pinUsername: 'one', moreNames: ['two', 'three'], profileId: undefined }, KEY);
+
+    it('stops at the first name that publishes', async () => {
+      const siteId = seedSite();
+      upsertBufferAccount({ siteId, label: 'A', token: 'tok-a', enabled: true }, KEY);
+      const posted = channels(new Set());
+      const r = await names(siteId).createVideoPin(pin, 'Desserts');
+      expect(r.postId).toBe('post-one');
+      expect(posted).toEqual(['one']);
+    });
+
+    it('moves on when a name does not publish', async () => {
+      const siteId = seedSite();
+      upsertBufferAccount({ siteId, label: 'A', token: 'tok-a', enabled: true }, KEY);
+      const posted = channels(new Set(['one']));
+      const r = await names(siteId).createVideoPin(pin, 'Desserts');
+      expect(r.postId).toBe('post-two');
+      expect(posted).toEqual(['one', 'two']);
+    });
+
+    it('says so when none publishes, in the wording the scheduler waits on', async () => {
+      const siteId = seedSite();
+      upsertBufferAccount({ siteId, label: 'A', token: 'tok-a', enabled: true }, KEY);
+      const posted = channels(new Set(['one', 'two', 'three']));
+      const err = await names(siteId).createVideoPin(pin, 'Desserts').catch((e) => e);
+      expect(posted).toEqual(['one', 'two', 'three']);
+      expect(String(err.message)).toContain('Not published on Buffer');
+      expect(String(err.message)).toContain('"three"');
+      expect(isBufferExhausted(err)).toBe(true);
+    });
+  });
 });
