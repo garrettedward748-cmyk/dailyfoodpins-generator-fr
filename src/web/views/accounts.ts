@@ -1,5 +1,6 @@
 import { emptyState, html, raw, timeAgo, type Html } from './layout.js';
 import type { BufferAccount, ChannelProfile, FbPageRow, ProfilePlatform } from '../../db/repos.js';
+import { isBufferRateLimit } from '../../integrations/buffer.js';
 
 /**
  * Channels -> Accounts: one card per site, and under it every network with
@@ -80,7 +81,7 @@ function tokens(site: AccountsSiteView, profile: ChannelProfile): Html {
         <input type="checkbox" form="buffer-${t.id}" name="enabled" value="1" ${t.enabled ? raw('checked') : raw('')} /> in use</label>
       <div class="account-state">
         ${full
-          ? html`<span class="badge warn" title="${t.lastError ?? ''}">queue full</span>`
+          ? html`<span class="badge warn" title="${t.lastError ?? ''}">${isBufferRateLimit(t.lastError ?? '') ? 'rate limited' : 'queue full'}</span>`
           : t.enabled ? html`<span class="badge ok">ready</span>` : html`<span class="badge muted">out</span>`}
         <span class="muted small">${t.lastUsedAt ? html`used ${timeAgo(t.lastUsedAt)}` : 'never used'}</span>
       </div>
@@ -441,7 +442,15 @@ export function accountsPage(data: AccountsPageData): Html {
             button.disabled = true;
             button.textContent = 'Loading…';
             fetch('/accounts/profile/' + id + '/buffer-channels', { credentials: 'same-origin' })
-              .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+              .then(function (r) {
+                return r.text().then(function (text) {
+                  try { return { ok: r.ok, body: JSON.parse(text) }; } catch (e) {}
+                  // A page instead of an answer: the login page, or a proxy's error page.
+                  throw new Error(r.status === 401
+                    ? 'Your session has expired. Reload the page and sign in again.'
+                    : 'The server did not answer properly (HTTP ' + r.status + '). Try again in a moment.');
+                });
+              })
               .then(function (res) {
                 if (!res.ok) throw new Error(res.body.error || 'Could not read Buffer');
                 select.innerHTML = '';

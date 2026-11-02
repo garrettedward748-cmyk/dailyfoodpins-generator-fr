@@ -270,7 +270,7 @@ import {
 import { reelCta } from '../reels/cta.js';
 import { FORMATS } from '../reels/formats.js';
 import { backupsPage } from './views/backups.js';
-import { BufferClient } from '../integrations/buffer.js';
+import { BufferClient, isBufferRateLimit } from '../integrations/buffer.js';
 import { askPrompt } from '../llm/ask.js';
 import {
   addPinIdeas, analyseExport, deletePinIdeas, dismissPinIdeas, lastPinReport, listPinIdeas, waitingPinIdeas, type PinIdea, type PinIdeasStage,
@@ -1672,17 +1672,29 @@ export function buildServer(
     const id = asNumber((request.params as { id: string }).id, 0);
     const profile = getProfile(id);
     if (!profile) return reply.code(404).send({ error: 'Account not found' });
-    const token = listBufferAccounts(profile.site_id, encryptionKey).find((a) => a.profileId === profile.id && a.enabled && a.token);
-    if (!token) return reply.code(409).send({ error: 'Add a Buffer token to this account first.' });
-    try {
-      BufferClient.forget(token.token); // a person asking: what Buffer has now
-      const client = new BufferClient(token.token);
-      const channels = (await client.getChannels(await client.getOrganizationId()))
-        .filter((c) => c.service === '' || c.service === profile.platform);
-      return { names: channels.map((c) => c.name) };
-    } catch (err) {
-      return reply.code(502).send({ error: `Buffer did not answer: ${errorMessage(err)}` });
+    const now = new Date();
+    const limited = (a: { fullUntil: Date | null; lastError: string | null }): boolean =>
+      !!a.fullUntil && a.fullUntil > now && isBufferRateLimit(a.lastError ?? '');
+    // Every token of this account, one over Buffer's request limit last: such a
+    // token is refused even reading its channels, and the next may still answer.
+    const tokens = listBufferAccounts(profile.site_id, encryptionKey)
+      .filter((a) => a.profileId === profile.id && a.enabled && a.token)
+      .sort((a, b) => Number(limited(a)) - Number(limited(b)));
+    if (tokens.length === 0) return reply.code(409).send({ error: 'Add a Buffer token to this account first.' });
+    let lastError = '';
+    for (const account of tokens) {
+      try {
+        BufferClient.forget(account.token); // a person asking: what Buffer has now
+        const client = new BufferClient(account.token);
+        const channels = (await client.getChannels(await client.getOrganizationId()))
+          .filter((c) => c.service === '' || c.service === profile.platform);
+        return { names: channels.map((c) => c.name) };
+      } catch (err) {
+        lastError = `${account.label}: ${errorMessage(err)}`;
+      }
     }
+    // Not 502: Cloudflare swaps a 502 for its own HTML page and the message is lost.
+    return reply.code(424).send({ error: `Buffer did not answer: ${lastError}` });
   });
 
   app.post('/accounts/profile/:id/boards', async (request, reply) => {

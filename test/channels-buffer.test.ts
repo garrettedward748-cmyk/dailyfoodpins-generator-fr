@@ -127,6 +127,27 @@ describe('the channel pages', () => {
     vi.restoreAllMocks();
   });
 
+  it('"Pick from Buffer" moves on from a token over its limit, and says so when none answers', async () => {
+    const id = site();
+    const fb = firstProfile(id, 'facebook');
+    const get = () => app.inject({ method: 'GET', url: `/accounts/profile/${fb.id}/buffer-channels`, headers: { cookie } });
+    upsertBufferAccount({ siteId: id, label: 'A', token: 'a', enabled: true, profileId: fb.id }, KEY);
+    upsertBufferAccount({ siteId: id, label: 'B', token: 'b', enabled: true, profileId: fb.id }, KEY);
+    const org = vi.spyOn(BufferClient.prototype, 'getOrganizationId');
+    org.mockRejectedValueOnce(new Error('Buffer HTTP 429: Too many requests')).mockResolvedValue('org');
+    vi.spyOn(BufferClient.prototype, 'getChannels').mockResolvedValue([
+      { id: 'a', name: 'Kitchen Stories', service: 'facebook', boards: [] },
+    ] as never);
+    expect((await get()).json()).toEqual({ names: ['Kitchen Stories'] });
+
+    org.mockReset();
+    org.mockRejectedValue(new Error('Buffer HTTP 429: Too many requests'));
+    const res = await get();
+    expect(res.statusCode).toBe(424); // not 502, which Cloudflare replaces with its own page
+    expect(res.json().error).toContain('429');
+    vi.restoreAllMocks();
+  });
+
   it('removes an extra account with its tokens, never the last one of a network', async () => {
     const id = site();
     const first = firstProfile(id, 'facebook');
