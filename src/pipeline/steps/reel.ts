@@ -164,7 +164,7 @@ export const createReelStep: Step<CreateReelInput, CreateReelOutput> = {
       }
       if (didYouKnow) {
         setReelStage(reelId, 'done', {
-          planJson: JSON.stringify({ ...seedFromRun(ctx.runId, host, input.images, title), didYouKnow: true }),
+          planJson: JSON.stringify({ ...seedFromRun(ctx.runId, host, input.images, title), didYouKnow: true, cta: reelCta(ctx.settings.get('reel_cta_text'), ctx.site.domain) }),
         });
       }
 

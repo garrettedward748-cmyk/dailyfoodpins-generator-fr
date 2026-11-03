@@ -2556,7 +2556,7 @@ export function buildServer(
       }
       if (mode === 'didyouknow') {
         setReelStage(reelId, 'done', {
-          planJson: JSON.stringify({ ...seedFromRun(runId, host, images, title), didYouKnow: true }),
+          planJson: JSON.stringify({ ...seedFromRun(runId, host, images, title), didYouKnow: true, cta: reelCta(settings.get('reel_cta_text'), candidate.site_domain) }),
         });
       }
       try {

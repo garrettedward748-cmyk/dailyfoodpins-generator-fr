@@ -126,7 +126,7 @@ export interface ReelDeps {
   /** Join scene clips into one file. ffmpeg, in production. */
   assemble(clipPaths: string[], outPath: string, ctaText: string): Promise<void>;
   /** Re-encode a raw Flow video for Facebook/Instagram; tests pass a stand-in. */
-  normalize?: (video: Buffer, hook?: string, words?: WordTiming[]) => Promise<Buffer>;
+  normalize?: (video: Buffer, hook?: string, words?: WordTiming[], cta?: string) => Promise<Buffer>;
   /** When each word of the voice is said, for "Did you know" captions. The captions service, in production. */
   wordTimings?: (video: Buffer) => Promise<WordTiming[]>;
   /**
@@ -1162,21 +1162,27 @@ export async function finalVideo(reel: ReelView, deps: Pick<ReelDeps, 'download'
       } catch {
         hook = '';
       }
-      // "Did you know": the voice goes on screen word by word, in place of the
-      // title. Without word timings the reel still goes out, with the title.
+      // "Did you know": the voice goes on screen word by word, in the centre, under
+      // the dish's name at the top, and the reel ends on where the recipe is.
+      // Without word timings the reel still goes out, with the name.
       let words: WordTiming[] = [];
+      let cta = '';
       if (isDidYouKnowSeed(reel.plan_json)) {
+        try {
+          cta = (JSON.parse(reel.plan_json || '{}') as { cta?: string }).cta ?? '';
+        } catch {
+          cta = '';
+        }
         try {
           words = await (deps.wordTimings ?? fetchWordTimings)(video);
           log.info(`reel ${reel.id}: ${words.length} spoken word(s) for the captions`);
         } catch (err) {
-          log.warn(`reel ${reel.id}: no word captions, using the title instead — ${errorMessage(err)}`);
+          log.warn(`reel ${reel.id}: no word captions, using the title alone — ${errorMessage(err)}`);
         }
-        if (words.length > 0) hook = '';
       }
       video = await (
-        deps.normalize ?? ((v: Buffer, h?: string, w?: WordTiming[]) => normalizeForSocial(v, 'ffmpeg', h, w))
-      )(video, hook, words);
+        deps.normalize ?? ((v: Buffer, h?: string, w?: WordTiming[], c?: string) => normalizeForSocial(v, 'ffmpeg', h, w, c))
+      )(video, hook, words, cta);
     } catch (err) {
       log.warn(`reel ${reel.id}: could not re-encode the video, sending it as it came — ${errorMessage(err)}`);
     }

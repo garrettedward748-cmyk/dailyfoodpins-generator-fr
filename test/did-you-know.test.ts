@@ -74,3 +74,22 @@ describe('a reel whose video is already the finished copy', () => {
     expect(isFinishedSeed(JSON.stringify({ didYouKnow: true }))).toBe(false);
   });
 });
+
+describe('the finished "Did you know" video', () => {
+  it('carries the dish name, the spoken words and the address on one encode', async () => {
+    const { execFileSync } = await import('node:child_process');
+    const { mkdtempSync, readFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { normalizeForSocial } = await import('../src/reels/assemble.js');
+    const dir = mkdtempSync(join(tmpdir(), 'dyk-'));
+    try {
+      const source = join(dir, 's.mp4');
+      execFileSync('ffmpeg', ['-y', '-f', 'lavfi', '-i', 'color=c=brown:s=720x1280:d=5:r=24', '-pix_fmt', 'yuv420p', source], { stdio: 'ignore' });
+      const out = await normalizeForSocial(readFileSync(source), 'ffmpeg', 'Matcha Brownies', [{ w: 'Did', start: 0.1, end: 0.4 }], 'Full recipe: site.com');
+      expect(out.length).toBeGreaterThan(1000);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

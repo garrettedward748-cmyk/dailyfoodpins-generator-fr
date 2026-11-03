@@ -1,10 +1,10 @@
 You are planning a 10-second vertical « Vous saviez que » recipe reel for "{{title}}". The video is for a French audience: the voice speaks French (France).
 
 The reels this copies get millions of views on Facebook. What they all do:
-- The very first frame is already moving: hands pouring, adding or mixing the main ingredients. Never a still shot, never the finished dish first.
+- The very first frame already shows the finished dish, and it is moving: a hand cutting or lifting a piece with the inside visible, so the viewer sees what this is before the second second. Never a still shot, never raw ingredients first.
 - The voice starts in the very first second with « Vous saviez que », on a surprising but TRUE fact about this recipe.
-- Three quick hand-only shots tell the method in its real order, and the last one ends on a hand lifting one piece toward the camera, the inside visible.
-- The voice ends on a two- or three-word reaction (« Trop fondant. », « Trop bon. »). No call to action, no website, no « recette en description »: the end has to feel like the start of a loop.
+- Then quick hand-only shots show the one moment of the method that matters, and the video ends back on the finished dish.
+- The voice ends on a two- or three-word reaction (« Trop fondant. », « Trop bon. »). Do not say a call to action, a website or « recette en description »: the address appears on screen by itself.
 
 The recipe:
 {{recipe}}
@@ -16,9 +16,9 @@ Write three things:
 "dish": the dish's everyday name in English, 2 to 5 words ("pumpkin caramels", "peach cobbler") -- never the full title. The video model reads English.
 
 "shots": exactly THREE short shot descriptions in English, one per part of the video, each at most 25 words, each ONE action with the real ingredient or the real cookware:
-  1. 0-3 s: hands adding, pouring or mixing the two or three ingredients that make this dish what it is.
-  2. 3-6 s: the one moment that shows how it is made (shaping, pouring into the pan, into the oven or onto the heat).
-  3. 6-10 s: the finished dish, exactly as in the reference photos, and a hand lifting one piece toward the camera, the inside visible.
+  1. 0-3 s: the finished dish, exactly as in the reference photos, already moving: a hand cutting or lifting one piece, showing what makes this dish what it is.
+  2. 3-6 s: the one moment that shows how it is made (mixing the key ingredients, shaping, pouring into the pan).
+  3. 6-10 s: the finished dish served, exactly as in the reference photos, with a fork or hand taking a bite-sized piece.
 Three actions, not more: a video model given ten actions for ten seconds does none of them.
 
 "voiceover": the words spoken, in correct French with every accent, 16 to 26 words in total, speaking to the viewer as « vous ». It ALWAYS starts with the exact words « Vous saviez que ». Only claims this recipe supports: say a number of ingredients only if it is exactly {{ingredientCount}}, and say « sans farine », « sans sucre », « sans œufs » or « sans four » only if the recipe really has none. When in doubt, leave the claim out. It ends on the two- or three-word reaction.

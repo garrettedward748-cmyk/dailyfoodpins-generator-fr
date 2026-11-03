@@ -92,6 +92,9 @@ function fontArg(): string {
 /** How long the hook stays on a one-clip reel, from frame 0. */
 export const HOOK_SECONDS = 3;
 
+/** How long a one-shot reel shows where the recipe is, at its end. */
+export const CTA_SECONDS = 3;
+
 /**
  * The words shown over a one-clip reel's opening: the dish's own name, the
  * part of the title before any colon or dash.
@@ -141,6 +144,7 @@ export async function normalizeForSocial(
   ffmpeg = 'ffmpeg',
   hook = '',
   spoken: readonly WordTiming[] = [],
+  cta = '',
 ): Promise<Buffer> {
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
@@ -170,6 +174,19 @@ export async function normalizeForSocial(
         `borderw=7:bordercolor=black:shadowcolor=black@0.5:shadowx=0:shadowy=6:` +
         `x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${from.toFixed(3)},${to.toFixed(3)})'`;
     });
+    // Where the recipe is, over the last seconds, clear of the words in the
+    // centre and of the buttons the apps lay over the bottom of a reel.
+    const closing = cta.trim();
+    if (closing) {
+      const { duration } = await probeMedia(input, ffmpeg.replace(/ffmpeg(\.exe)?$/, 'ffprobe$1'));
+      const from = duration > CTA_SECONDS ? duration - CTA_SECONDS : 0;
+      const file = join(dir, 'cta.txt');
+      writeFileSync(file, wrapWords(closing, 22));
+      vf +=
+        `,drawtext=${fontArg()}textfile='${escapeDrawtext(file)}':fontcolor=white:fontsize=64:line_spacing=12:` +
+        `box=1:boxcolor=black@0.55:boxborderw=24:x=(w-text_w)/2:y=h*0.66:` +
+        `enable='gte(t,${from.toFixed(3)})'`;
+    }
     await run(ffmpeg, [
       '-y', '-i', input,
       '-map', '0:v:0', '-map', '0:a:0?',
