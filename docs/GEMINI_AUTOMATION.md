@@ -1,4 +1,4 @@
-> **Ported into dailyfoodpins-generator-fr** (same as the English generator, dailyfoodpins-generator a352e64) from `walidselatnia-maker/Automation` @ `feature/gemini-chat` (`110f327`).
+> **Ported into dailyfoodpins-generator-fr** (same as the English generator, dailyfoodpins-generator a352e64 and 9fa6f35) from `walidselatnia-maker/Automation` @ `feature/gemini-chat` (`110f327`).
 > The imagegen side (queue, `/v1/gemini` + `/ext/gemini` APIs, the Gemini Chat extension, packing) and the
 > LLM routing (`src/integrations/gemini.ts`, `src/llm/gemini.ts`, `chat()` fallback) are the same as described below.
 > Differences in this project:
@@ -11,6 +11,15 @@
 > - `geminiAccount()` always returns `''`: here each Google account has its own Chrome profile and only one
 >   runs at a time, so Gemini simply uses the account the browser is on (no `?authuser`, no email check).
 >   An account switch waits for a running Gemini prompt like it waits for an image job.
+> - **One ordinary Gemini chat per article (not temporary).** An article run's prompts, and later its reel's,
+>   are asked inside `withGeminiChat('run:<runId>', …)` (`src/pipeline/context.ts`, `src/reels/engine.ts`).
+>   The first prompt starts a normal chat; the reply's `conversation_id` is saved in the setting `gemini_chats`
+>   (`{key: {id, at}}`, 30 days / 500 entries), and the next prompts send it as `conversation_id`, so the
+>   extension opens `gemini.google.com/app/<id>`, waits for the earlier messages to load, and answers in that
+>   chat with its context. One article's prompts wait for each other so they never open two chats.
+>   A chat that is gone opens as a new one and its new id replaces the old; a `NO_PROMPT_BOX` failure drops
+>   the saved chat. Prompts outside an article (research, Search Console, Try Gemini) still use a temporary chat.
+>   Extension 1.1.0.
 > - Tests: `test/gemini.test.ts`, `test/settings-gemini.test.ts`, `services/imagegen/tests/test_gemini.py`.
 
 # Gemini Automation — Technical Report

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeDatabase, openDatabase } from '../src/db/index.js';
 import { GeminiClient, GeminiError } from '../src/integrations/gemini.js';
 import { chat } from '../src/llm/client.js';
-import { configureGemini, GEMINI_LAST_ERROR, GEMINI_LAST_OK, GEMINI_MODEL, joinMessages, jsonFrom, unusableReply } from '../src/llm/gemini.js';
+import { configureGemini, GEMINI_LAST_ERROR, GEMINI_LAST_OK, GEMINI_MODEL, geminiChatFor, joinMessages, jsonFrom, rememberGeminiChat, unusableReply, withGeminiChat } from '../src/llm/gemini.js';
 import { listEndpointRows, upsertEndpoint } from '../src/llm/pool.js';
 import { Settings } from '../src/settings.js';
 import { setLogLevel } from '../src/lib/logger.js';
@@ -44,7 +44,7 @@ describe('Gemini client', () => {
     const client = new GeminiClient({ baseUrl: `${BASE}/`, apiKey: 'k', pollIntervalMs: 1, fetchImpl });
     const got = await client.ask({ prompt: 'Hi', account: 'a@b.c', timeoutS: 120 });
     expect(got.text).toBe('Hello there');
-    expect(sent[0]).toEqual({ prompt: 'Hi', files: [], account: 'a@b.c', temporary: true, images: true, timeout_s: 120 });
+    expect(sent[0]).toEqual({ prompt: 'Hi', files: [], account: 'a@b.c', temporary: true, conversation_id: '', images: true, timeout_s: 120 });
   });
 
   it("reports the page's own failure code", async () => {
@@ -151,6 +151,58 @@ describe('chat() with Gemini as the model', () => {
     expect(result.model).toBe('gemma4:31b');
     expect(settings.get(GEMINI_LAST_ERROR)).toMatch(/NOT_JSON/);
   });
+
+  it("asks an article's prompts in one ordinary chat, carried on from prompt to prompt", async () => {
+    const answer: { result?: unknown; error?: string } = { result: reply({ conversation_id: 'c1' }) };
+    const { fetchImpl, sent } = service(answer);
+    configureGemini({ settings, account: () => '', fetchImpl });
+    const ask = () => chat({ model: GEMINI_MODEL, messages: [{ role: 'user', content: 'x' }], fallbackModel: 'gpt-oss:120b' }, KEY);
+
+    await withGeminiChat('run:7', ask);
+    expect(sent[0]).toMatchObject({ temporary: false, conversation_id: '' });
+    expect(geminiChatFor(settings, 'run:7')).toBe('c1');
+
+    await withGeminiChat('run:7', ask);
+    expect(sent[1]).toMatchObject({ temporary: false, conversation_id: 'c1' });
+
+    // Another article has its own chat; a prompt outside any article is a one-off temporary chat.
+    answer.result = reply({ conversation_id: 'c2' });
+    await withGeminiChat('run:8', ask);
+    expect(sent[2]).toMatchObject({ temporary: false, conversation_id: '' });
+    expect(geminiChatFor(settings, 'run:8')).toBe('c2');
+    await ask();
+    expect(sent[3]).toMatchObject({ temporary: true, conversation_id: '' });
+    expect(geminiChatFor(settings, 'run:7')).toBe('c1');
+  }, 30_000);
+
+  it('moves to the new chat when the old one was gone, and lets go of one whose page failed', async () => {
+    rememberGeminiChat(settings, 'run:7', 'old');
+    const answer: { result?: unknown; error?: string } = { result: reply({ conversation_id: 'fresh' }) };
+    const { fetchImpl, sent } = service(answer);
+    configureGemini({ settings, account: () => '', fetchImpl });
+    const ask = () => chat({ model: GEMINI_MODEL, messages: [{ role: 'user', content: 'x' }], fallbackModel: 'gpt-oss:120b' }, KEY);
+
+    await withGeminiChat('run:7', ask);
+    expect(sent[0]).toMatchObject({ conversation_id: 'old' });
+    expect(geminiChatFor(settings, 'run:7')).toBe('fresh');
+
+    answer.error = 'TIMEOUT: slow';
+    await withGeminiChat('run:7', ask);
+    expect(geminiChatFor(settings, 'run:7')).toBe('fresh');
+
+    answer.error = 'NO_PROMPT_BOX: the page broke';
+    await withGeminiChat('run:7', ask);
+    expect(geminiChatFor(settings, 'run:7')).toBe('');
+  }, 30_000);
+
+  it("asks one article's prompts one after another, so they never start two chats", async () => {
+    const answer: { result?: unknown; error?: string } = { result: reply({ conversation_id: 'c1' }) };
+    const { fetchImpl, sent } = service(answer);
+    configureGemini({ settings, account: () => '', fetchImpl });
+    const ask = () => withGeminiChat('run:9', () => chat({ model: GEMINI_MODEL, messages: [{ role: 'user', content: 'x' }], fallbackModel: 'gpt-oss:120b' }, KEY));
+    await Promise.all([ask(), ask()]);
+    expect(sent.map((b) => b.conversation_id)).toEqual(['', 'c1']);
+  }, 30_000);
 
   it('fails plainly with no fallback, and with no Gemini set up at all', async () => {
     const { fetchImpl } = service({ error: 'TIMEOUT: too slow' });

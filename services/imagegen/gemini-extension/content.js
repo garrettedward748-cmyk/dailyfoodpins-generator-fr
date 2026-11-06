@@ -53,16 +53,48 @@
   }
 
   // ── temporary chat ─────────────────────────────────────────────────────────
-  // Automated prompts go in a temporary chat, so they do not fill the account's chat history and
-  // Gemini does not personalise them from it. Best effort: if the toggle cannot be found the
-  // prompt still goes, as an ordinary chat.
-  async function useTemporaryChat() {
-    const toggle = $$('button').find((b) => /^temporary chat$/i.test(labelOf(b)));
+  // A temporary chat stays out of the account's chat history but has no address to come back to,
+  // so it is used only when asked for. The platform's article prompts ask for an ordinary chat,
+  // one per article, so each answer has the article's earlier answers in mind. Best effort: if the
+  // toggle cannot be found the prompt still goes, as an ordinary chat.
+  const temporaryToggle = () => $$('button').find((b) => /^temporary chat$/i.test(labelOf(b)));
+  const isPressed = (b) => b.getAttribute('aria-pressed') === 'true' || b.classList.contains('active');
+
+  async function setTemporaryChat(on) {
+    const toggle = temporaryToggle();
     if (!toggle) return false;
-    if (toggle.getAttribute('aria-pressed') === 'true' || toggle.classList.contains('active')) return true;
-    toggle.click();
-    await sleep(800);
-    await waitFor(editor, 10_000, () => null);
+    if (isPressed(toggle) !== on) {
+      toggle.click();
+      await sleep(800);
+      await waitFor(editor, 10_000, () => null);
+    }
+    return on;
+  }
+
+  // ── carrying on a chat ─────────────────────────────────────────────────────
+  // An earlier chat's messages arrive a moment after its prompt box. Sending before they are all
+  // in would mistake an old answer for the new one, so wait until they stop arriving and the last
+  // one is finished. A chat that no longer exists (deleted, or another account's) opens as a new
+  // one; the reply then carries the new chat's id and the platform remembers that one instead.
+  async function settleHistory(wanted) {
+    if (!wanted) return false;
+    await waitFor(() => responses().length > 0 || conversationId() !== wanted, 15_000, () => null);
+    if (conversationId() !== wanted) return false;
+    // Still at the chat's address with none of its messages shown: sending now could take a late
+    // old answer for the new one. The platform lets this chat go and the next prompt starts afresh.
+    if (!responses().length) fail('NO_PROMPT_BOX', 'the earlier messages of this Gemini chat did not load');
+    let count = -1;
+    let stableSince = 0;
+    await waitFor(() => {
+      const n = responses().length;
+      const last = responses().at(-1);
+      if (n !== count || !last || !$('message-actions', last) || stopButton()) {
+        count = n;
+        stableSince = Date.now();
+        return false;
+      }
+      return Date.now() - stableSince > 1500;
+    }, 20_000, () => null);
     return true;
   }
 
@@ -246,20 +278,25 @@
   }
 
   // ── the job ────────────────────────────────────────────────────────────────
-  async function chat({ prompt = '', files = [], account = '', temporary = true, images = true, timeoutMs = 240_000 }) {
+  async function chat({ prompt = '', files = [], account = '', temporary = true, conversationId: wanted = '', images = true, timeoutMs = 240_000 }) {
     // A page that is not visible may not draw the reply as it streams in.
     if (document.visibilityState !== 'visible') fail('HIDDEN', 'the Gemini window is minimized or hidden');
     const email = await checkSession(account);
-    const temp = temporary ? await useTemporaryChat() : false;
+    const continued = await settleHistory(wanted);
+    // Carrying on a chat is never temporary; a new chat is temporary only when asked.
+    const temp = continued ? false : await setTemporaryChat(Boolean(temporary && !wanted));
     await waitFor(editor, 15_000, () => fail('NO_PROMPT_BOX', 'the Gemini page did not show its prompt box'));
 
-    const before = responses().length;
+    // The answer is the response that was not on the page before Send, at the end of the chat.
+    const old = new Set(responses());
+    const isNew = () => { const last = responses().at(-1); return last && !old.has(last) ? last : null; };
+    const before = old.size;
     await setPrompt(prompt);
     await attachFiles(files);
     const send = await waitFor(() => { const b = sendButton(); return !isDisabled(b) && b; }, 15_000, () => fail('NO_PROMPT_BOX', 'the Send button stayed disabled'));
     send.click();
 
-    await waitFor(() => responses().length > before, 60_000, () => fail('TIMEOUT', 'Gemini did not start answering'));
+    await waitFor(() => responses().length > before && isNew(), 60_000, () => fail('TIMEOUT', 'Gemini did not start answering'));
     // Done when the reply's action row (copy, redo) is shown and no Stop button is left, for 1.5 s.
     let stableSince = 0;
     const end = Date.now() + timeoutMs;
@@ -274,7 +311,7 @@
       if (Date.now() > end) fail('TIMEOUT', 'Gemini was still answering when the time ran out');
       await sleep(400);
     }
-    return { ...(await extract(responses().at(-1), images)), account: email, temporary: temp };
+    return { ...(await extract(responses().at(-1), images)), account: email, temporary: temp, continued };
   }
 
   window.__geminiChat = { chat, setPrompt, toMarkdown, plainText };

@@ -167,8 +167,10 @@ What keeps the two apart:
   someone ticks it on Setup → Gemini.
 
 The risk accepted: automated prompts from the same account and browser Flow
-uses. They run in Gemini's own page, paced by its own answering, in temporary
-chats, and only for the steps someone chose.
+uses. They run in Gemini's own page, paced by its own answering, and only for
+the steps someone chose. An article's prompts share one ordinary chat (so each
+answer keeps the article's earlier ones in mind, and the chats show in the
+account's history); one-off prompts outside an article use temporary chats.
 
 ### Server-rendered HTML, no framework
 

@@ -21,6 +21,11 @@ export interface GeminiAsk {
   account?: string;
   /** A temporary chat keeps automated prompts out of the account's chat history. */
   temporary?: boolean;
+  /**
+   * Gemini's id for an existing chat (the part after /app/ in its address) to ask in, so the
+   * prompt is answered with that chat's earlier messages in mind. Empty starts a new chat.
+   */
+  conversationId?: string;
   /** Whether pictures in the reply come back as data, not only as addresses. */
   images?: boolean;
   /** The whole budget: the browser starting, the page loading and Gemini answering. */
@@ -129,6 +134,7 @@ export class GeminiClient {
         files: ask.files ?? [],
         account: ask.account ?? '',
         temporary: ask.temporary ?? true,
+        conversation_id: ask.conversationId ?? '',
         images: ask.images ?? true,
         timeout_s: Math.min(1800, Math.max(60, Math.round(ask.timeoutS ?? DEFAULT_TIMEOUT_S))),
       }),

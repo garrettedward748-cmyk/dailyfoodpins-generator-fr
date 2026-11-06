@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { GeminiClient, GeminiError, type GeminiReply } from '../integrations/gemini.js';
 import type { Settings } from '../settings.js';
 import type { ChatMessage, ChatRequest, Completion } from './client.js';
@@ -107,6 +108,78 @@ export function unusableReply(text: string): string | null {
   return null;
 }
 
+/* -------------------------------------------------------------------------
+ * One Gemini chat per article
+ * ---------------------------------------------------------------------- */
+
+/**
+ * The prompts for one article (its recipe, its parts, its pins, later its reel) are asked in the
+ * same ordinary Gemini chat, so each answer has the article's earlier answers in mind. The work
+ * that runs an article wraps itself in withGeminiChat('run:<id>', ...); askPrompt and chat() below
+ * it are not handed the key, they read it from here. A prompt asked outside any article (research,
+ * Search Console, Try Gemini) has no key and goes to a new temporary chat, as before, so the
+ * account's chat history is not filled with one-off questions.
+ */
+const chatKey = new AsyncLocalStorage<string>();
+
+export function withGeminiChat<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  return chatKey.run(key, fn);
+}
+
+export function currentGeminiChat(): string | undefined {
+  return chatKey.getStore();
+}
+
+/** Settings key holding which Gemini chat each article uses: {key: {id, at}}. */
+export const GEMINI_CHATS = 'gemini_chats';
+const KEEP_CHATS_DAYS = 30;
+const KEEP_CHATS_MAX = 500;
+
+type ChatMap = Record<string, { id: string; at: string }>;
+
+function readChats(settings: Settings): ChatMap {
+  try {
+    const parsed = JSON.parse(settings.get(GEMINI_CHATS) || '{}') as unknown;
+    return parsed && typeof parsed === 'object' ? (parsed as ChatMap) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The Gemini chat an article's prompts go to, if it has one yet. */
+export function geminiChatFor(settings: Settings, key: string): string {
+  return readChats(settings)[key]?.id ?? '';
+}
+
+/** Remember (or, with an empty id, forget) the chat an article uses. Old entries are dropped. */
+export function rememberGeminiChat(settings: Settings, key: string, id: string): void {
+  const chats = readChats(settings);
+  if (id) chats[key] = { id, at: new Date().toISOString() };
+  else delete chats[key];
+  const cutoff = Date.now() - KEEP_CHATS_DAYS * 86_400_000;
+  const kept = Object.entries(chats)
+    .filter(([, v]) => v && typeof v.id === 'string' && Date.parse(v.at) >= cutoff)
+    .sort(([, a], [, b]) => b.at.localeCompare(a.at))
+    .slice(0, KEEP_CHATS_MAX);
+  settings.set(GEMINI_CHATS, JSON.stringify(Object.fromEntries(kept)));
+}
+
+// Prompts of one article wait for each other: two asked at once would each start a chat of their
+// own before either knew the other's. Gemini answers one prompt at a time anyway.
+const chatLocks = new Map<string, Promise<unknown>>();
+
+async function oneAtATime<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const before = chatLocks.get(key) ?? Promise.resolve();
+  const mine = before.catch(() => undefined).then(fn);
+  const tail = mine.catch(() => undefined);
+  chatLocks.set(key, tail);
+  try {
+    return await mine;
+  } finally {
+    if (chatLocks.get(key) === tail) chatLocks.delete(key);
+  }
+}
+
 /** Ask Gemini for one completion. Throws when it cannot give a usable one. */
 export async function geminiCompletion(request: ChatRequest): Promise<Completion> {
   if (!setup) throw new GeminiError('Gemini is not set up in this process', 'SETUP');
@@ -114,14 +187,27 @@ export async function geminiCompletion(request: ChatRequest): Promise<Completion
   const client = geminiClient(settings, setup.fetchImpl);
   if (!client) throw new GeminiError('The image service is not configured, and Gemini runs there', 'SETUP');
 
+  const key = currentGeminiChat();
+  if (key) return oneAtATime(key, () => askOnce(request, settings, client, key));
+  return askOnce(request, settings, client, undefined);
+}
+
+async function askOnce(request: ChatRequest, settings: Settings, client: GeminiClient, key: string | undefined): Promise<Completion> {
+  const conversationId = key ? geminiChatFor(settings, key) : '';
   try {
     const reply = await client.ask({
       prompt: joinMessages(request.messages, request.format),
-      account: setup.account(),
-      temporary: true,
+      account: setup!.account(),
+      // An article's prompts share one ordinary chat; a one-off prompt gets a temporary one.
+      temporary: !key,
+      conversationId,
       images: false,
       timeoutS: Math.round((request.timeoutMs ?? 300_000) / 1000),
     });
+    // The chat may be new (first prompt, or the old one was gone): remember the one answered in.
+    if (key && reply.conversation_id && reply.conversation_id !== conversationId) {
+      rememberGeminiChat(settings, key, reply.conversation_id);
+    }
     const problem = unusableReply(reply.text);
     if (problem) throw new GeminiError(problem, 'NOT_AN_ANSWER');
     const content = request.format === 'json' ? jsonFrom(reply) : reply.markdown || reply.text;
@@ -129,6 +215,13 @@ export async function geminiCompletion(request: ChatRequest): Promise<Completion
     return { content, tokensIn: 0, tokensOut: 0 };
   } catch (err) {
     const error = err instanceof GeminiError ? err : new GeminiError(err instanceof Error ? err.message : String(err));
+    // A chat whose page could not be used is let go, so the next prompt of this article starts a
+    // fresh chat instead of failing on it again. Anything else (a slow answer, a limit, a reply
+    // that was not JSON) keeps the chat: its context is what this is for. A chat that no longer
+    // exists needs nothing here: Gemini opens a new one and the reply brings its id.
+    if (key && conversationId && error.code === 'NO_PROMPT_BOX') {
+      rememberGeminiChat(settings, key, '');
+    }
     recordGeminiOutcome(settings, `${error.code}: ${error.message}`);
     throw error;
   }

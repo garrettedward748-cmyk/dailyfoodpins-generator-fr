@@ -85,6 +85,22 @@ def test_a_prompt_goes_to_the_extension_and_its_reply_comes_back(fresh):
         assert c.get("/v1/gemini/status").json()["last_success_at"]
 
 
+def test_a_chat_to_carry_on_reaches_the_extension_and_is_never_temporary():
+    with client() as c:
+        assert c.post("/v1/gemini/jobs", json={"prompt": "Next step", "conversation_id": "a1b2_C-3"}).status_code == 202
+        payload = c.get("/ext/gemini/poll").json()["job"]["payload"]
+        assert payload["conversationId"] == "a1b2_C-3"
+        assert payload["temporary"] is False
+
+        c.post("/v1/gemini/jobs", json={"prompt": "One-off"})
+        payload = c.get("/ext/gemini/poll").json()["job"]["payload"]
+        assert payload["conversationId"] == ""
+        assert payload["temporary"] is True
+
+        # Only an id can go into the page address.
+        assert c.post("/v1/gemini/jobs", json={"prompt": "x", "conversation_id": "../evil?x=1"}).status_code == 422
+
+
 def test_a_failure_from_the_page_is_reported_with_its_reason():
     with client() as c:
         job_id = c.post("/v1/gemini/jobs", json={"prompt": "Hello"}).json()["id"]

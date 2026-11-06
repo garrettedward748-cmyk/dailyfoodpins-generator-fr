@@ -47,6 +47,9 @@ class AskRequest(BaseModel):
     account: str = Field(default="", max_length=320)
     # A temporary chat keeps automated prompts out of the account's chat history.
     temporary: bool = True
+    # Gemini's id for an existing chat to ask in (the part after /app/ in its address), so the
+    # answer keeps that chat's earlier messages in mind. Empty starts a new chat.
+    conversation_id: str = Field(default="", max_length=100, pattern=r"^[A-Za-z0-9_-]*$")
     # Whether pictures in the reply come back as data, not only as addresses.
     images: bool = True
     # The whole budget: Chrome starting, the page loading and Gemini answering.
@@ -68,7 +71,9 @@ async def ask(body: AskRequest) -> dict:
             "prompt": body.prompt,
             "files": [f.model_dump() for f in body.files],
             "account": body.account.strip(),
-            "temporary": body.temporary,
+            # A chat that is carried on is an ordinary one: a temporary chat has no address to return to.
+            "temporary": body.temporary and not body.conversation_id,
+            "conversationId": body.conversation_id,
             "images": body.images,
             "timeoutMs": (body.timeout_s - START_ALLOWANCE_S) * 1000,
         },

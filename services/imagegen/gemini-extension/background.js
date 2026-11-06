@@ -55,9 +55,11 @@ function loaded(tabId, timeoutMs = 60_000) {
   });
 }
 
-// Every prompt starts from a fresh page, so it never lands in the previous prompt's chat.
-async function openFresh(account) {
-  const url = account ? `${APP}?authuser=${encodeURIComponent(account)}` : APP;
+// Every prompt reloads the page: at the chat it is to carry on (its earlier messages give the
+// answer its context), or at a new chat, so it never lands in whatever chat was open last.
+async function openFresh(account, conversationId) {
+  const base = /^[A-Za-z0-9_-]+$/.test(conversationId || '') ? `${APP}/${conversationId}` : APP;
+  const url = account ? `${base}?authuser=${encodeURIComponent(account)}` : base;
   const tab = await geminiTab();
   ports.delete(tab.id);
   const done = loaded(tab.id);
@@ -75,7 +77,7 @@ async function openFresh(account) {
 }
 
 async function run(job) {
-  const port = await openFresh(job.payload.account || '');
+  const port = await openFresh(job.payload.account || '', job.payload.conversationId || '');
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => finish(new Error('TIMEOUT: the Gemini page stopped answering')), (job.payload.timeoutMs || 240_000) + 30_000);
     function finish(err, result) {
