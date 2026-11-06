@@ -213,6 +213,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   deleteEndpoint,
+  keyPrefix,
   listEndpoints,
   resetEndpointHealth,
   upsertEndpoint,
@@ -5781,7 +5782,9 @@ export function buildServer(
 
     const existing = listEndpoints(encryptionKey);
     const takenNames = new Set(existing.map((e) => e.name.toLowerCase()));
+    const owners = new Map(existing.filter((e) => e.apiKey).map((e) => [e.apiKey, e.name]));
     const seenKeys = new Set<string>();
+    const duplicates: string[] = [];
 
     let counter = 0;
     const nextName = (): string => {
@@ -5810,6 +5813,11 @@ export function buildServer(
       const apiKey = (separated ? separated[2]! : line).trim();
 
       if (!apiKey) continue;
+      const owner = owners.get(apiKey);
+      if (owner) {
+        duplicates.push(`${keyPrefix(apiKey)} is already ${owner}`);
+        continue;
+      }
       if (seenKeys.has(apiKey)) {
         skipped += 1;
         continue;
@@ -5827,6 +5835,13 @@ export function buildServer(
       }
     }
 
+    if (added === 0 && errors.length === 0 && (duplicates.length > 0 || skipped > 0)) {
+      return redirect(reply, '/settings/keys', {
+        kind: 'error',
+        message: `Nothing added, that key already exists. ${duplicates.join('; ')}`.trim(),
+      });
+    }
+
     if (added === 0 && errors.length === 0) {
       return redirect(reply, '/settings/keys', {
         kind: 'warn',
@@ -5835,11 +5850,12 @@ export function buildServer(
     }
 
     const parts = [`Added ${added} key(s).`];
-    if (skipped) parts.push(`${skipped} duplicate(s) skipped.`);
+    if (skipped) parts.push(`${skipped} repeated in what you pasted, skipped.`);
+    if (duplicates.length) parts.push(`Already there, skipped: ${duplicates.join('; ')}.`);
     if (errors.length) parts.push(`Failed: ${errors.slice(0, 3).join('; ')}`);
 
     return redirect(reply, '/settings/keys', {
-      kind: errors.length ? 'warn' : 'ok',
+      kind: errors.length || duplicates.length ? 'warn' : 'ok',
       message: parts.join(' '),
     });
   });
@@ -6127,6 +6143,14 @@ export function buildServer(
     }
     if (!apiKey) {
       return redirect(reply, '/settings', { kind: 'error', message: 'An API key is required.' });
+    }
+
+    const owner = listEndpoints(encryptionKey).find((e) => e.apiKey === apiKey && e.name !== name);
+    if (owner) {
+      return redirect(reply, '/settings/keys', {
+        kind: 'error',
+        message: `That key already exists: ${keyPrefix(apiKey)} is ${owner.name}.`,
+      });
     }
 
     try {

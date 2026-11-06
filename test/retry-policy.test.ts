@@ -27,6 +27,8 @@ describe('classifying a failure', () => {
 
   it.each([
     'HTTP 401: unauthorized',
+    'HTTP 402: add usage credits',
+    'No Ollama endpoint could serve "m" — every key is out of credit: tried 2 endpoint(s): a, b. Last error: HTTP 402',
     'HTTP 403: forbidden',
     'HTTP 404: not found',
     'HTTP 422: validation failed on field title',
@@ -38,6 +40,11 @@ describe('classifying a failure', () => {
     'No Ollama endpoint could serve "gemma4:31b" — no enabled endpoint serves model "gemma4:31b". Add one in Settings.',
   ])('does not retry %s', (error) => {
     expect(isTransient(error)).toBe(false);
+  });
+
+  it('still retries when only the last key of a mixed pool was out of credit', () => {
+    // The others may just be rate limited, so waiting can still work.
+    expect(isTransient('No Ollama endpoint could serve "m" — tried 2 endpoint(s): a, b. Last error: HTTP 402')).toBe(true);
   });
 
   it('treats an empty error as not retryable', () => {
@@ -101,6 +108,13 @@ describe('planning a retry', () => {
 
     expect(decision.retry).toBe(false);
     expect(decision.reason).toContain('identically');
+  });
+
+  it('says what to do when the keys are out of credit', () => {
+    const decision = planRetry('HTTP 402: add usage credits', 0, POLICY, NOW);
+
+    expect(decision.retry).toBe(false);
+    expect(decision.reason).toContain('Add credit');
   });
 
   it('does nothing when the policy is off', () => {

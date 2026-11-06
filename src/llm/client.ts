@@ -1,5 +1,6 @@
 import { candidatesFor, allFor, markFailure, markSuccess, COOLDOWNS } from './pool.js';
 import { createLogger, errorMessage } from '../lib/logger.js';
+import { LLM_OUT_OF_CREDIT } from '../core/retry.js';
 
 const log = createLogger('llm');
 
@@ -40,11 +41,13 @@ export class NoEndpointAvailableError extends Error {
     readonly model: string,
     readonly tried: string[],
     readonly lastError: string,
+    readonly outOfCredit = false,
   ) {
     const detail = tried.length
       ? `tried ${tried.length} endpoint(s): ${tried.join(', ')}. Last error: ${lastError}`
       : `no enabled endpoint serves model "${model}". Add one in Settings → LLM endpoints.`;
-    super(`No Ollama endpoint could serve "${model}" — ${detail}`);
+    const credit = outOfCredit ? `${LLM_OUT_OF_CREDIT}: ` : '';
+    super(`No Ollama endpoint could serve "${model}" — ${credit}${detail}`);
     this.name = 'NoEndpointAvailableError';
   }
 }
@@ -173,6 +176,11 @@ export async function chat(
           : COOLDOWNS.RATE_LIMIT_COOLDOWN_MS;
         markFailure(endpoint.id, `Rate limited: ${message}`, cooldown);
         log.warn(`"${endpoint.name}" rate limited, cooling down ${cooldown / 1000}s`);
+      } else if (status === 402) {
+        // Unpaid, not busy. Keep it out of the rotation so every run does not
+        // spend time asking it again; a new or paid key is used straight away.
+        markFailure(endpoint.id, `Out of credit: ${message}`, COOLDOWNS.OUT_OF_CREDIT_COOLDOWN_MS);
+        log.warn(`"${endpoint.name}" is out of credit`);
       } else {
         markFailure(endpoint.id, message);
         log.warn(`"${endpoint.name}" failed: ${message}`);
@@ -183,5 +191,10 @@ export async function chat(
     }
   }
 
-  throw new NoEndpointAvailableError(request.model, tried, lastError);
+  // Read back from the pool so a key skipped for being rate limited counts:
+  // that one may still work, and then waiting is the right thing to do.
+  const everyKey = allFor(request.model, encryptionKey, baseUrl);
+  const outOfCredit = tried.length > 0 && everyKey.every((e) => /\bHTTP 402\b/.test(e.lastError ?? ''));
+
+  throw new NoEndpointAvailableError(request.model, tried, lastError, outOfCredit);
 }

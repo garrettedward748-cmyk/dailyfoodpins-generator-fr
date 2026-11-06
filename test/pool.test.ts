@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeDatabase, openDatabase } from '../src/db/index.js';
 import {
   candidatesFor,
+  keyPrefix,
   listEndpoints,
   listEndpointRows,
   markFailure,
@@ -158,6 +159,47 @@ describe('LLM endpoint pool', () => {
       expect(a.lastError).toContain('Rate limited');
     });
 
+    it('takes a key with no credit out of the rotation and uses another', async () => {
+      addEndpoint('a', ['m']);
+      addEndpoint('b', ['m']);
+      vi.stubGlobal(
+        'fetch',
+        stubFetch((host) => (host === 'a' ? new Response('pay', { status: 402 }) : okResponse('ok'))),
+      );
+
+      const result = await chat({ model: 'm', messages: [{ role: 'user', content: 'x' }] }, KEY);
+      expect(result.endpoint).toBe('b');
+
+      const a = listEndpoints(KEY).find((e) => e.name === 'a')!;
+      expect(a.lastError).toContain('Out of credit');
+      expect(candidatesFor('m', KEY).map((e) => e.name)).toEqual(['b']);
+    });
+
+    it('says so when every key is out of credit', async () => {
+      addEndpoint('a', ['m']);
+      addEndpoint('b', ['m']);
+      vi.stubGlobal('fetch', stubFetch(() => new Response('pay', { status: 402 })));
+
+      await expect(
+        chat({ model: 'm', messages: [{ role: 'user', content: 'x' }] }, KEY),
+      ).rejects.toThrow(/every key is out of credit/);
+    });
+
+    it('does not blame credit while another key is only rate limited', async () => {
+      addEndpoint('a', ['m']);
+      addEndpoint('b', ['m']);
+      vi.stubGlobal(
+        'fetch',
+        stubFetch((host) =>
+          host === 'a' ? new Response('slow', { status: 429 }) : new Response('pay', { status: 402 }),
+        ),
+      );
+
+      const error = await chat({ model: 'm', messages: [{ role: 'user', content: 'x' }] }, KEY).catch((e: Error) => e);
+      expect(error).toBeInstanceOf(NoEndpointAvailableError);
+      expect((error as Error).message).not.toContain('every key is out of credit');
+    });
+
     it('walks the whole pool before giving up', async () => {
       addEndpoint('a', ['m']);
       addEndpoint('b', ['m']);
@@ -248,6 +290,11 @@ describe('LLM endpoint pool', () => {
       const stored = listEndpointRows()[0]!.api_key_encrypted;
       expect(stored).not.toContain('sk-super-secret-value');
       expect(stored.startsWith('v1.')).toBe(true);
+    });
+
+    it('shows only the start of a key', () => {
+      expect(keyPrefix('abcdefgh12345678')).toBe('abcdefgh…');
+      expect(keyPrefix('')).toBe('—');
     });
 
     it('keeps the existing key when updated with a blank one', () => {

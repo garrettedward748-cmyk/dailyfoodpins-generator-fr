@@ -43,7 +43,7 @@ const ROLE_LABEL: Record<ArticleRole, string> = {
   stepC: 'Third method shot',
 };
 import type { ReelFormat } from '../../reels/formats.js';
-import type { Endpoint } from '../../llm/pool.js';
+import { keyPrefix, type Endpoint } from '../../llm/pool.js';
 import type { SettingSpec } from '../../settings.js';
 import type { Supply } from '../../core/supply.js';
 import type { RunUsage } from '../../db/repos.js';
@@ -2027,6 +2027,11 @@ export function settingsPage(
 }
 
 export function keysPage(endpoints: Endpoint[], baseUrl: string): Html {
+  const uses = new Map<string, string[]>();
+  for (const e of endpoints) {
+    if (e.apiKey) uses.set(e.apiKey, [...(uses.get(e.apiKey) ?? []), e.name]);
+  }
+
   return html`
     <h1>LLM API keys</h1>
     <p class="subtitle">
@@ -2048,6 +2053,10 @@ export function keysPage(endpoints: Endpoint[], baseUrl: string): Html {
                   <td>
                     <strong>${e.name}</strong>
                     ${e.enabled ? raw('') : html` <span class="badge muted">disabled</span>`}
+                    <div class="muted small mono">${keyPrefix(e.apiKey)}</div>
+                    ${(uses.get(e.apiKey)?.length ?? 0) > 1
+                      ? html`<div class="small"><span class="badge error">same key as ${(uses.get(e.apiKey) ?? []).filter((n) => n !== e.name).join(', ')}</span></div>`
+                      : raw('')}
                     ${e.models.length
                       ? html`<div class="muted small">only: ${e.models.join(', ')}</div>`
                       : raw('')}
@@ -2114,7 +2123,7 @@ export function keysPage(endpoints: Endpoint[], baseUrl: string): Html {
             <label>API key</label>
             <input type="password" name="api_key" required autocomplete="new-password"
                    placeholder="paste the key" />
-            <div class="help">Stored encrypted. Never displayed again.</div>
+            <div class="help">Stored encrypted. Only its first characters are shown afterwards.</div>
           </div>
         </div>
         <details>

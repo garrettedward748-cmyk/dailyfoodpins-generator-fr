@@ -52,6 +52,7 @@ export interface Endpoint {
 const FAILURES_BEFORE_UNHEALTHY = 3;
 const RATE_LIMIT_COOLDOWN_MS = 60_000;
 const UNHEALTHY_RETRY_AFTER_MS = 120_000;
+const OUT_OF_CREDIT_COOLDOWN_MS = 6 * 60 * 60_000;
 
 function parseModels(json: string): string[] {
   try {
@@ -131,6 +132,10 @@ export const deleteEndpoint = (id: number): void => {
   run('DELETE FROM llm_endpoints WHERE id = ?', id);
 };
 
+/** The start of a key, enough to tell which one it is without showing it. */
+export const keyPrefix = (apiKey: string): string =>
+  apiKey ? `${apiKey.slice(0, 8)}…` : '—';
+
 /* -- Health bookkeeping -------------------------------------------------- */
 
 export function markSuccess(id: number): void {
@@ -207,4 +212,4 @@ export function allFor(model: string, key: Buffer, fallbackBaseUrl = ''): Endpoi
   );
 }
 
-export const COOLDOWNS = { RATE_LIMIT_COOLDOWN_MS, UNHEALTHY_RETRY_AFTER_MS };
+export const COOLDOWNS = { RATE_LIMIT_COOLDOWN_MS, UNHEALTHY_RETRY_AFTER_MS, OUT_OF_CREDIT_COOLDOWN_MS };

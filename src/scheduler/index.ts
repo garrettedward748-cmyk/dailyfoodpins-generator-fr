@@ -26,7 +26,7 @@ import {
   resumeExpiredPauses,
   scheduleRetry,
 } from '../db/repos.js';
-import { isTransient, planRetry, type RetryPolicy } from '../core/retry.js';
+import { isOutOfCredit, isTransient, planRetry, type RetryPolicy } from '../core/retry.js';
 import { announceNotices } from '../core/notices.js';
 import { localDateKey, selectTask } from '../core/selector.js';
 import { RESEARCH_UNAVAILABLE } from '../pipeline/steps/research.js';
@@ -211,6 +211,9 @@ function considerBlockingPair(runId: number, error: string, settings: Settings):
 
   // The world's problems are the retry policy's business, not this one's.
   if (isTransient(error)) return '';
+
+  // Permanent until paid for, but no fault of this keyword on this site.
+  if (isOutOfCredit(error)) return '';
 
   const failures = consecutiveFailuresForPair(row.keyword_id, row.site_id);
   if (failures < limit) return '';

@@ -99,11 +99,32 @@ const PERMANENT = [
  */
 const RECAPTCHA = /recaptcha/i;
 
+/** The pool's "tried N endpoints", whose last error speaks for only one key. */
+const POOL_ATTEMPT = /tried \d+ endpoint/i;
+
+/**
+ * Put in the pool's error when every key for a model has answered 402.
+ *
+ * Kept apart from a 402 somewhere in a mixed pool: when other keys were only
+ * rate limited, waiting can still work, so that failure stays transient.
+ */
+export const LLM_OUT_OF_CREDIT = 'every key is out of credit';
+
+/**
+ * Nothing but money fixes this: not time, not another attempt, and not a
+ * different keyword, so it is not held against the keyword either.
+ */
+export function isOutOfCredit(error: string): boolean {
+  const text = error ?? '';
+  return text.includes(LLM_OUT_OF_CREDIT) || (!POOL_ATTEMPT.test(text) && /\bHTTP 402\b/.test(text));
+}
+
 export function isTransient(error: string): boolean {
   const text = (error ?? '').trim();
   if (text === '') return false;
 
   if (RECAPTCHA.test(text)) return true;
+  if (isOutOfCredit(text)) return false;
   if (PERMANENT.some((pattern) => pattern.test(text))) return false;
   return TRANSIENT.some((pattern) => pattern.test(text));
 }
@@ -138,6 +159,10 @@ export function planRetry(
 
   if (!policy.enabled) return no('Automatic retries are off');
   if (policy.maxAttempts <= 0) return no('Automatic retries are off');
+
+  if (isOutOfCredit(error)) {
+    return no('Out of credit, so a retry would fail the same way. Add credit, press Reset on the key, then Resume this run');
+  }
 
   if (attempts >= policy.maxAttempts) {
     return no(`Already retried ${attempts} time(s); giving up and leaving it for you`);
