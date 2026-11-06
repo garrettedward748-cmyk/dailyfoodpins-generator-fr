@@ -178,6 +178,7 @@ export const SECTIONS: NavSection[] = [
       { href: '/settings/collage', label: 'Collage' },
       { href: '/settings/presenters', label: 'Presenters', hidden: true },
       { href: '/settings/google', label: 'Google accounts' },
+      { href: '/settings/gemini', label: 'Gemini' },
       { href: '/settings/backups', label: 'Backups' },
       { href: '/browser', label: 'Browser', external: true },
       { href: '/settings/account', label: 'Password' },

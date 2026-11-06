@@ -41,18 +41,24 @@ async def update_manifest():
     )
 
 
-@router.get("/flowkit.crx")
-async def crx():
-    """The packed extension itself."""
-    package = DIST / "flowkit.crx"
+def _package(name: str) -> FileResponse:
+    package = DIST / name
     if not package.is_file():
         raise HTTPException(503, "Extension was not packed at build time")
-    logger.info("Serving CRX to Chrome")
-    return FileResponse(
-        package,
-        media_type="application/x-chrome-extension",
-        filename="flowkit.crx",
-    )
+    logger.info("Serving %s to Chrome", name)
+    return FileResponse(package, media_type="application/x-chrome-extension", filename=name)
+
+
+@router.get("/flowkit.crx")
+async def crx():
+    """The packed Flow Kit extension itself."""
+    return _package("flowkit.crx")
+
+
+@router.get("/gemini.crx")
+async def gemini_crx():
+    """The packed Gemini Chat extension, named by the same update manifest."""
+    return _package("gemini.crx")
 
 
 FLOW_HOME = "https://flow.google.com/"

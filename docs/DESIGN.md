@@ -142,6 +142,34 @@ tuned without a rebuild.
 `part-2` and `part-3` fall back to materially shorter prompts. That is a
 degradation strategy, distinct from endpoint failover, and both are kept.
 
+### Gemini rides in the image service's Chrome
+
+Gemini is answered by its own web page, driven by a second extension (Gemini
+Chat) in the same Chrome as Flow Kit, rather than by a separate container or an
+API key. One Google sign-in serves both, there is nothing to deploy, and the
+platform reaches it the way it reaches pictures: the image service's API key,
+over the internal network, submit then poll.
+
+What keeps the two apart:
+
+- **Its own queue**, in memory, not the image job table. The watchdog breaker,
+  the unusual-activity hold and the worker pause read that table; a Gemini
+  session that needs signing in must not stop pictures, nor a Flow hold stop
+  Gemini.
+- **Its own window**, a popup created at the Gemini address. Flow Kit takes
+  over blank tabs and opens its tabs in the first normal window.
+- **The same Chrome counter.** A queued prompt holds the browser up like a job,
+  so the idle stop never takes it away mid-answer and a prompt alone starts it.
+- **Not an AI key.** A key with no model list serves every model, so a Gemini
+  key would take prompts meant for the others. It is a model override instead,
+  intercepted in `chat()` before the pool, and anything that stops Gemini
+  answering sends the prompt to its shipped model. Every step is off until
+  someone ticks it on Setup → Gemini.
+
+The risk accepted: automated prompts from the same account and browser Flow
+uses. They run in Gemini's own page, paced by its own answering, in temporary
+chats, and only for the steps someone chose.
+
 ### Server-rendered HTML, no framework
 
 No build step, no hydration, no client state. The maintenance audience is an AI

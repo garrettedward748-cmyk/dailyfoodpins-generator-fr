@@ -349,6 +349,8 @@ import { cleanTopics, DEFAULT_PER_TOPIC, getResearchJob, recallIdeas, rememberId
 import { liveDeps as liveResearchDeps, runAutoResearch, serperStateIn } from '../research/auto.js';
 import { filterWithModel, parseTopicIdeas, researchKeywords, titleCase, topicCandidates, verifyTopics } from '../research/keywords.js';
 import { googleAccountsPage, type GoogleAccountView } from './views/google-accounts.js';
+import { configureGemini, GEMINI_MODEL } from '../llm/gemini.js';
+import { geminiAccount, registerGeminiRoutes } from './gemini.js';
 import { parseSnapshot, restorableCount, serviceIsBehind, takeSnapshot } from './google-snapshot.js';
 import {
   addBlogQuestions,
@@ -510,6 +512,9 @@ export function buildServer(
   auth: AuthOptions,
 ): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 20 * 1024 * 1024 });
+
+  // Prompts switched to Gemini reach it through chat(), which is not handed Settings.
+  configureGemini({ settings, account: geminiAccount });
 
   void app.register(formbody);
   void app.register(multipart, { limits: { fileSize: 20 * 1024 * 1024 } });
@@ -5380,12 +5385,18 @@ export function buildServer(
     return redirect(reply, '/settings/reel-structures', { kind: 'ok', message: 'Structure deleted.' });
   });
 
+  registerGeminiRoutes(app, {
+    settings,
+    render: (reply, body, flash) => page(reply, 'Gemini', '/settings', body, flash),
+    readFlash,
+  });
+
   app.get('/settings/prompts', async (request, reply) =>
     page(
       reply,
       'Prompts',
       '/settings',
-      promptsPage(listPromptFiles(), modelChoices(), KNOWN_MODELS),
+      promptsPage(listPromptFiles(), modelChoices(), [...KNOWN_MODELS, GEMINI_MODEL]),
       readFlash(request.query),
     ),
   );
