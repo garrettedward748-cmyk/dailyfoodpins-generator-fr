@@ -24,14 +24,13 @@ export interface GoogleAccountView {
 /** How images are made: the image service's choice, set from this page. */
 export const IMAGE_METHODS: { value: string; label: string; help: string }[] = [
   { value: 'flowkit', label: 'Flow Kit (as before)', help: 'Builds Flow\'s request and sends it from inside the tab.' },
-  { value: 'flowbatch', label: 'Flow Batch (drives the page)', help: 'Sets the model and shape, attaches references and presses Generate in Flow, like a person.' },
-  { value: 'flowkit_then_flowbatch', label: 'Flow Kit, then Flow Batch if it fails', help: 'Flow Batch only runs for an image Flow Kit could not make.' },
-  { value: 'flowbatch_then_flowkit', label: 'Flow Batch, then Flow Kit if it fails', help: 'Flow Kit only runs for an image Flow Batch could not make.' },
+  { value: 'page', label: 'Flow page (like Automation)', help: 'Picks the model and shape in Flow\'s composer, attaches references with its "+" and presses the button, like a person.' },
+  { value: 'flowkit_then_page', label: 'Flow Kit, then the page if it fails', help: 'The page only runs for an image Flow Kit could not make.' },
+  { value: 'page_then_flowkit', label: 'The page, then Flow Kit if it fails', help: 'Flow Kit only runs for an image the page could not make.' },
 ];
 
-function imageMethodCard(current: string, connected: boolean | undefined): Html {
+function imageMethodCard(current: string): Html {
   const chosen = IMAGE_METHODS.find((m) => m.value === current) ?? IMAGE_METHODS[0]!;
-  const usesBatch = chosen.value !== 'flowkit';
   return html`
     <form method="post" action="/settings/google/image-method" class="card" style="flex:1 1 320px;max-width:520px;margin:0">
       <label for="g-method" style="margin-top:0">How images are made</label>
@@ -44,13 +43,6 @@ function imageMethodCard(current: string, connected: boolean | undefined): Html 
         <button type="submit" class="primary">Save</button>
       </div>
       <div class="small muted" style="margin-top:6px">${chosen.help} Applies to article images; reels still use Flow Kit.</div>
-      ${usesBatch && connected === false
-        ? html`<div class="small" style="margin-top:6px;color:var(--danger, #e5484d)">
-            The Flow Batch extension has not checked in from the browser. Redeploy the image service so it is installed, and keep the browser running.
-          </div>`
-        : usesBatch && connected
-          ? html`<div class="small muted" style="margin-top:6px"><span class="badge ok">Flow Batch connected</span></div>`
-          : raw('')}
     </form>`;
 }
 
@@ -79,8 +71,6 @@ export function googleAccountsPage(data: {
   restore?: { count: number } | null;
   /** How images are made (see IMAGE_METHODS); the service's default when absent. */
   imageMethod?: string;
-  /** Whether the Flow Batch extension in the browser has polled recently. */
-  flowbatchConnected?: boolean;
 }): Html {
   const many = data.accounts.length > 1;
   const clipCost = data.clipCost ?? 0;
@@ -95,7 +85,7 @@ export function googleAccountsPage(data: {
         Each account uses its own Flow project for every site: a project only works with the
         account that created it.
       </p>
-      ${data.reachable ? imageMethodCard(data.imageMethod ?? 'flowkit', data.flowbatchConnected) : raw('')}
+      ${data.reachable ? imageMethodCard(data.imageMethod ?? 'flowkit') : raw('')}
     </div>
 
     ${!data.reachable

@@ -100,7 +100,7 @@ async def status() -> dict:
 def loopback_only(request: Request) -> None:
     host = request.client.host if request.client else ""
     if host not in ("127.0.0.1", "::1", "localhost"):
-        raise HTTPException(403, "Only the browser in this container takes these prompts.")
+        raise HTTPException(403, "Only the browser in this container takes Gemini prompts.")
 
 
 extension = APIRouter(prefix="/ext/gemini", tags=["gemini"], dependencies=[Depends(loopback_only)])

@@ -3210,7 +3210,6 @@ export function buildServer(
         pending: number | null;
         clip_cost?: number;
         image_method?: string;
-        flowbatch_connected?: boolean;
       };
       // The project used to be set in Settings or on a site. Carry it over to
       // account 1 once, so nothing needs typing again.
@@ -3226,7 +3225,6 @@ export function buildServer(
         pending: data.pending,
         clipCost: data.clip_cost,
         imageMethod: data.image_method,
-        flowbatchConnected: data.flowbatch_connected,
       };
       // Keep a copy in the platform's database, so a backup carries the list. A
       // service that holds less than the copy (a new server) is offered the

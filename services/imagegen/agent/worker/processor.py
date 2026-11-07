@@ -11,6 +11,7 @@ the queue, so a half-generated video is never re-submitted and paid for twice.
 """
 import asyncio
 import base64
+import hashlib
 import json
 import os
 import logging
@@ -58,11 +59,17 @@ ASPECT_RATIOS = {
     "HORIZONTAL": "IMAGE_ASPECT_RATIO_LANDSCAPE",
 }
 
-#: The shape as Flow's settings chip labels it, for the Flow Batch path.
-FLOWBATCH_ASPECTS = {
+#: The shape as Flow's composer labels it, for picking one by clicking.
+UI_ASPECT_LABELS = {
     "VERTICAL": "9:16",
     "HORIZONTAL": "16:9",
 }
+
+def _is_daily_quota(error: str) -> bool:
+    """This model is out for today; the limit is per model, not per account."""
+    text = str(error or "")
+    return "DAILY_QUOTA_REACHED" in text.upper() or "usage limit" in text.lower()
+
 
 VIDEO_ASPECT_RATIOS = {
     "VERTICAL": "VIDEO_ASPECT_RATIO_PORTRAIT",
@@ -116,7 +123,17 @@ RETRYABLE = ("quota", "rate_limit", "exhausted", "resource_exhausted", "429",
              "no_at_token",
              # Google's servers busy for the model: nothing wrong with the
              # request or the account. Retried after a pause (see below).
-             "high_traffic")
+             "high_traffic",
+             # The page way's own misses (Settings -> Google accounts -> "Flow
+             # page"): an error Flow showed after the submit, the picture never
+             # showing, the composer not taking the prompt, every tile going
+             # blank without a word, the "+" picker not giving the references.
+             # Tried again the way a person retries a prompt.
+             "flow_ui_error", "no current window", "no_flow_tab",
+             "no image appeared", "composer would not take", "no_composer",
+             "composer_rejected_prompt", "generate_disabled", "submit_not_accepted",
+             "composer_busy", "composer_stuck", "ui_error at",
+             "silent_failure", "references_not_attached")
 
 # How long a job waits before going back in line after PUBLIC_ERROR_HIGH_TRAFFIC.
 HIGH_TRAFFIC_WAIT_S = int(os.environ.get("HIGH_TRAFFIC_WAIT_SECONDS", "90"))
@@ -331,8 +348,10 @@ class WorkerController:
         result: dict = {"error": "no image method configured"}
         for n, method in enumerate(methods):
             last = n == len(methods) - 1
-            if method == "flowbatch":
-                result = await self._image_via_flowbatch(job, request)
+            if method == "page":
+                result = await self._image_via_page(job, dict(request), fail_job=last)
+                if result is None:
+                    return  # failed and handled already
             else:
                 result = await self._image_via_flowkit(job, job_id, dict(request), fail_job=last)
                 if result is None:
@@ -410,36 +429,202 @@ class WorkerController:
 
         return result
 
-    async def _image_via_flowbatch(self, job: dict, request: dict) -> dict:
-        """The Flow Batch way: the extension drives Flow's page like a person.
+    async def _image_via_page(self, job: dict, request: dict, fail_job: bool = True):
+        """The page way: Flow's own composer, driven like a person (from Automation).
 
-        References go along as data: Flow Batch uploads them through Flow's own
-        picker. The model is named as the page names it; on Automatic the page
-        is left on whatever it has selected.
+        The model and the shape are picked in the composer's menus, the
+        references attached through its "+" picker, the prompt typed and the
+        button pressed; the picture is read off this job's own tiles. Nothing
+        here builds a request for Google to judge.
+
+        None means the job was already failed (with fail_job set); otherwise
+        the answer, error or not.
+        """
+        client = get_flow_client()
+        project_id = request["project_id"]
+        references = await self._ui_references(job, project_id, fail_job=fail_job)
+        if references is None or isinstance(references, dict):
+            return references
+        result = await self._generate_by_ui(client, job, request, references)
+        if self._media_missing(result):
+            # Nothing was submitted: up it goes, and the job asks again.
+            references = await self._ui_references(job, project_id, reuse=False, fail_job=fail_job)
+            if references is None or isinstance(references, dict):
+                return references
+            result = await self._generate_by_ui(client, job, request, references)
+        return result
+
+    @staticmethod
+    async def _generate_by_ui(client, job: dict, request: dict, references: list[dict]) -> dict:
+        """The composer path, moving to the next model when one is out for today.
+
+        The model is always picked in Flow's menu -- Automatic is the first its
+        plan names -- so the composer never keeps whatever was last selected in
+        the tab. Google's daily quota is per model: when it answers that, the
+        same job picks the next model straight away and the spent one is left
+        out of the plan for a while. Any other failure ends the walk.
+        """
+        choice = job.get("image_model") or image_models.AUTO
+        models = image_models.plan(choice)
+        result: dict = {"error": "no image model to pick"}
+        for i, wire in enumerate(models or [None]):
+            result = await client.generate_images_ui(
+                request["prompt"], request["project_id"],
+                model_label=image_models.label_of(wire) if wire else None,
+                aspect_label=UI_ASPECT_LABELS.get(job["orientation"], UI_ASPECT_LABELS["VERTICAL"]),
+                job_id=job["id"], references=references,
+            )
+            err = error_text(result) if is_error(result) else None
+            if wire:
+                image_models.record(wire, err)
+            if not (err and wire and _is_daily_quota(err)):
+                break
+            image_models.refused(wire)
+            if i + 1 < len(models):
+                logger.warning("job %s: %s is out of its daily quota -- picking %s",
+                               job["id"][:8], image_models.label_of(wire),
+                               image_models.label_of(models[i + 1]))
+        return result
+
+    async def _ui_references(self, job: dict, project_id: str,
+                             reuse: bool = True, fail_job: bool = True):
+        """The job's references, ready to attach in Flow's prompt box.
+
+        Each goes into the project first under a name of this job's own
+        ("ref-1a2b3c4d-1.jpg"), an upload that needs no captcha, so the
+        extension only has to find it in the "+" picker by that name. One that
+        will not go up that way travels as bytes and is uploaded through the
+        page instead. None means the job was failed here; with fail_job off
+        an error comes back as {"error": ...} so another way can be tried.
+
+        A picture made in this same project (its media id sent beside its link)
+        is not uploaded again when it can be found as it is (`reuse`). The
+        picker's rows carry no media id -- their thumbnails are opaque
+        flow.google.com/asb/ links -- only the title Flow shows, a caption of
+        its own for a picture it made (measured 2026-10-30). That title is read
+        off the project listing and the row picked by it, when no other
+        picture in the project has the same one. Otherwise, or when the picker
+        does not show it (MEDIA_NOT_FOUND, reuse=False), it goes up like the rest.
         """
         try:
             reference_urls = json.loads(job.get("reference_urls") or "[]")
         except (TypeError, ValueError):
-            return {"error": "reference_urls is not valid JSON"}
-        images = []
-        for url in reference_urls[:3]:
+            if not fail_job:
+                return {"error": "reference_urls is not valid JSON"}
+            await self._handle_failure(job, "reference_urls is not valid JSON")
+            return None
+        try:
+            media_ids = json.loads(job.get("reference_media_ids") or "[]") if reuse else []
+        except (TypeError, ValueError):
+            media_ids = []
+        client = get_flow_client()
+        listing = await self._project_titles(client, project_id) if reference_urls else {}
+        titles = self._unique_titles(listing, media_ids)
+        listed = {t.lower() for t in listing.values()}
+        fresh: list[str] = []
+        references: list[dict] = []
+        for i, url in enumerate(reference_urls[:3], start=1):
+            media_id = media_ids[i - 1] if i <= len(media_ids) else ""
+            title = titles.get(media_id) if isinstance(media_id, str) else None
+            if title:
+                logger.info("job %s: reference %d is already in the project, as \"%s\"",
+                            job["id"][:8], i, title[:60])
+                references.append({"name": title, "exact": True, "inProject": True})
+                continue
             fetched = await self._fetch_reference(url)
             if "error" in fetched:
-                return {"error": fetched["error"]}
-            name = (url.rsplit("/", 1)[-1].split("?", 1)[0] or "reference.jpg")[:80]
-            images.append({
-                "name": name,
-                "dataUrl": f"data:{fetched['mime']};base64," + base64.b64encode(fetched["bytes"]).decode("ascii"),
-            })
+                if not fail_job:
+                    return {"error": fetched["error"]}
+                await self._handle_failure(job, fetched["error"])
+                return None
+            ext = {"image/png": "png", "image/webp": "webp"}.get(fetched["mime"], "jpg")
+            # Named by its bytes: the same picture -- the article's photo every
+            # scene starts from, a reference of a job tried again -- goes up
+            # once, and is then found under that name.
+            name = f"ref-{hashlib.sha256(fetched['bytes']).hexdigest()[:12]}"
+            if f"{name}.{ext}" in listed:
+                logger.info("job %s: reference %d is already in the project, as %s.%s",
+                            job["id"][:8], i, name, ext)
+                references.append({"name": name, "uploaded": True})
+                continue
+            encoded = base64.b64encode(fetched["bytes"]).decode("ascii")
+            for attempt in range(2):
+                # A tab moving between projects at that moment answers nothing;
+                # a second go a little later finds it settled.
+                uploaded = await client.upload_image_batch(
+                    image_base64=encoded, project_id=project_id,
+                    mime_type=fetched["mime"], file_name=f"{name}.{ext}",
+                )
+                if not uploaded.get("error") or attempt:
+                    break
+                await asyncio.sleep(5)
+            # `uploaded`: the extension reloads the tab before picking it, since
+            # an open page does not list an upload made beside it.
+            reference = {"name": name, "uploaded": not uploaded.get("error")}
+            if uploaded.get("error"):
+                logger.warning("job %s: reference %d did not go up (%s); uploading it through "
+                               "the page", job["id"][:8], i, str(uploaded["error"])[:120])
+                reference.update(dataUrl=f"data:{fetched['mime']};base64,{encoded}",
+                                 mime=fetched["mime"])
+            references.append(reference)
+            listed.add(f"{name}.{ext}")
+            if reference["uploaded"]:
+                fresh.append(f"{name}.{ext}")
+        if fresh and not await self._wait_listed(client, project_id, fresh):
+            logger.warning("job %s: %s not listed in the project yet; trying anyway",
+                           job["id"][:8], ", ".join(fresh))
+        return references
 
-        choice = job.get("image_model") or image_models.AUTO
-        model = "" if choice == image_models.AUTO else (image_models.label(choice) or "")
-        return await get_flow_client().generate_images_flowbatch(
-            request["prompt"], request["project_id"],
-            aspect_ratio=FLOWBATCH_ASPECTS.get(job["orientation"], FLOWBATCH_ASPECTS["VERTICAL"]),
-            model=model,
-            images=images,
-        )
+    @classmethod
+    async def _wait_listed(cls, client, project_id: str, names: list[str],
+                           wait_s: float = 90, every_s: float = 6) -> bool:
+        """Wait until the project lists every one of `names`.
+
+        An upload answers before Flow lists it: a page loaded straight after
+        did not show it, and the same page loaded half a minute later did
+        (measured 2026-10-30).
+        """
+        want = {n.lower() for n in names}
+        loop = asyncio.get_running_loop()
+        until = loop.time() + wait_s
+        while True:
+            titles = await cls._project_titles(client, project_id)
+            if want <= {t.lower() for t in titles.values()}:
+                return True
+            if not titles or loop.time() > until:
+                return False
+            await asyncio.sleep(every_s)
+
+    @staticmethod
+    async def _project_titles(client, project_id: str) -> dict[str, str]:
+        """Each media id in the project and its picker title; empty when unread."""
+        listed = await client.project_titles(project_id)
+        if "error" in listed:
+            logger.warning("project listing for reuse failed (%s); references go up",
+                           str(listed["error"])[:120])
+            return {}
+        return listed["titles"]
+
+    @staticmethod
+    def _unique_titles(titles: dict[str, str], media_ids: list) -> dict[str, str]:
+        """The picker title of each of `media_ids` no other picture shares."""
+        wanted = [m for m in media_ids if isinstance(m, str) and m.strip()]
+        if not wanted:
+            return {}
+        counts: dict[str, int] = {}
+        for title in titles.values():
+            counts[title.lower()] = counts.get(title.lower(), 0) + 1
+        return {m: titles[m] for m in wanted
+                if m in titles and counts[titles[m].lower()] == 1}
+
+    @staticmethod
+    def _media_missing(result) -> bool:
+        """A picture of the project was not in the picker under its title."""
+        if not is_error(result) or "MEDIA_NOT_FOUND" not in error_text(result):
+            return False
+        logger.warning("a reference was not found in the project's media (%s); uploading it",
+                       error_text(result)[:160])
+        return True
 
     async def _generate_by_model(self, client, job: dict, job_id: str, request: dict) -> dict:
         """The captcha-gated path: walk the models and keep the first Google takes.

@@ -439,7 +439,7 @@ async def test_an_image_job_without_references_never_uploads(monkeypatch):
 
 # --- The image method (Settings -> Google accounts) ------------------------
 
-def run_with_methods(monkeypatch, methods, flowkit, flowbatch) -> tuple[dict, list]:
+def run_with_methods(monkeypatch, methods, flowkit, page) -> tuple[dict, list]:
     """One job through _run with both ways stubbed; the row and the ways tried."""
     tried: list[str] = []
 
@@ -450,9 +450,9 @@ def run_with_methods(monkeypatch, methods, flowkit, flowbatch) -> tuple[dict, li
             tried.append("flowkit")
             return flowkit
 
-        async def generate_images_flowbatch(self, prompt, project_id, **kwargs):
-            tried.append("flowbatch")
-            return flowbatch
+        async def generate_images_ui(self, prompt, project_id, **kwargs):
+            tried.append("page")
+            return page
 
     monkeypatch.setattr(processor, "get_flow_client", lambda: FakeClient())
     monkeypatch.setattr(processor, "API_COOLDOWN", 0)
@@ -464,29 +464,29 @@ def run_with_methods(monkeypatch, methods, flowkit, flowbatch) -> tuple[dict, li
     return asyncio.run(jobs.get(job["id"])), tried
 
 
-def test_flow_batch_alone_makes_the_image(monkeypatch):
-    stored, tried = run_with_methods(monkeypatch, ["flowbatch"], None, ok_response())
-    assert tried == ["flowbatch"]
+def test_the_page_alone_makes_the_image(monkeypatch):
+    stored, tried = run_with_methods(monkeypatch, ["page"], None, ok_response())
+    assert tried == ["page"]
     assert stored["status"] == "COMPLETED"
 
 
 def test_a_failed_first_way_hands_the_image_to_the_second(monkeypatch):
     stored, tried = run_with_methods(
-        monkeypatch, ["flowkit", "flowbatch"], {"error": "PUBLIC_ERROR_UNUSUAL_ACTIVITY"}, ok_response())
-    assert tried == ["flowkit", "flowbatch"]
+        monkeypatch, ["flowkit", "page"], {"error": "PUBLIC_ERROR_UNUSUAL_ACTIVITY"}, ok_response())
+    assert tried == ["flowkit", "page"]
     assert stored["status"] == "COMPLETED"
     assert stored["output_url"] == CDN_URL
 
 
 def test_the_second_way_is_not_tried_when_the_first_worked(monkeypatch):
-    stored, tried = run_with_methods(monkeypatch, ["flowbatch", "flowkit"], None, ok_response())
-    assert tried == ["flowbatch"]
+    stored, tried = run_with_methods(monkeypatch, ["page", "flowkit"], None, ok_response())
+    assert tried == ["page"]
     assert stored["status"] == "COMPLETED"
 
 
 def test_when_both_ways_fail_the_last_error_is_the_jobs(monkeypatch):
     stored, tried = run_with_methods(
-        monkeypatch, ["flowkit", "flowbatch"], {"error": "first broke"},
-        {"error": "Flow Batch: Generate stayed disabled"})
-    assert tried == ["flowkit", "flowbatch"]
+        monkeypatch, ["flowkit", "page"], {"error": "first broke"},
+        {"error": "the composer would not take it: Generate stayed disabled"})
+    assert tried == ["flowkit", "page"]
     assert "Generate stayed disabled" in (stored["error_message"] or stored.get("last_error") or "")

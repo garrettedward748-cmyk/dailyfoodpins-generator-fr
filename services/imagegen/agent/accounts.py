@@ -87,9 +87,10 @@ FAIL_STREAK = int(os.environ.get("ACCOUNT_FAIL_STREAK", "3"))
 DEFAULT_CLIP_COST = 0
 
 #: How images are made (Settings -> Google accounts). Flow Kit builds Flow's
-#: request and sends it from inside the tab; Flow Batch drives Flow's page like
-#: a person. The two "_then_" orders try the second only when the first fails.
-IMAGE_METHODS = ("flowkit", "flowbatch", "flowkit_then_flowbatch", "flowbatch_then_flowkit")
+#: request and sends it from inside the tab; "page" drives Flow's own composer
+#: like a person (the way the Automation project makes them). The two
+#: "_then_" orders try the second only when the first fails.
+IMAGE_METHODS = ("flowkit", "page", "flowkit_then_page", "page_then_flowkit")
 DEFAULT_IMAGE_METHOD = "flowkit"
 
 
@@ -621,7 +622,8 @@ def set_limits(account_id: int, daily: Optional[int], monthly: Optional[int]) ->
 
 
 def _image_method(data: dict) -> str:
-    value = data.get("image_method")
+    # "flowbatch" was this choice's first name, for a few hours.
+    value = str(data.get("image_method") or "").replace("flowbatch", "page")
     return value if value in IMAGE_METHODS else DEFAULT_IMAGE_METHOD
 
 
@@ -630,7 +632,7 @@ def image_method() -> str:
 
 
 def image_methods_in_order() -> list[str]:
-    """The ways to try for an image, first choice first: ["flowkit"], ["flowbatch", "flowkit"], ..."""
+    """The ways to try for an image, first choice first: ["flowkit"], ["page", "flowkit"], ..."""
     return image_method().split("_then_")
 
 

@@ -574,12 +574,18 @@ function connectToAgent() {
       } else if (msg.method === 'discover_image_models') {
         sendToAgent({ id: msg.id, result: await discoverImageModels(msg.params || {}) });
       } else if (msg.method === 'ui_generate_image') {
-        holdFlowTab();
-        try {
-          sendToAgent({ id: msg.id, result: await uiGenerateImage(msg.params || {}) });
-        } finally {
-          releaseFlowTab();
-        }
+        // Holds the Flow tab itself, around the submit only (uiGenerateOnce).
+        sendToAgent({ id: msg.id, result: await uiGenerateOnce(msg.params || {}) });
+      } else if (msg.method === 'ui_page_images') {
+        sendToAgent({ id: msg.id, result: await uiPageImages() });
+      } else if (msg.method === 'ui_job_tiles') {
+        sendToAgent({ id: msg.id, result: await uiJobTiles(msg.params || {}) });
+      } else if (msg.method === 'ui_tile_image') {
+        sendToAgent({ id: msg.id, result: await uiTileImage(msg.params || {}) });
+      } else if (msg.method === 'ui_page_errors') {
+        sendToAgent({ id: msg.id, result: await uiPageErrors(msg.params || {}) });
+      } else if (msg.method === 'ui_probe_picker') {
+        sendToAgent({ id: msg.id, result: await uiProbePicker(msg.params || {}) });
       } else if (msg.method === 'create_flow_project') {
         sendToAgent({ id: msg.id, result: await createFlowProject() });
       } else if (msg.method === 'google_login') {
@@ -1728,6 +1734,22 @@ async function discoverImageModels({ known = [] }) {
 //
 // Read-only. It types nothing and clicks nothing.
 
+/**
+ * chrome.tabs.create, but never "No current window".
+ *
+ * A service worker has no window of its own, so a create without a windowId
+ * goes to the last focused one -- and when the Flow tab was Chrome's last tab
+ * and was closed, Chrome keeps running for this extension with no window at
+ * all, and every create fails with "No current window". So a window is picked,
+ * or made, explicitly.
+ */
+async function openTab(props) {
+  const windows = await chrome.windows.getAll({ windowTypes: ['normal'] }).catch(() => []);
+  if (windows.length) return chrome.tabs.create({ ...props, windowId: windows[0].id });
+  const win = await chrome.windows.create({ url: props.url, focused: !!props.active });
+  return win.tabs?.[0] || (await chrome.tabs.query({ windowId: win.id }))[0];
+}
+
 /** Attributes worth seeing, with the noise (class soup, Angular ids) left out. */
 const SCAN_ATTRS = [
   'id', 'name', 'type', 'role', 'placeholder', 'aria-label', 'aria-labelledby',
@@ -1907,31 +1929,213 @@ async function scanFlowUi({ projectId = null } = {}) {
 
 const CDP_VERSION = '1.3';
 
-/** Run `body` with the debugger attached, and always detach afterwards. */
+// Where things are on Flow's page. The agent sends its own copy with every
+// call (agent/ui_selectors.json, overridable from the data folder without a
+// rebuild); these are only for a call that arrives without one.
+const UI_DEFAULTS = {
+  editor: 'div.ProseMirror',
+  generateButton: 'button[aria-label="Start generation"]',
+  // While Flow works on a submit, a Stop button sits where Generate was.
+  stopButton: 'button[aria-label="Stop"]',
+  // Flow's Agent mode, on when pressed. It answers a prompt with its own
+  // settings (shape, count, model) and hides the composer's, so it is turned off.
+  agentToggle: 'button.agent-mode-chip',
+  menuTriggers: 'button, [role="button"], [role="combobox"], [aria-haspopup]',
+  menuOptions: '[role="option"], [role="menuitem"], [role="menuitemradio"], [role="radio"], [role="tab"], button, li',
+  errorRegions: '[role="alert"], [role="status"], [aria-live], [data-state="error"]',
+  errorWords: 'unusual activity|something went wrong|couldn.t generate|could not generate|failed to generate|generation failed|violat|against our policies|policy violation|quota|limit reached|try again later|not available in your',
+  // Ingredients stay in the prompt box after a submit; this empties it.
+  clearPromptButton: 'button[aria-label="Clear prompt"]',
+  // The "+" by the prompt box: a picker of the project's media with a search
+  // box. A row clicked there attaches it, and a chip shows in the box.
+  addMediaButton: 'button[aria-label="Add ingredients to the prompt box"]',
+  assetSearch: 'input[aria-label="Search assets"]',
+  assetList: 'flow-add-menu-asset-list',
+  assetRow: '.asset-item-container',
+  ingredientChip: 'flow-ingredient-chip',
+  uploadWords: 'upload media',
+  // One generation slot in the results grid: a percent while it renders,
+  // then the picture or the clip. The element stays from one to the other.
+  tile: 'flow-tile-container',
+  tileVideo: 'flow-video-tile video',
+  tileImage: 'flow-image-tile img.image',
+};
+
+function uiSelectors(given) {
+  return { ...UI_DEFAULTS, ...(given && typeof given === 'object' ? given : {}) };
+}
+
+// ─── Acting like a person ───────────────────────────────────
+//
+// Flow's page sends the request, so reCAPTCHA scores the session the page is
+// in -- and how the clicks and keys arrive is part of that session. A pointer
+// that teleports to the exact centre of a button and presses and releases in
+// the same millisecond, every time, is a pattern no person makes. So the
+// pointer travels a curved path from where it last was, lands somewhere inside
+// the control rather than its centre, and holds the button for as long as a
+// finger does. The ranges are ours, chosen to sit inside what people do.
+
+const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+const pause = (lo, hi) => sleep(Math.round(rand(lo, hi)));
+
+/** Last pointer position per tab, so each move starts where the last ended. */
+const pointerAt = new Map();
+
+/** Ease in and out: slow off the mark, fast in the middle, slow onto the target. */
+const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+
+async function humanMove(target, x, y) {
+  const from = pointerAt.get(target.tabId) || { x: x + rand(-250, 250), y: y + rand(-180, 180) };
+  // Two control points off the straight line make the path a gentle curve.
+  const bend = () => ({ x: rand(-80, 80), y: rand(-60, 60) });
+  const b1 = bend();
+  const b2 = bend();
+  const c1 = { x: from.x + (x - from.x) * 0.3 + b1.x, y: from.y + (y - from.y) * 0.3 + b1.y };
+  const c2 = { x: from.x + (x - from.x) * 0.7 + b2.x, y: from.y + (y - from.y) * 0.7 + b2.y };
+  const steps = Math.round(rand(8, 26));
+  for (let i = 1; i <= steps; i++) {
+    const t = ease(i / steps);
+    const u = 1 - t;
+    const px = u * u * u * from.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * x;
+    const py = u * u * u * from.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * y;
+    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent',
+      { type: 'mouseMoved', x: Math.round(px), y: Math.round(py) });
+    await pause(8, 22);
+  }
+  pointerAt.set(target.tabId, { x, y });
+}
+
+/** A trusted click somewhere inside `box`, reached by moving there first. */
+async function humanClick(target, box) {
+  const x = box.left + box.w * rand(0.3, 0.7);
+  const y = box.top + box.h * rand(0.35, 0.65);
+  await humanMove(target, x, y);
+  await pause(50, 150);
+  const base = { x: Math.round(x), y: Math.round(y), button: 'left', clickCount: 1 };
+  await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mousePressed', ...base });
+  await pause(60, 140);
+  await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mouseReleased', ...base });
+}
+
+async function pressKey(target, key, { code = key, keyCode = 0, modifiers = 0, text, commands } = {}) {
+  const down = { type: text ? 'keyDown' : 'rawKeyDown', key, code, windowsVirtualKeyCode: keyCode, modifiers };
+  if (text) down.text = text;
+  if (commands) down.commands = commands;
+  await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', down);
+  await pause(35, 95);
+  await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent',
+    { type: 'keyUp', key, code, windowsVirtualKeyCode: keyCode, modifiers });
+}
+
+// ─── One debugger session per run, not per click ────────────
+//
+// Attaching shows Chrome's "being debugged" bar and resizes the page under it,
+// and doing that around every action is itself a rhythm. So it is attached
+// once and let go only after the tab has been idle for a while.
+
+// Long enough to outlast a generation: the answer to the page's own submit is
+// read through this session (see "What Flow's own answers say" below).
+const DEBUGGER_IDLE_MS = 360_000;
+const attached = new Map(); // tabId -> idle timer
+
+chrome.debugger.onDetach.addListener((source) => {
+  clearTimeout(attached.get(source.tabId));
+  attached.delete(source.tabId);
+  pointerAt.delete(source.tabId);
+  watchedRequests.delete(source.tabId);
+});
+
+// ─── What Flow's own answers say ────────────────────────────
+//
+// When the page submits, Google answers it with the new pictures' addresses.
+// Reading that answer is how a picture is known to be done the moment it is:
+// the project listing lags or misses it, and Flow's tiles are minified markup
+// that changes. Read through the debugger's network view, which only watches --
+// nothing is added to the page.
+
+// Flow's own host, and the storage bucket some answers sign instead.
+const MEDIA_URL_RE = /https:\/\/(?:flow-content\.google|storage\.googleapis\.com\/[A-Za-z0-9_\-.]+)\/image\/[A-Za-z0-9_\-]+(?:\?[^"'\s\\<>\]]*)?/g;
+const watchedRequests = new Map(); // tabId -> Set(requestId)
+const answeredImages = []; // { url, at }, newest last, bounded
+// What the page asked Google lately and how many pictures each answer named,
+// so a picture nobody saw finish can be traced to where it was missed.
+const networkSeen = []; // { at, url, status, found }, newest last, bounded
+// Google's own verdicts in those answers (PUBLIC_ERROR_...), with when they
+// came. A failed tile reads the same words every time, so the words cannot say
+// whether a failure is this picture's; the time of the answer can.
+const answeredCodes = []; // { code, at }, newest last, bounded
+const CODE_RE = /PUBLIC_ERROR_[A-Z_]+/g;
+
+// The answer is JSON inside JSON, so its escapes come doubled: \\u003d is "=".
+const unescapeBody = (text) =>
+  text.replace(/\\+u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16))).replace(/\\+\//g, '/');
+
+chrome.debugger.onEvent.addListener(async (source, method, params) => {
+  const tabId = source.tabId;
+  if (method === 'Network.responseReceived') {
+    const url = params?.response?.url || '';
+    // Every call the page's code makes, not only batchexecute: where Flow
+    // sends the generate has moved before and will again.
+    if (params?.type === 'XHR' || params?.type === 'Fetch') {
+      if (!watchedRequests.has(tabId)) watchedRequests.set(tabId, new Set());
+      watchedRequests.get(tabId).add(params.requestId);
+      networkSeen.push({ at: Date.now(), url: url.split('?')[0].slice(0, 160),
+                         status: params.response?.status, found: 0, requestId: params.requestId });
+      if (networkSeen.length > 60) networkSeen.splice(0, networkSeen.length - 60);
+    }
+  } else if (method === 'Network.loadingFinished') {
+    const watched = watchedRequests.get(tabId);
+    if (!watched?.has(params.requestId)) return;
+    watched.delete(params.requestId);
+    try {
+      const { body = '', base64Encoded } = await chrome.debugger.sendCommand(
+        source, 'Network.getResponseBody', { requestId: params.requestId });
+      const text = unescapeBody(base64Encoded ? atob(body) : body);
+      const found = text.match(MEDIA_URL_RE) || [];
+      const seen = networkSeen.find((n) => n.requestId === params.requestId);
+      if (seen) seen.found = found.length;
+      for (const url of found) {
+        if (!answeredImages.some((a) => a.url.split('?')[0] === url.split('?')[0])) {
+          answeredImages.push({ url, at: Date.now() });
+        }
+      }
+      if (answeredImages.length > 400) answeredImages.splice(0, answeredImages.length - 400);
+      for (const code of new Set(text.match(CODE_RE) || [])) answeredCodes.push({ code, at: Date.now() });
+      if (answeredCodes.length > 100) answeredCodes.splice(0, answeredCodes.length - 100);
+    } catch {
+      // The body is gone (navigated away, or too large to keep): nothing to read.
+    }
+  }
+});
+
 async function withDebugger(tabId, body) {
   const target = { tabId };
-  try {
-    await chrome.debugger.attach(target, CDP_VERSION);
-  } catch (e) {
-    // Already attached -- by a previous run that died, or by DevTools being
-    // open on this tab. Neither is ours to steal.
-    return { error: `DEBUGGER_ATTACH_FAILED: ${e?.message || e}` };
+  if (!attached.has(tabId)) {
+    try {
+      await chrome.debugger.attach(target, CDP_VERSION);
+      await chrome.debugger.sendCommand(target, 'Network.enable', {}).catch(() => {});
+    } catch (e) {
+      // Already attached -- by DevTools open on this tab, or a run of ours
+      // that the service worker lost track of across a restart.
+      if (!String(e?.message || e).includes('Another debugger')) {
+        return { error: `DEBUGGER_ATTACH_FAILED: ${e?.message || e}` };
+      }
+    }
   }
+  clearTimeout(attached.get(tabId));
+  attached.set(tabId, null);
   try {
     return await body(target);
   } finally {
-    await chrome.debugger.detach(target).catch(() => {});
+    attached.set(tabId, setTimeout(() => {
+      attached.delete(tabId);
+      pointerAt.delete(tabId);
+      chrome.debugger.detach(target).catch(() => {});
+    }, DEBUGGER_IDLE_MS));
   }
 }
 
-/** One trusted click at viewport coordinates. */
-async function trustedClick(target, x, y) {
-  const base = { x: Math.round(x), y: Math.round(y), button: 'left', clickCount: 1 };
-  await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent',
-    { type: 'mousePressed', ...base });
-  await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent',
-    { type: 'mouseReleased', ...base });
-}
+// ─── Reading the page ───────────────────────────────────────
 
 /**
  * Where the composer and the Generate button are, and whether it is ready.
@@ -1939,23 +2143,31 @@ async function trustedClick(target, x, y) {
  * Read immediately before each click rather than once: the composer grows as
  * text is typed into it and the button moves down the page with it.
  */
-async function composerBox(tabId) {
+async function composerBox(tabId, ui) {
   const [out] = await chrome.scripting.executeScript({
     target: { tabId },
     world: 'MAIN',
-    func: () => {
-      const editor = document.querySelector('div.ProseMirror');
-      const button = document.querySelector('button[aria-label="Start generation"]');
+    args: [ui.editor, ui.generateButton, ui.stopButton],
+    func: (editorSel, buttonSel, stopSel) => {
+      const editor = document.querySelector(editorSel);
+      const button = document.querySelector(buttonSel);
       const box = (el) => {
         if (!el) return null;
         const r = el.getBoundingClientRect();
-        return { x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height };
+        return { left: r.x, top: r.y, w: r.width, h: r.height };
       };
+      const stop = [...document.querySelectorAll(stopSel)].some((el) => el.getBoundingClientRect().width > 0);
+      // Tiles still working, each showing a percent ("45%") on its own.
+      const working = [...document.querySelectorAll('div, span')].filter((d) =>
+        /^\s*\d{1,3}\s*%\s*$/.test(d.textContent || '') && !d.querySelector('div, span')
+        && d.getBoundingClientRect().width > 0).length;
       return {
         editor: box(editor),
         button: box(button),
         ready: !!button && !button.disabled,
         text: editor ? editor.innerText.trim() : null,
+        stop,
+        working,
       };
     },
   });
@@ -1963,85 +2175,1215 @@ async function composerBox(tabId) {
 }
 
 /**
- * Put `prompt` in the composer.
- *
- * insertText through execCommand rather than assigning textContent: the
- * composer is a ProseMirror editor and keeps its own document, so text set
- * on the node is text the editor does not know it has -- the button stays
- * disabled and a submit sends nothing. selectAll first, so a prompt left over
- * from an attempt that failed is replaced rather than appended to.
+ * Error messages showing on the page: alert regions, and any small element
+ * whose own words read like a failure. Leaf-sized only, so a paragraph that
+ * merely mentions "policy" in Flow's help text is not taken for one. Each
+ * message with how many places show it.
  */
-async function typePrompt(tabId, prompt) {
+async function pageErrorCounts(tabId, ui) {
   const [out] = await chrome.scripting.executeScript({
     target: { tabId },
     world: 'MAIN',
-    args: [prompt],
-    func: (text) => {
-      const editor = document.querySelector('div.ProseMirror');
-      if (!editor) return { error: 'NO_COMPOSER' };
-      editor.focus();
-      document.execCommand('selectAll', false, null);
-      document.execCommand('insertText', false, text);
-      return { text: editor.innerText.trim() };
+    args: [ui.errorRegions, ui.errorWords],
+    func: (regionSel, words) => {
+      const re = new RegExp(words, 'i');
+      const matched = new Set();
+      const visible = (el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      };
+      const textOf = (el) => (el.innerText || '').trim().replace(/\s+/g, ' ');
+      const consider = (el) => {
+        const text = textOf(el);
+        if (text && text.length < 300 && re.test(text) && visible(el)) matched.add(el);
+      };
+      document.querySelectorAll(regionSel).forEach(consider);
+      document.querySelectorAll('div, span, p').forEach((el) => {
+        if (el.childElementCount <= 2) consider(el);
+      });
+      // One per failed tile: an element holding another that matched is the
+      // same message twice. Counted, because every failed tile reads the same.
+      const counts = {};
+      for (const el of matched) {
+        if ([...matched].some((o) => o !== el && el.contains(o))) continue;
+        const text = textOf(el).slice(0, 200);
+        counts[text] = (counts[text] || 0) + 1;
+      }
+      return counts;
     },
   });
-  return out?.result || { error: 'NO_INJECTION_RESULT' };
+  return out?.result || {};
+}
+
+/** Picture addresses showing in the tab: Flow's tiles, read as a person sees them. */
+async function pageImages(tabId) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    func: () => {
+      const urls = new Set();
+      document.querySelectorAll('img, source, video').forEach((el) => {
+        for (const v of [el.currentSrc, el.src, el.getAttribute('src'), el.poster]) {
+          if (v && /flow-content\.google\/image\/|storage\.googleapis\.com\/[^/]+\/image\//.test(v)) urls.add(v);
+        }
+      });
+      return [...urls];
+    },
+  });
+  // And every picture Google's answers to this browser have named.
+  return [...(out?.result || []), ...answeredImages.map((a) => a.url)];
+}
+
+const mediaIdOf = (url) => url.split('/image/')[1].split('?')[0];
+
+/**
+ * Every picture-sized image on the page, whatever its address: a signed link,
+ * a redirect through Flow, or a blob the page made. Read when the addresses
+ * above miss a picture a person can plainly see -- Flow changes how it shows
+ * them more often than what it shows. Icons and avatars are too small to count.
+ */
+async function pageTiles(tabId) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    func: () => {
+      // A tile still working shows a percent ("45%") and no picture yet; a
+      // finished one holds an img with a src. That is the whole signal -- the
+      // same one a person reads off the grid.
+      const working = (el) => {
+        for (let up = el.parentElement, i = 0; up && i < 4; up = up.parentElement, i++) {
+          if ([...up.querySelectorAll('div, span')].some((d) => /^\s*\d{1,3}\s*%\s*$/.test(d.textContent || ''))) return true;
+        }
+        return false;
+      };
+      const srcs = [];
+      document.querySelectorAll('img').forEach((el) => {
+        const src = el.currentSrc || el.src;
+        if (!src) return;
+        // Big enough to be a picture, by its pixels or by the space it takes:
+        // a tab in the background may not have decoded it yet.
+        const box = el.getBoundingClientRect();
+        const big = (el.naturalWidth >= 200 && el.naturalHeight >= 200) || (box.width >= 120 && box.height >= 120);
+        if (!big || working(el)) return;
+        const key = src.startsWith('data:') ? src.slice(0, 200) : src;
+        if (!srcs.includes(key)) srcs.push(key);
+      });
+      // Tiles Flow is still working on: a percent ("45%") on its own.
+      const busy = [...document.querySelectorAll('div, span')].filter((d) => {
+        if (!/^\s*\d{1,3}\s*%\s*$/.test(d.textContent || '')) return false;
+        const r = d.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && !d.querySelector('div, span');
+      }).length;
+      return { srcs, url: location.href, working: busy };
+    },
+  });
+  return out?.result || { srcs: [], url: '' };
+}
+
+/** One tile's picture, fetched by the page itself, as a data: URL. */
+async function tileImage(tabId, src) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [src],
+    func: async (want) => {
+      const el = [...document.querySelectorAll('img')].find(
+        (i) => (i.currentSrc || i.src) === want || (i.currentSrc || i.src).startsWith(want));
+      // Since 2026-10-30 17:07 the grid's tiles are small and load "=s512-rw"
+      // previews (382x512 for a 3:4 picture) that never grow. The same link
+      // ending in "=s0" is the picture at full size (896x1200), measured.
+      const full = (u) => u.replace(/=s\d+(-[a-z]+)?(?=\?|$)/, '=s0');
+      try {
+        const res = await fetch(full(el ? (el.currentSrc || el.src) : want), { credentials: 'include' });
+        if (!res.ok) return { error: `HTTP ${res.status}` };
+        const blob = await res.blob();
+        if (!blob.type.startsWith('image/')) return { error: `not a picture: ${blob.type}` };
+        // Its real size, so a preview is not taken for the picture: after a
+        // reload Flow's tiles load through flow.google.com/asb/ links, and a
+        // portrait one there is 286x512 where the picture is 768x1376.
+        const { width, height } = await createImageBitmap(blob).catch(() => ({}));
+        return await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve({ dataUrl: reader.result, width, height });
+          reader.onerror = () => resolve({ error: 'unreadable' });
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        return { error: String(e?.message || e) };
+      }
+    },
+  });
+  return out?.result || { error: 'no answer from the page' };
 }
 
 /**
- * Type a prompt into Flow's composer and press Generate.
+ * Pick `wanted` among the composer's settings -- the model, the shape, the
+ * count, or Image over Video.
  *
- * Says only whether the submit went in. What it produced is read from the
- * project listing afterwards, by the agent -- that call carries no captcha,
- * so it is the half of this that never broke.
+ * Done by the words on screen rather than by Flow's markup, which is minified
+ * and changes. As measured on 2026-10-28: the settings sit behind one button by
+ * the prompt box ("🍌 Nano Banana 2.1 crop_portrait x1", labelled "Settings
+ * trigger"), which opens a panel where the shape, the count and Image/Video are
+ * radios and the model is a dropdown of its own ("Select model family") holding
+ * menu items. So the panel is opened, `wanted` is clicked if it shows, and
+ * otherwise the control in the panel showing one of `family` (every value that
+ * setting can take) is opened and `wanted` picked from it.
+ *
+ * Picked is read off the page: the radio is checked, or the dropdown names it.
+ * The chip by the prompt box is not trusted for it -- it shows the shape only as
+ * an icon name ("crop_9_16"). Answers true, or why not.
  */
-async function uiGenerateImage({ projectId = null, prompt = '' } = {}) {
-  if (!prompt.trim()) return { error: 'EMPTY_PROMPT' };
+async function pickInMenu(target, tabId, ui, wanted, family) {
+  const find = async (mode) => {
+    const [out] = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      args: [mode, wanted, family, ui.menuTriggers, ui.menuOptions],
+      func: (how, want, names, triggerSel, optionSel) => {
+        const box = (el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 ? { left: r.x, top: r.y, w: r.width, h: r.height } : null;
+        };
+        // Icon-only controls carry their words in aria-label or title.
+        const text = (el) => ((el.innerText || el.textContent || '').trim()
+          || el.getAttribute('aria-label') || el.getAttribute('title') || '').replace(/\s+/g, ' ');
+        const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // The name as words of its own: "Nano Banana 2" is not in "Nano Banana
+        // 2.1", and "9:16" is in "crop_9_16 9:16".
+        const named = (t, n) => new RegExp(`(^|[\\s(])${esc(n)}($|[\\s)])`).test(t);
+        if (how === 'trigger') {
+          // A dropdown that shows the current choice. One that opens a menu is
+          // preferred, so the model's own dropdown wins over the chip by the
+          // prompt box, which names the model too.
+          let best = null;
+          for (const el of document.querySelectorAll(triggerSel)) {
+            const t = text(el);
+            if (t.length > 80 || !names.some((n) => named(t, n))) continue;
+            const b = box(el);
+            const rank = el.hasAttribute('aria-haspopup') ? 0 : 1;
+            if (b && (!best || rank < best.rank)) best = { box: b, current: t, already: named(t, want), rank };
+          }
+          return best;
+        }
+        // The option's own words may run on ("🍌 Nano Banana Pro", "crop_9_16
+        // 9:16"); the shortest such text is the option itself rather than a
+        // panel that holds it. Only a radio, menu item or the like: the chip by
+        // the prompt box is a plain button that names the model and the count
+        // too, and clicking it is opening the panel, not picking.
+        let best = null;
+        for (const el of document.querySelectorAll(optionSel)) {
+          const t = text(el);
+          if (!el.hasAttribute('role') || t.length > 60 || !named(t, want)) continue;
+          const b = box(el);
+          if (b && (!best || t.length < best.len)) {
+            best = { box: b, len: t.length, checked: el.getAttribute('aria-checked') };
+          }
+        }
+        // checked: 'true', 'false', or null for an item that keeps no state.
+        return best && { box: best.box, checked: best.checked };
+      },
+    });
+    return out?.result || null;
+  };
+  const close = async () => {
+    await pressKey(target, 'Escape', { keyCode: 27 });
+    await pause(200, 400);
+  };
 
+  // The panel, opened by the button by the prompt box -- unless it is open.
+  let option = await find('option');
+  if (!option) {
+    const settings = await composerSettingsButton(tabId, ui);
+    if (!settings) {
+      const seen = await visibleControls(tabId, ui);
+      return `no settings button by the prompt box; on screen: ${seen.join(' | ')}`;
+    }
+    await humanClick(target, settings);
+    await pause(500, 1000);
+    option = await find('option');
+  }
+
+  if (option) {
+    // Shown in the panel as a choice of its own: a radio.
+    if (option.checked !== 'true') {
+      await humanClick(target, option.box);
+      await pause(300, 700);
+      option = await find('option');
+    }
+    await close();
+    // A menu item that closed its menu, or keeps no state, was picked by the click.
+    return !option || option.checked !== 'false' || `"${wanted}" did not stay selected`;
+  }
+
+  // Behind a dropdown in the panel.
+  const trigger = await find('trigger');
+  if (!trigger) {
+    const seen = await visibleControls(tabId, ui);
+    await close();
+    return `no control showing any of ${family.join(', ')}; on screen: ${seen.join(' | ')}`;
+  }
+  if (trigger.already) {
+    await close();
+    return true;
+  }
+  await humanClick(target, trigger.box);
+  await pause(400, 900);
+  option = await find('option');
+  if (!option) {
+    const seen = await visibleControls(tabId, ui);
+    await close();
+    await close();
+    return `"${wanted}" was not in the menu; on screen: ${seen.join(' | ')}`;
+  }
+  await humanClick(target, option.box);
+  await pause(300, 700);
+  const after = await find('trigger');
+  await close();
+  return after && after.already ? true : `the control still shows "${after?.current || '?'}"`;
+}
+
+/**
+ * Turn Flow's Agent mode off, as a person would: one click on its chip.
+ *
+ * With it on, a prompt goes to Flow's agent, which makes pictures with its own
+ * settings (16:9, two at a time, its own model) and keeps the composer's
+ * hidden; the composer's prompt box goes away while it works. It stays on
+ * across reloads. Answers true, or why not.
+ */
+async function agentModeOff(target, tabId, ui) {
+  const find = async () => {
+    const [out] = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      args: [ui.agentToggle],
+      func: (sel) => {
+        const chips = [...document.querySelectorAll(sel), ...[...document.querySelectorAll('button')]
+          .filter((b) => (b.innerText || '').trim() === 'Agent')];
+        const on = chips.find((el) => el.getAttribute('aria-pressed') === 'true'
+          && el.getBoundingClientRect().width > 0);
+        if (!on) return null;
+        const r = on.getBoundingClientRect();
+        return { left: r.x, top: r.y, w: r.width, h: r.height };
+      },
+    }).catch(() => [{ result: null }]);
+    return out?.result || null;
+  };
+  const chip = await find();
+  if (!chip) return true;
+  await humanClick(target, chip);
+  await pause(500, 1000);
+  return (await find()) ? 'Agent mode stayed on' : true;
+}
+
+/** The words of every control on screen, so a failed pick says what it saw. */
+async function visibleControls(tabId, ui) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [ui.menuOptions],
+    func: (sel) => {
+      const seen = [];
+      for (const el of document.querySelectorAll(sel)) {
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) continue;
+        const t = ((el.innerText || '').trim() || el.getAttribute('aria-label') || '').replace(/\s+/g, ' ').slice(0, 40);
+        if (t && !seen.includes(t)) seen.push(t);
+        if (seen.length >= 40) break;
+      }
+      return seen;
+    },
+  }).catch(() => [{ result: [] }]);
+  return out?.result || [];
+}
+
+/**
+ * The button by the prompt box that opens the generation settings, if any:
+ * one close to the editor whose words or label speak of settings, the model
+ * or the shape, or that shows an output count ("x2").
+ */
+async function composerSettingsButton(tabId, ui) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [ui.editor, ui.menuTriggers],
+    func: (editorSel, triggerSel) => {
+      const editor = document.querySelector(editorSel);
+      if (!editor) return null;
+      let scope = editor;
+      for (let i = 0; i < 6 && scope.parentElement; i++) scope = scope.parentElement;
+      const words = /setting|tune|option|model|aspect|ratio|config|banana|imagen|^\s*x\s*\d|\d\s*x\s*$|×/i;
+      for (const el of scope.querySelectorAll(triggerSel)) {
+        const t = `${el.innerText || ''} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`;
+        if (/start generation|send|submit|attach|upload|add/i.test(t) || !words.test(t)) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width && r.height) return { left: r.x, top: r.y, w: r.width, h: r.height };
+      }
+      return null;
+    },
+  }).catch(() => [{ result: null }]);
+  return out?.result || null;
+}
+
+const MODEL_LABELS = ['Nano Banana Pro', 'Nano Banana 2.1', 'Nano Banana 2 Lite', 'Nano Banana 2', 'Imagen'];
+const VIDEO_MODEL_LABELS = ['Veo 3.1 - Fast', 'Veo 3.1 - Quality', 'Veo 3.1 - Lite', 'Veo 3.1', 'Veo 3', 'Veo 2'];
+const ASPECT_LABELS = ['16:9', '9:16', '1:1', '3:4', '4:3'];
+const KIND_LABELS = ['Image', 'Video'];
+// Video's two ways in, as measured: Frames starts the clip from a picture,
+// Ingredients composes it from up to three.
+const VIDEO_MODE_LABELS = ['Frames', 'Ingredients'];
+/** The clip lengths Flow offers for a video: radios, as measured 2026-10-30. */
+const DURATION_LABELS = ['4s', '6s', '8s', '10s'];
+const COUNT_LABELS = ['x1', 'x2', 'x3', 'x4'];
+
+// ─── References: attaching pictures to the prompt ───────────
+//
+// The agent puts each reference into the project first (an upload that needs
+// no captcha) under a name of its own, so here it is only found in the "+"
+// picker by that name and clicked, the way a person reuses an upload. When the
+// agent could not upload it, the bytes come along and go in through Flow's own
+// file input instead.
+
+/** Where the first visible element matching `sel` is, optionally only one whose words hold `text`. */
+async function boxOf(tabId, sel, { text = '', within = '' } = {}) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [sel, text, within],
+    func: (s, words, scopeSel) => {
+      const scopes = scopeSel ? [...document.querySelectorAll(scopeSel)] : [document];
+      const want = words.toLowerCase();
+      for (const scope of scopes) {
+        for (const el of scope.querySelectorAll(s)) {
+          const r = el.getBoundingClientRect();
+          if (!r.width || !r.height) continue;
+          const t = `${el.innerText || ''} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`.toLowerCase();
+          if (want && !t.includes(want)) continue;
+          return { left: r.x, top: r.y, w: r.width, h: r.height };
+        }
+      }
+      return null;
+    },
+  }).catch(() => [{ result: null }]);
+  return out?.result || null;
+}
+
+async function countOf(tabId, sel) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [sel],
+    func: (s) => document.querySelectorAll(s).length,
+  }).catch(() => [{ result: 0 }]);
+  return out?.result || 0;
+}
+
+/** Wait up to `ms` for `check` to answer something truthy. */
+async function waitUntil(check, ms, every = 250) {
+  const until = Date.now() + ms;
+  for (;;) {
+    const got = await check();
+    if (got || Date.now() > until) return got;
+    await sleep(every);
+  }
+}
+
+/** Empty the prompt box of text and ingredients an earlier prompt left. */
+async function clearComposer(target, tabId, ui) {
+  const clear = await boxOf(tabId, ui.clearPromptButton);
+  if (!clear) return false;
+  await humanClick(target, clear);
+  await pause(300, 700);
+  return true;
+}
+
+/** The picker open, its search box showing. */
+/** Where the Frames-mode button worded exactly `words` is ("Start", "End"). */
+async function frameSlot(tabId, words) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [words.toLowerCase()],
+    func: (want) => {
+      for (const el of document.querySelectorAll('button, [role="button"]')) {
+        if ((el.innerText || '').trim().toLowerCase() !== want) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width && r.height) return { left: r.x, top: r.y, w: r.width, h: r.height };
+      }
+      return null;
+    },
+  }).catch(() => [{ result: null }]);
+  return out?.result || null;
+}
+
+/**
+ * How many pictures the prompt box holds: ingredient chips, and pictures in
+ * the composer itself -- a Frames clip's start frame shows there, not as a chip.
+ */
+async function attachedCount(tabId, ui) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [ui.ingredientChip, ui.editor, ui.assetList],
+    func: (chipSel, editorSel, listSel) => {
+      const chips = document.querySelectorAll(chipSel).length;
+      const editor = document.querySelector(editorSel);
+      let scope = editor;
+      for (let i = 0; scope && i < 8 && scope.parentElement; i++) scope = scope.parentElement;
+      const pictures = scope ? [...scope.querySelectorAll('img')]
+        .filter((img) => !img.closest(chipSel) && !img.closest(listSel) && !img.closest('.cdk-overlay-container')
+          && img.getBoundingClientRect().width > 0).length : 0;
+      return chips + pictures;
+    },
+  }).catch(() => [{ result: 0 }]);
+  return out?.result || 0;
+}
+
+async function openPicker(target, tabId, ui) {
+  if (await boxOf(tabId, ui.assetSearch)) return true;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    // In Frames mode there is no "+": the clip's first frame is its own
+    // button, worded "Start" (measured 2026-10-30).
+    const plus = await boxOf(tabId, ui.addMediaButton) || await frameSlot(tabId, 'Start');
+    if (!plus) return false;
+    await humanClick(target, plus);
+    // A first click can land while another overlay closes and only raise a tooltip.
+    if (await waitUntil(() => boxOf(tabId, ui.assetSearch), 3000)) return true;
+  }
+  return false;
+}
+
+/**
+ * Search the picker for `name`, click the row, and see a chip appear. With
+ * `exact`, only a row whose title is `name` itself counts: a caption Flow wrote
+ * can be the start of another's.
+ */
+async function pickAsset(target, tabId, ui, name, waitMs, exact = false) {
+  const search = await boxOf(tabId, ui.assetSearch);
+  if (!search) return false;
+  await humanClick(target, search);
+  await pause(120, 300);
+  await typePrompt(target, name);
+  const row = await waitUntil(
+    () => (exact ? titledRow(tabId, ui, name) : boxOf(tabId, ui.assetRow, { text: name, within: ui.assetList })),
+    waitMs, 500);
+  if (!row) return false;
+  const chips = await attachedCount(tabId, ui);
+  await humanClick(target, row);
+  return !!(await waitUntil(async () => (await attachedCount(tabId, ui)) > chips, 4000));
+}
+
+/** Where the one picker row titled exactly `title` is; null when none or several. */
+async function titledRow(tabId, ui, title) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [title.trim().toLowerCase(), ui.assetList, ui.assetRow],
+    func: (want, listSel, rowSel) => {
+      const list = document.querySelector(listSel);
+      if (!list) return null;
+      const rows = [...list.querySelectorAll(rowSel)].filter((row) => {
+        const t = (row.querySelector('.asset-title')?.innerText || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        // A long title is cut short on screen, ending in an ellipsis.
+        const cut = t.endsWith('…') ? t.slice(0, -1).trim() : '';
+        return t === want || (cut.length >= 12 && want.length > cut.length && want.startsWith(cut));
+      });
+      if (rows.length !== 1) return null;
+      const r = rows[0].getBoundingClientRect();
+      return r.width && r.height ? { left: r.x, top: r.y, w: r.width, h: r.height } : null;
+    },
+  }).catch(() => [{ result: null }]);
+  return out?.result || null;
+}
+
+/**
+ * Every row of the open "+" picker as the page has it: its words, the
+ * addresses of its pictures, its data attributes and the start of its markup.
+ * The list is scrolled to its end so rows drawn only when seen are read too.
+ */
+async function pickerRows(tabId, ui) {
+  const seen = new Map();
+  for (let i = 0; i < 20; i++) {
+    const [out] = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      args: [ui.assetList, ui.assetRow],
+      func: (listSel, rowSel) => {
+        const list = document.querySelector(listSel);
+        if (!list) return { gone: true, rows: [] };
+        const rows = [...list.querySelectorAll(rowSel)].map((row) => {
+          const data = {};
+          for (const el of [row, ...row.querySelectorAll('*')]) {
+            for (const a of el.attributes) {
+              if (a.name.startsWith('data-') || a.name === 'aria-label' || a.name === 'title' || a.name === 'alt') {
+                data[`${el.tagName.toLowerCase()}.${a.name}`] = a.value.slice(0, 200);
+              }
+            }
+          }
+          const srcs = [...row.querySelectorAll('img, video, source')].map((el) => el.currentSrc || el.src || '');
+          const bg = [row, ...row.querySelectorAll('*')].map((el) => getComputedStyle(el).backgroundImage)
+            .filter((b) => b && b !== 'none');
+          return { text: (row.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 200), srcs, bg, data,
+            html: row.outerHTML.slice(0, 1500) };
+        });
+        const scroller = [list, ...list.querySelectorAll('*')].find((el) => el.scrollHeight > el.clientHeight + 4);
+        const end = !scroller || scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
+        if (scroller && !end) scroller.scrollTop += scroller.clientHeight * 0.8;
+        return { rows, end };
+      },
+    }).catch((e) => [{ result: { gone: true, rows: [], why: String(e?.message || e) } }]);
+    const got = out?.result || { gone: true, rows: [] };
+    for (const r of got.rows) seen.set(r.html, r);
+    if (got.gone || got.end) break;
+    await pause(400, 700);
+  }
+  return [...seen.values()];
+}
+
+/**
+ * A diagnostic: the project's "+" picker as it is now -- every row, then the
+ * rows a search for `search` leaves -- and which rows hold each of `mediaIds`.
+ * With `durations`, also the words of the Video settings (the clip lengths).
+ * Nothing is generated; the picker is closed again.
+ */
+async function uiProbePicker({ projectId = null, search = '', mediaIds = [], durations = false,
+  reload = false, selectors = null } = {}) {
+  if (uiSubmit) return { error: `COMPOSER_BUSY: a submit is at "${uiStepName}"` };
+  const ui = uiSelectors(selectors);
+  holdFlowTab();
+  try {
+    if (!(await queryFlowTabs()).length) {
+      const created = await openTab({ url: projectId ? projectUrl(projectId) : FLOW_HOME, active: false });
+      await waitForTabLoad(created.id, 30000).catch(() => {});
+      await pause(2500, 4500);
+    }
+    await ensureFlowTabOnProject(projectId);
+    const tabs = await queryFlowTabs();
+    const candidate = (projectId && tabs.find((t) => (t.url || '').includes(projectId)))
+      || tabs.find((t) => !t.discarded) || tabs[0];
+    if (!candidate) return { error: 'NO_FLOW_TAB' };
+    const tab = await reviveTabIfNeeded(candidate);
+    if (!tab) return { error: 'FLOW_TAB_DISCARDED' };
+    await chrome.tabs.update(tab.id, { active: true }).catch(() => {});
+    if (reload) {
+      const loaded = waitForTabLoad(tab.id, 30000);
+      await chrome.tabs.reload(tab.id);
+      await loaded.catch(() => {});
+      await pause(2500, 4500);
+    }
+    return await withDebugger(tab.id, async (target) => {
+      const report = { tabUrl: tab.url };
+      if (!(await openPicker(target, tab.id, ui))) return { ...report, error: 'the "+" picker did not open' };
+      await pause(1500, 2000);
+      report.rows = await pickerRows(tab.id, ui);
+      const holding = (rows) => Object.fromEntries(mediaIds.map((id) => [id,
+        rows.map((r, i) => (JSON.stringify(r).toLowerCase().includes(String(id).toLowerCase()) ? i : -1))
+          .filter((i) => i >= 0)]));
+      report.holding = holding(report.rows);
+      if (search) {
+        const box = await boxOf(tab.id, ui.assetSearch);
+        if (box) {
+          await humanClick(target, box);
+          await pause(120, 300);
+          await typePrompt(target, search);
+          await pause(2500, 3000);
+          report.searched = await pickerRows(tab.id, ui);
+          report.searchedHolding = holding(report.searched);
+        }
+      }
+      await pressKey(target, 'Escape', { keyCode: 27 });
+      await pause(300, 600);
+      if (durations) {
+        report.kindVideo = await pickInMenu(target, tab.id, ui, 'Video', KIND_LABELS);
+        const settings = await composerSettingsButton(tab.id, ui);
+        if (settings) {
+          await humanClick(target, settings);
+          await pause(700, 1000);
+          report.videoSettings = await visibleControls(tab.id, ui);
+          const [out] = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            world: 'MAIN',
+            func: () => [...document.querySelectorAll('[role]')]
+              .filter((el) => el.getBoundingClientRect().width > 0)
+              .map((el) => `${el.getAttribute('role')}:${(el.innerText || el.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim().slice(0, 40)}`)
+              .filter((t, i, all) => /\d\s*s\b|sec|second|duration|length/i.test(t) && all.indexOf(t) === i),
+          }).catch(() => [{ result: [] }]);
+          report.durationControls = out?.result || [];
+          await pressKey(target, 'Escape', { keyCode: 27 });
+          await pause(300, 600);
+        }
+        // The composer's controls in Frames mode, where a clip starts from a picture.
+        report.framesMode = await pickInMenu(target, tab.id, ui, 'Frames', VIDEO_MODE_LABELS);
+        await pause(800, 1200);
+        const [btns] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          world: 'MAIN',
+          args: [ui.editor],
+          func: (editorSel) => {
+            const editor = document.querySelector(editorSel);
+            let scope = editor || document.body;
+            for (let i = 0; editor && i < 8 && scope.parentElement; i++) scope = scope.parentElement;
+            return [...scope.querySelectorAll('button, [role="button"], input[type="file"]')]
+              .filter((el) => el.getBoundingClientRect().width > 0 || el.type === 'file')
+              .map((el) => `${el.tagName.toLowerCase()} aria="${el.getAttribute('aria-label') || ''}" text="${(el.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 50)}"`)
+              .slice(0, 60);
+          },
+        }).catch((e) => [{ result: String(e?.message || e) }]);
+        report.framesControls = btns?.result;
+        report.framesPicker = await openPicker(target, tab.id, ui);
+        if (report.framesPicker) {
+          report.framesRows = (await pickerRows(tab.id, ui)).length;
+          await pressKey(target, 'Escape', { keyCode: 27 });
+          await pause(300, 600);
+        }
+        report.kindImage = await pickInMenu(target, tab.id, ui, 'Image', KIND_LABELS);
+      }
+      return report;
+    });
+  } finally {
+    releaseFlowTab();
+  }
+}
+
+/**
+ * Hold the next click on a file input and hand it these bytes instead of
+ * opening the system's file dialog -- which nothing could answer in this
+ * browser. Installed once per page, in the page's own world, where Flow's
+ * file input lives.
+ */
+async function armUpload(tabId, ref) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [ref.dataUrl, ref.name, ref.mime || 'image/jpeg'],
+    func: (dataUrl, filename, mimeType) => {
+      if (!window.__vpsUpload) {
+        const nativeClick = HTMLInputElement.prototype.click;
+        window.__vpsUpload = { file: null };
+        HTMLInputElement.prototype.click = function (...args) {
+          const pending = window.__vpsUpload.file;
+          if (this.type !== 'file' || !pending) return nativeClick.apply(this, args);
+          window.__vpsUpload.file = null;
+          const transfer = new DataTransfer();
+          transfer.items.add(pending);
+          this.files = transfer.files;
+          this.dispatchEvent(new Event('change', { bubbles: true }));
+          return undefined;
+        };
+      }
+      const bytes = atob(String(dataUrl).split(',').pop());
+      const buffer = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) buffer[i] = bytes.charCodeAt(i);
+      window.__vpsUpload.file = new File([buffer], filename, { type: mimeType });
+      return true;
+    },
+  }).catch((e) => [{ result: String(e?.message || e) }]);
+  return out?.result === true || out?.result;
+}
+
+/**
+ * Attach one reference to the prompt box. `ref` is { name } for a picture
+ * already in the project, with { dataUrl, mime } when it has to be uploaded
+ * here. Answers true, or why not.
+ */
+async function attachReference(target, tabId, ui, ref) {
+  if (!(await openPicker(target, tabId, ui))) return 'the "+" picker did not open';
+  if (ref.inProject) {
+    // Made in this project: picked by the title Flow shows it under, never
+    // uploaded again. Not there: the agent uploads it and asks again.
+    const picked = await pickAsset(target, tabId, ui, ref.name, 8000, true);
+    if (await boxOf(tabId, ui.assetSearch)) await pressKey(target, 'Escape', { keyCode: 27 });
+    return picked || `MEDIA_NOT_FOUND: "${ref.name}" is not in the "+" picker`;
+  }
+  if (await pickAsset(target, tabId, ui, ref.name, 8000)) {
+    if (await boxOf(tabId, ui.assetSearch)) await pressKey(target, 'Escape', { keyCode: 27 });
+    return true;
+  }
+  if (!ref.dataUrl) {
+    await pressKey(target, 'Escape', { keyCode: 27 });
+    return `"${ref.name}" is not in the project's media`;
+  }
+  const armed = await armUpload(tabId, ref);
+  if (armed !== true) return `could not prepare the upload: ${armed}`;
+  const upload = await boxOf(tabId, '[role="button"], button, [role="menuitem"]', { text: ui.uploadWords });
+  if (!upload) return 'no "Upload media" in the picker';
+  const chips = await attachedCount(tabId, ui);
+  await humanClick(target, upload);
+  // Flow attaches a fresh upload itself, or lists it once it has gone up.
+  const done = await waitUntil(async () => {
+    if ((await attachedCount(tabId, ui)) > chips) return true;
+    return !!(await boxOf(tabId, ui.assetRow, { text: ref.name, within: ui.assetList }));
+  }, 180_000, 1000);
+  if (!done) return `"${ref.name}" did not finish uploading`;
+  const attached = (await attachedCount(tabId, ui)) > chips
+    || (await pickAsset(target, tabId, ui, ref.name, 5000));
+  if (await boxOf(tabId, ui.assetSearch)) await pressKey(target, 'Escape', { keyCode: 27 });
+  return attached || `"${ref.name}" uploaded but would not attach`;
+}
+
+// ─── Tiles: which results are whose ─────────────────────────
+//
+// A submit adds placeholder tiles to the grid at once, and the element stays
+// from the percent to the finished picture or clip. So the tiles that were not
+// there before a submit are that prompt's, and are marked with its job: the
+// result is then read off its own tiles, never guessed from the project, and
+// two prompts can render at the same time without taking each other's.
+
+/** Mark every tile now on the page as seen. Answers how many there are. */
+async function markTilesSeen(tabId, ui) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [ui.tile],
+    func: (sel) => {
+      const tiles = [...document.querySelectorAll(sel)];
+      tiles.forEach((t) => t.setAttribute('data-vps-seen', '1'));
+      return tiles.length;
+    },
+  }).catch(() => [{ result: -1 }]);
+  return out?.result ?? -1;
+}
+
+/** Give the tiles that appeared since markTilesSeen to `jobId`. Answers how many. */
+async function claimNewTiles(tabId, ui, jobId) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [ui.tile, jobId],
+    func: (sel, job) => {
+      // Still working, too: a finished tile Flow re-rendered is new to the
+      // page but not this prompt's; a new one starts as a placeholder -- a
+      // percent, a queue note, or nothing in it yet (a clip's may show its
+      // start frame while it works).
+      const working = (t) => [...t.querySelectorAll('div, span')].some((d) => !d.childElementCount
+        && /^\s*\d{1,3}\s*%\s*$|queue|waiting|starting/i.test(d.textContent || ''));
+      const filled = (t) => [...t.querySelectorAll('img, video')].some((m) => (m.currentSrc || m.src)
+        && m.getBoundingClientRect().width >= 120);
+      const fresh = [...document.querySelectorAll(sel)].filter((t) => !t.hasAttribute('data-vps-seen')
+        && (working(t) || !filled(t)));
+      fresh.forEach((t) => {
+        t.setAttribute('data-vps-seen', '1');
+        t.setAttribute('data-vps-job', job);
+      });
+      return fresh.length;
+    },
+  }).catch(() => [{ result: 0 }]);
+  return out?.result || 0;
+}
+
+/**
+ * The state of `jobId`'s tiles: per tile, its percent, the picture or clip
+ * once there, every id-shaped string the tile carries (its media id), and any
+ * failure words it shows.
+ */
+async function jobTiles(tabId, ui, jobId) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [ui.tile, ui.tileVideo, ui.tileImage, ui.errorWords, jobId],
+    func: (sel, videoSel, imageSel, words, job) => {
+      const errorRe = new RegExp(words, 'i');
+      const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+      return [...document.querySelectorAll(sel)]
+        .filter((t) => t.getAttribute('data-vps-job') === job)
+        .map((tile) => {
+          const video = [...tile.querySelectorAll(videoSel)].find((v) => v.currentSrc || v.src);
+          const image = [...tile.querySelectorAll(imageSel)].find((i) => i.currentSrc || i.src);
+          const pct = [...tile.querySelectorAll('div, span')].find(
+            (d) => !d.childElementCount && /^\s*\d{1,3}\s*%\s*$/.test(d.textContent || ''));
+          const text = (tile.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 300);
+          const ids = new Set();
+          for (const el of [tile, ...tile.querySelectorAll('*')]) {
+            for (const a of el.attributes) {
+              for (const m of a.value.match(uuidRe) || []) ids.add(m.toLowerCase());
+            }
+          }
+          // A clip's tile shows a still until its <video> loads; the still
+          // says the clip is there, and its media id is in the tile.
+          const clip = tile.querySelector('flow-video-tile');
+          const still = clip && [...clip.querySelectorAll('img')].find((i) => i.currentSrc || i.src);
+          return {
+            percent: pct ? parseInt(pct.textContent, 10) : null,
+            clip: !!clip,
+            still: still ? (still.currentSrc || still.src) : null,
+            video: video ? (video.currentSrc || video.src) : null,
+            poster: video ? video.poster || null : null,
+            image: image ? (image.currentSrc || image.src) : null,
+            error: !video && !image && !still && errorRe.test(text) ? text : null,
+            queued: !pct && /queue|waiting|starting/i.test(text),
+            ids: [...ids],
+          };
+        });
+    },
+  }).catch(() => [{ result: null }]);
+  return out?.result;
+}
+
+/**
+ * Type `prompt` into the composer as keyboard input.
+ *
+ * Select-all and then one insertText through the debugger: the browser's own
+ * input path, so ProseMirror sees the change it would see from a person and
+ * the Generate button enables. Whatever an earlier attempt left in the box is
+ * replaced, not appended to.
+ */
+async function typePrompt(target, prompt) {
+  const mac = /Mac/.test(navigator.platform);
+  await pressKey(target, 'a', { code: 'KeyA', keyCode: 65, modifiers: mac ? 4 : 2, commands: ['selectAll'] });
+  await pause(80, 200);
+  await chrome.debugger.sendCommand(target, 'Input.insertText', { text: prompt });
+}
+
+/**
+ * Pick the model and shape, type a prompt into Flow's composer, and submit.
+ *
+ * Says whether the submit went in, what could be picked, and which error
+ * messages the page was already showing -- so the agent, watching for the
+ * result, does not take an old message for this attempt's. What it produced is
+ * read from the project listing afterwards, by the agent.
+ *
+ * Paced like a person: a pause before the prompt box and another before
+ * submitting, and the submit is the Enter key most times and the button the
+ * rest. A page with no composer -- left on the project list, or stuck -- is
+ * reloaded once before giving up.
+ */
+/*
+ * One submit at a time, each one bounded. The agent stops waiting for an
+ * answer at 240s and tries again; without this the second try started while
+ * the first was still clicking in the same tab, and a step that never
+ * returned (a frozen tab, a page that never loaded) held the composer for
+ * good. Each step is reported to the agent's log as it starts, so a submit
+ * that hangs says where.
+ */
+const UI_SUBMIT_LIMIT_MS = 200_000;
+let uiSubmit = null; // { done: Promise, since: ms }
+let uiStepName = '';
+
+function uiStep(name) {
+  uiStepName = name;
+  sendToAgent({ type: 'ui_step', step: name });
+}
+
+/** How long one submit may take: more for each reference, most for one uploaded here. */
+function submitLimitMs(params) {
+  const refs = Array.isArray(params?.references) ? params.references : [];
+  return UI_SUBMIT_LIMIT_MS + refs.reduce((ms, r) => ms + (r?.dataUrl ? 200_000 : 40_000), 0);
+}
+
+async function uiGenerateOnce(params) {
+  const limitMs = submitLimitMs(params);
+  if (uiSubmit && Date.now() - uiSubmit.since < uiSubmit.limitMs + 60_000) {
+    return { error: `COMPOSER_BUSY: the previous submit is still at "${uiStepName}"` };
+  }
+  holdFlowTab();
+  const work = uiGenerateImage(params).catch((e) => ({ error: `UI_ERROR at "${uiStepName}": ${e?.message || e}` }));
+  const mine = { done: work, since: Date.now(), limitMs };
+  uiSubmit = mine;
+  work.finally(() => {
+    if (uiSubmit === mine) uiSubmit = null;
+    releaseFlowTab();
+  });
+  let timer;
+  const limit = new Promise((resolve) => {
+    timer = setTimeout(() => resolve({ error: `COMPOSER_STUCK at "${uiStepName}" after ${limitMs / 1000}s` }), limitMs);
+  });
+  try {
+    return await Promise.race([work, limit]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * `kind` is 'image' or 'video'; a video starts from its references as Frames
+ * (one picture, its first frame) or Ingredients (up to three). `references`
+ * are attached before the prompt is typed. With a `jobId`, the tiles the
+ * submit adds are marked as that job's and `tiles` says how many; the agent
+ * then reads the result off them (uiJobTiles). `reloadFirst` reloads the tab
+ * before anything, after the agent saw a submit fail without a word.
+ */
+async function uiGenerateImage({
+  projectId = null, prompt = '', model = null, aspect = null, selectors = null,
+  kind = 'image', videoMode = null, references = [], jobId = null, reloadFirst = false, seconds = null,
+} = {}) {
+  if (!prompt.trim()) return { error: 'EMPTY_PROMPT' };
+  // One line: a new line typed into the box is a paragraph (or a submit) and
+  // the box then held only the first line of a clip's labelled prompt.
+  prompt = prompt.replace(/\s*\n\s*/g, ' ').trim();
+  const ui = uiSelectors(selectors);
+  const video = kind === 'video';
+
+  // The tab is closed between runs to save CPU, so the first job after a
+  // quiet spell opens it again -- on the job's project, as a person would.
+  uiStep('opening the Flow tab');
+  if (!(await queryFlowTabs()).length) {
+    const created = await openTab({ url: projectId ? projectUrl(projectId) : FLOW_HOME, active: false });
+    await waitForTabLoad(created.id, 30000).catch(() => {});
+    await pause(2500, 4500);
+  }
+  uiStep('moving the tab to the project');
   await ensureFlowTabOnProject(projectId);
   const tabs = await queryFlowTabs();
-  const candidate = tabs.find((t) => !t.discarded) || tabs[0];
+  // The tab that was just moved to this job's project: with two Flow tabs
+  // open, taking any live one typed one website's prompt into another's project.
+  const candidate = (projectId && tabs.find((t) => (t.url || '').includes(projectId)))
+    || tabs.find((t) => !t.discarded) || tabs[0];
   if (!candidate) return { error: 'NO_FLOW_TAB' };
   const tab = await reviveTabIfNeeded(candidate);
   if (!tab) return { error: 'FLOW_TAB_DISCARDED' };
+  composerTabId = tab.id;
+  // In front, as a person's tab is: a tab left behind can be frozen by the
+  // browser, and every step on its page then waits for ever.
+  uiStep('bringing the tab to the front');
+  await chrome.tabs.update(tab.id, { active: true }).catch(() => {});
+  if (tab.windowId) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+  if (reloadFirst) {
+    // The last submit's tiles all went blank with no message from Flow; a
+    // fresh page is what clears that, as it would for a person.
+    uiStep('reloading the tab after a silent failure');
+    const loaded = waitForTabLoad(tab.id, 30000);
+    await chrome.tabs.reload(tab.id);
+    await loaded.catch(() => {});
+    await pause(2500, 4500);
+  }
+  uiStep('finding the prompt box');
 
-  // The composer only exists on a project page. A tab that landed on the
-  // project list or Flow's 404 has none, and clicking where it would be
-  // clicks the page behind it.
-  let box = await composerBox(tab.id);
-  if (!box || !box.editor) return { error: 'NO_COMPOSER: the tab is not on a project page' };
+  let box = await composerBox(tab.id, ui);
+  if (!box || !box.editor) {
+    const loaded = waitForTabLoad(tab.id, 30000);
+    await chrome.tabs.reload(tab.id);
+    await loaded.catch(() => {});
+    await pause(2000, 4000);
+    box = await composerBox(tab.id, ui);
+    if (!box || !box.editor) return { error: 'NO_COMPOSER: the tab is not on a project page' };
+  }
+  const before = await pageErrorCounts(tab.id, ui);
+  const imagesBefore = (await pageImages(tab.id).catch(() => [])).map(mediaIdOf);
+  const tilesBefore = (await pageTiles(tab.id).catch(() => ({ srcs: [] }))).srcs;
+  const sent = async (picked, submittedAt) => {
+    // Placeholders show at once; the ones that were not there before are this
+    // prompt's. None after a while: Flow's grid changed, and the agent falls
+    // back to reading the project for what is new.
+    let tiles = 0;
+    if (jobId) {
+      uiStep('marking this prompt\'s tiles');
+      await waitUntil(async () => {
+        tiles += await claimNewTiles(tab.id, ui, jobId);
+        return tiles > 0;
+      }, 20000, 500);
+    }
+    return {
+      ok: true, submitted: true, picked, pageErrors: Object.keys(before), pageErrorCounts: before,
+      pageImages: imagesBefore, pageTiles: tilesBefore, tabUrl: tab.url, tiles,
+      // On this worker's clock, which is the one answeredCodes are stamped with.
+      submittedAt, now: Date.now() };
+  };
 
   return withDebugger(tab.id, async (target) => {
+    const picked = {};
+    uiStep('turning Agent mode off');
+    picked.agentOff = await agentModeOff(target, tab.id, ui);
+    // One result per prompt: x2 spends twice for a second one nobody takes.
+    uiStep(video ? 'picking a clip, one per prompt' : 'picking a picture, one per prompt');
+    picked.kind = await pickInMenu(target, tab.id, ui, video ? 'Video' : 'Image', KIND_LABELS);
+    if (video) {
+      const mode = videoMode || (references.length === 1 ? 'Frames' : 'Ingredients');
+      picked.videoMode = await pickInMenu(target, tab.id, ui, mode, VIDEO_MODE_LABELS);
+      if (seconds) {
+        uiStep(`picking a ${seconds}s clip`);
+        picked.seconds = await pickInMenu(target, tab.id, ui, `${seconds}s`, DURATION_LABELS);
+      }
+    }
+    picked.count = await pickInMenu(target, tab.id, ui, 'x1', COUNT_LABELS);
+    uiStep('picking the model');
+    if (model) {
+      const family = video ? VIDEO_MODEL_LABELS : MODEL_LABELS;
+      picked.model = await pickInMenu(target, tab.id, ui, model,
+        family.includes(model) ? family : [model, ...family]);
+    }
+    uiStep('picking the shape');
+    if (aspect) picked.aspect = await pickInMenu(target, tab.id, ui, aspect, ASPECT_LABELS);
+
+    // What the last prompt left in the box -- its ingredients above all --
+    // would ride along with this one.
+    uiStep('clearing the prompt box');
+    picked.cleared = await clearComposer(target, tab.id, ui);
+    for (let i = 0; i < references.length; i++) {
+      uiStep(`attaching reference ${i + 1} of ${references.length}`);
+      picked[`reference${i + 1}`] = await attachReference(target, tab.id, ui, references[i]);
+      await pause(400, 1200);
+    }
+    // A picture sent by its media id and not found: the agent uploads it and
+    // asks again, so nothing is submitted without it.
+    const missing = references.map((_, i) => picked[`reference${i + 1}`])
+      .find((r) => typeof r === 'string' && r.startsWith('MEDIA_NOT_FOUND'));
+    if (missing) {
+      await clearComposer(target, tab.id, ui);
+      return { error: missing };
+    }
+    // Every reference or none: a scene made without one of its pictures is
+    // not the scene asked for, and nothing has been spent yet.
+    const notAttached = references.map((_, i) => picked[`reference${i + 1}`]).find((r) => r !== true);
+    if (references.length && notAttached !== undefined) {
+      await clearComposer(target, tab.id, ui);
+      return { error: `REFERENCES_NOT_ATTACHED: ${notAttached}` };
+    }
+
     // Focus by clicking it, not by calling focus(): ProseMirror places the
     // caret from the pointer event, and text inserted without a caret goes
     // nowhere.
-    await trustedClick(target, box.editor.x, box.editor.y);
-    const typed = await typePrompt(tab.id, prompt);
-    if (typed.error) return typed;
-    if (typed.text !== prompt.trim()) {
-      return { error: `COMPOSER_REJECTED_PROMPT: it holds ${JSON.stringify((typed.text || '').slice(0, 80))}` };
+    await pause(1000, 3500);
+    box = await composerBox(tab.id, ui);
+    if (!box?.editor) return { error: 'NO_COMPOSER: it went away while picking settings' };
+    uiStep('typing the prompt');
+    await humanClick(target, box.editor);
+    await pause(150, 400);
+    await typePrompt(target, prompt);
+
+    box = await composerBox(tab.id, ui);
+    if ((box?.text || '') !== prompt.trim()) {
+      return { error: `COMPOSER_REJECTED_PROMPT: it holds ${JSON.stringify((box?.text || '').slice(0, 80))}` };
     }
 
     // The button enables on the editor's own change event, which lands a
     // frame or two after the insert.
-    for (let i = 0; i < 20; i++) {
-      box = await composerBox(tab.id);
-      if (box?.ready) break;
+    for (let i = 0; i < 20 && !box?.ready; i++) {
       await sleep(100);
+      box = await composerBox(tab.id, ui);
     }
     if (!box?.ready) return { error: 'GENERATE_DISABLED: the composer did not accept the prompt' };
 
-    await trustedClick(target, box.button.x, box.button.y);
-
-    // Submitted is the composer going empty again. Without this a caller can
-    // start polling the listing before Flow has sent anything.
-    for (let i = 0; i < 30; i++) {
-      await sleep(200);
-      const after = await composerBox(tab.id);
-      if (after && after.text === '') return { ok: true, submitted: true };
+    uiStep('submitting');
+    if (jobId) await markTilesSeen(tab.id, ui);
+    await pause(800, 3000);
+    // Submitted is the composer going empty again, or -- when Flow keeps the
+    // prompt ("Clear prompt on submit" off) or hides the box while it works --
+    // a Stop button where Generate was, or one more tile showing a percent.
+    // Clicking again on any of those would stop the picture or make a second.
+    const workingBefore = box.working || 0;
+    const submittedAt = Date.now();
+    const cleared = async (tries) => {
+      for (let i = 0; i < tries; i++) {
+        await sleep(200);
+        const after = await composerBox(tab.id, ui);
+        if (after && (after.text === '' || after.stop || after.working > workingBefore)) return true;
+      }
+      return false;
+    };
+    // Enter first most times; if Enter only made a new line, the button.
+    if (Math.random() < 0.8) {
+      await pressKey(target, 'Enter', { keyCode: 13, text: '\r' });
+      if (await cleared(10)) return await sent(picked, submittedAt);
+      box = await composerBox(tab.id, ui);
+      if (box?.text && box.text !== prompt.trim()) {
+        await typePrompt(target, prompt); // undo the new line Enter made
+        box = await composerBox(tab.id, ui);
+      }
     }
+    if (!box?.button) return { error: 'SUBMIT_NOT_ACCEPTED: no Generate button' };
+    await humanClick(target, box.button);
+    if (await cleared(30)) return await sent(picked, submittedAt);
     return { error: 'SUBMIT_NOT_ACCEPTED: the prompt is still in the composer' };
   });
+}
+
+/** Pictures showing on the Flow page now. */
+/** The tab the last picture was typed into, so its result is read there. */
+let composerTabId = null;
+async function composerTab() {
+  const tabs = await queryFlowTabs();
+  return tabs.find((t) => t.id === composerTabId) || tabs.find((t) => !t.discarded);
+}
+
+/**
+ * A read of the page that cannot wait for ever. The browser freezes a tab it
+ * is not showing, and a script sent into a frozen tab never comes back: every
+ * read while the picture was being made hung on it. So the tab is put in front
+ * first, and a read that still does not answer brings it forward again and is
+ * tried once more.
+ */
+const READ_LIMIT_MS = 10000;
+async function awake(tab) {
+  if (!tab.active || tab.frozen) await chrome.tabs.update(tab.id, { active: true }).catch(() => {});
+}
+async function readAwake(tab, read, fallback) {
+  const once = () => Promise.race([
+    read().catch(() => fallback),
+    sleep(READ_LIMIT_MS).then(() => 'TIMED_OUT'),
+  ]);
+  await awake(tab);
+  let out = await once();
+  if (out === 'TIMED_OUT') {
+    await chrome.tabs.update(tab.id, { active: true }).catch(() => {});
+    if (tab.windowId) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+    out = await once();
+  }
+  return out === 'TIMED_OUT' ? fallback : out;
+}
+
+async function uiPageImages() {
+  const tab = await composerTab();
+  if (!tab) return { images: [], tiles: [], tabUrl: null, codes: answeredCodes.slice(-20), now: Date.now() };
+  const tiles = await readAwake(tab, () => pageTiles(tab.id), { srcs: [], url: tab.url });
+  return {
+    images: await readAwake(tab, () => pageImages(tab.id), []),
+    tiles: tiles.srcs,
+    tabUrl: tiles.url,
+    working: tiles.working || 0,
+    network: networkSeen.slice(-8).map(({ url, status, found }) => ({ url, status, found })),
+    answered: answeredImages.length,
+    codes: answeredCodes.slice(-20),
+    now: Date.now(),
+  };
+}
+
+/** The picture of one tile on the Flow page, as a data: URL. */
+async function uiTileImage({ src = '' } = {}) {
+  const tab = await composerTab();
+  if (!tab) return { error: 'NO_FLOW_TAB' };
+  const inPage = await tileImage(tab.id, src).catch((e) => ({ error: String(e?.message || e) }));
+  if (inPage.dataUrl || !/^https:/.test(src)) return inPage;
+  // A picture on another host can refuse the page's fetch (no CORS); this
+  // worker holds the host permission and the same cookies, so it can read it.
+  try {
+    const res = await fetch(src, { credentials: 'include' });
+    if (!res.ok) return { error: `${inPage.error}; worker HTTP ${res.status}` };
+    const blob = await res.blob();
+    if (!blob.type.startsWith('image/')) return { error: `not a picture: ${blob.type}` };
+    const { width, height } = await createImageBitmap(blob).catch(() => ({}));
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return { dataUrl: `data:${blob.type};base64,${btoa(bin)}`, width, height };
+  } catch (e) {
+    return { error: `${inPage.error}; worker: ${e?.message || e}` };
+  }
+}
+
+/**
+ * A job's tiles as they are now. `found: false` when none carry its mark any
+ * more -- a reload, or Flow drawing its grid anew -- so the agent knows to look
+ * for the result another way.
+ */
+async function uiJobTiles({ jobId = '', selectors = null } = {}) {
+  const tab = await composerTab();
+  if (!tab) return { error: 'NO_FLOW_TAB' };
+  const ui = uiSelectors(selectors);
+  const tiles = await readAwake(tab, () => jobTiles(tab.id, ui, jobId), null);
+  if (!Array.isArray(tiles)) return { error: 'the page did not answer' };
+  return { found: tiles.length > 0, tiles, codes: answeredCodes.slice(-20), now: Date.now() };
+}
+
+/** Error messages on the Flow page now, less the ones in `ignore`. */
+async function uiPageErrors({ ignore = [], before = null, selectors = null } = {}) {
+  const tab = await composerTab();
+  if (!tab) return { errors: [] };
+  const counts = await readAwake(tab, () => pageErrorCounts(tab.id, uiSelectors(selectors)), {});
+  // With the counts from before the submit, a message is new when more tiles
+  // show it than did then -- the same words on a new failed tile count.
+  if (before && typeof before === 'object') {
+    return { errors: Object.keys(counts).filter((e) => counts[e] > (before[e] || 0)), counts };
+  }
+  return { errors: Object.keys(counts).filter((e) => !ignore.includes(e)), counts };
 }
 
 async function handleBatchRpc(msg) {

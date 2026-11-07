@@ -65,13 +65,6 @@ class GeminiJob:
 
 
 class GeminiQueue:
-    #: How this queue names itself in logs and errors. The Flow Batch bridge
-    #: (agent/flowbatch.py) is the same queue with a different extension on the
-    #: other end, and says so.
-    tag = "gemini"
-    page = "the Gemini page"
-    answerer = "Gemini"
-
     def __init__(self) -> None:
         self.jobs: dict[str, GeminiJob] = {}
         self._order: deque[str] = deque()
@@ -90,7 +83,7 @@ class GeminiQueue:
         self.jobs[job.id] = job
         self._order.append(job.id)
         self._wakeup.set()
-        logger.info("%s: prompt %s queued (%d chars, %d file(s))", self.tag, job.id[:8], len(payload.get("prompt", "")), len(payload.get("files", [])))
+        logger.info("gemini: prompt %s queued (%d chars, %d file(s))", job.id[:8], len(payload.get("prompt", "")), len(payload.get("files", [])))
         return job
 
     def get(self, job_id: str) -> Optional[GeminiJob]:
@@ -150,9 +143,9 @@ class GeminiQueue:
             job.status, job.result = DONE, result or {}
             self.last_success_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
             self.last_error = None
-            logger.info("%s: prompt %s answered", self.tag, job.id[:8])
+            logger.info("gemini: prompt %s answered", job.id[:8])
         else:
-            self._fail(job, error or f"{self.page} reported an error without saying why")
+            self._fail(job, error or "the Gemini page reported an error without saying why")
         self._close(job)
         return True
 
@@ -161,7 +154,7 @@ class GeminiQueue:
     def _fail(self, job: GeminiJob, error: str) -> None:
         job.status, job.error = FAILED, error[:500]
         self.last_error = job.error
-        logger.warning("%s: prompt %s failed: %s", self.tag, job.id[:8], job.error)
+        logger.warning("gemini: prompt %s failed: %s", job.id[:8], job.error)
 
     def _close(self, job: GeminiJob) -> None:
         job.finished_at = time.monotonic()
@@ -174,14 +167,14 @@ class GeminiQueue:
         now = time.monotonic()
         for job in list(self.jobs.values()):
             if job.status in (QUEUED, RUNNING) and now > job.deadline:
-                self._fail(job, f"TIMEOUT: {self.answerer} did not answer in time")
+                self._fail(job, "TIMEOUT: Gemini did not answer in time")
                 self._close(job)
             elif job.status == RUNNING and now - job.last_beat > LEASE_S:
                 if job.deliveries >= MAX_DELIVERIES:
-                    self._fail(job, f"TIMEOUT: {self.page} never picked the prompt up")
+                    self._fail(job, "TIMEOUT: the Gemini page never picked the prompt up")
                     self._close(job)
                 else:
-                    logger.info("%s: prompt %s was handed out but never confirmed; queued again", self.tag, job.id[:8])
+                    logger.info("gemini: prompt %s was handed out but never confirmed; queued again", job.id[:8])
                     job.status = QUEUED
                     self._order.appendleft(job.id)
                     self._wakeup.set()

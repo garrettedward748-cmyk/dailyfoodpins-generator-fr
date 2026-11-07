@@ -292,8 +292,7 @@ class _NewAccount(BaseModel):
 
 @router.get("/accounts")
 async def accounts_list() -> dict:
-    from agent.flowbatch import get_queue as flowbatch_queue
-    return {**accounts.list_accounts(), "flowbatch_connected": flowbatch_queue().connected()}
+    return accounts.list_accounts()
 
 
 @router.post("/accounts")

@@ -18,11 +18,9 @@ set -euo pipefail
 # Two extensions ship in this image and are packed the same way:
 #   Flow Kit     (EXT_SRC)     makes the pictures in Google Flow
 #   Gemini Chat  (GEMINI_SRC)  answers the platform's Gemini prompts in Gemini's own page
-#   Flow Batch   (FLOWBATCH_SRC) makes images by driving Flow's page, when chosen
 # Each path is overridable so the script can be checked outside a container.
 EXT_SRC=${EXT_SRC:-/app/extension}
 GEMINI_SRC=${GEMINI_SRC:-/app/gemini-extension}
-FLOWBATCH_SRC=${FLOWBATCH_SRC:-/app/flowbatch-extension}
 OUT=${OUT:-/app/ext-dist}
 POLICY_DIR=${POLICY_DIR:-/etc/opt/chrome/policies/managed}
 CHROME_BIN=${CHROME_BIN:-google-chrome}
@@ -74,12 +72,10 @@ print(json.load(open('$src/manifest.json'))['version'])
 
 read -r EXT_ID EXT_VERSION < <(pack "$EXT_SRC" flowkit)
 read -r GEMINI_ID GEMINI_VERSION < <(pack "$GEMINI_SRC" gemini)
-read -r FLOWBATCH_ID FLOWBATCH_VERSION < <(pack "$FLOWBATCH_SRC" flowbatch)
 # A failure inside pack() only ends its own subshell, so check what came back.
-[[ -n "${EXT_ID:-}" && -n "${GEMINI_ID:-}" && -n "${FLOWBATCH_ID:-}" ]] || { echo "ERROR: an extension did not pack"; exit 1; }
+[[ -n "${EXT_ID:-}" && -n "${GEMINI_ID:-}" ]] || { echo "ERROR: an extension did not pack"; exit 1; }
 echo "$EXT_ID" > "$OUT/extension_id"
 echo "$GEMINI_ID" > "$OUT/gemini_extension_id"
-echo "$FLOWBATCH_ID" > "$OUT/flowbatch_extension_id"
 
 echo "==> Writing update manifest"
 # One manifest names both: Chrome looks up each extension by its appid.
@@ -92,9 +88,6 @@ cat > "$OUT/update.xml" <<XML
   <app appid='${GEMINI_ID}'>
     <updatecheck codebase='http://127.0.0.1:8100/ext/gemini.crx' version='${GEMINI_VERSION}' />
   </app>
-  <app appid='${FLOWBATCH_ID}'>
-    <updatecheck codebase='http://127.0.0.1:8100/ext/flowbatch.crx' version='${FLOWBATCH_VERSION}' />
-  </app>
 </gupdate>
 XML
 
@@ -106,8 +99,7 @@ cat > "$POLICY_DIR/flowkit.json" <<JSON
 {
   "ExtensionInstallForcelist": [
     "${EXT_ID};http://127.0.0.1:8100/ext/update.xml",
-    "${GEMINI_ID};http://127.0.0.1:8100/ext/update.xml",
-    "${FLOWBATCH_ID};http://127.0.0.1:8100/ext/update.xml"
+    "${GEMINI_ID};http://127.0.0.1:8100/ext/update.xml"
   ],
   "ExtensionInstallSources": [
     "http://127.0.0.1:8100/*"
@@ -120,14 +112,10 @@ cat > "$POLICY_DIR/flowkit.json" <<JSON
     "${GEMINI_ID}": {
       "installation_mode": "force_installed",
       "update_url": "http://127.0.0.1:8100/ext/update.xml"
-    },
-    "${FLOWBATCH_ID}": {
-      "installation_mode": "force_installed",
-      "update_url": "http://127.0.0.1:8100/ext/update.xml"
     }
   }
 }
 JSON
 
 rm -rf /tmp/pack-profile /tmp/pub.der
-echo "==> Done: Flow Kit $EXT_ID v$EXT_VERSION, Gemini Chat $GEMINI_ID v$GEMINI_VERSION, Flow Batch $FLOWBATCH_ID v$FLOWBATCH_VERSION"
+echo "==> Done: Flow Kit $EXT_ID v$EXT_VERSION, Gemini Chat $GEMINI_ID v$GEMINI_VERSION"
