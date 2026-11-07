@@ -783,6 +783,74 @@ class FlowClient:
 
         return {"error": f"the composer took the prompt but no image appeared in {poll_seconds:.0f}s"}
 
+    async def flowbatch_run(self, payload: dict, timeout_s: float) -> dict:
+        """Hand one prompt to the Flow Batch extension and wait (agent/flowbatch.py)."""
+        from agent.flowbatch import get_queue
+        return await get_queue().run(payload, timeout_s)
+
+    async def generate_images_flowbatch(self, prompt: str, project_id: str,
+                                        aspect_ratio: str = "9:16", model: str = "",
+                                        images: list[dict] | None = None,
+                                        timeout_s: float = 420,
+                                        poll_seconds: float = 90) -> dict:
+        """Generate by having Flow Batch drive Flow's page, and read the result back.
+
+        Flow Batch sets the model and the shape on the settings chip, attaches
+        the references through Flow's own picker, types the prompt and presses
+        Generate, then waits for the tile to finish -- all as a person would,
+        so nothing here builds a request for Google to judge.
+
+        Which picture is this job's is decided as generate_images_ui decides it:
+        by what the project did not have before. Among the new ones, the one
+        whose id appears in an address Flow Batch saw on its tile wins; that
+        keeps a picture another job landed in between from being taken.
+
+        Answers in the REST shape, like every other path.
+        """
+        before = await self.project_images(project_id)
+        if isinstance(before, dict):
+            return before
+        known = {image.media_id for image in before}
+
+        answer = await self.flowbatch_run({
+            "prompt": prompt,
+            "projectId": project_id,
+            "aspectRatio": aspect_ratio,
+            "model": model,
+            "images": images or [],
+            "timeoutMs": int(timeout_s * 1000),
+        }, timeout_s + 120)
+        if answer.get("error"):
+            return {"error": f"Flow Batch: {answer['error']}"}
+        sources = [str(src) for src in (answer.get("result") or {}).get("sources") or []]
+
+        deadline = time.monotonic() + poll_seconds
+        while True:
+            now = await self.project_images(project_id)
+            if not isinstance(now, dict):
+                fresh = [image for image in now if image.media_id not in known]
+                if fresh:
+                    ours = [image for image in fresh
+                            if any(image.media_id and image.media_id in src for src in sources)]
+                    first = (ours or fresh)[0]
+                    return {
+                        "status": 200,
+                        "data": {
+                            "media": [{
+                                "name": first.media_id,
+                                "image": {"generatedImage": {
+                                    "mediaId": first.media_id,
+                                    "fifeUrl": first.url,
+                                }},
+                            }],
+                        },
+                    }
+            if time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(3)
+
+        return {"error": f"Flow Batch finished the prompt but no new image showed in the project within {poll_seconds:.0f}s"}
+
     async def generate_images_batch(self, prompt: str, project_id: str,
                                     aspect_ratio: str = "IMAGE_ASPECT_RATIO_PORTRAIT",
                                     image_model_name: str | None = None,

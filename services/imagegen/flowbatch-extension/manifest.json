@@ -1,0 +1,66 @@
+{
+  "manifest_version": 3,
+  "name": "Flow Batch",
+  "version": "0.3.0",
+  "description": "Queue prompts on Google Flow: set the model and shape, attach references, wait for each generation, and download the results.",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "downloads",
+    "sidePanel",
+    "debugger",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://flow.google.com/*",
+    "https://labs.google/*",
+    "https://flow-content.google/*",
+    "https://storage.googleapis.com/*",
+    "https://*.googleusercontent.com/*",
+    "http://127.0.0.1:8100/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://flow.google.com/*",
+        "https://labs.google/fx/tools/flow*",
+        "https://labs.google/fx/*/tools/flow*"
+      ],
+      "js": [
+        "content/upload-hook.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://flow.google.com/*",
+        "https://labs.google/fx/tools/flow*",
+        "https://labs.google/fx/*/tools/flow*"
+      ],
+      "js": [
+        "shared/defaults.js",
+        "content/core.js",
+        "content/scan.js",
+        "content/configure.js",
+        "content/media.js",
+        "content/tiles.js",
+        "content/generate.js",
+        "content/download.js",
+        "content/queue.js",
+        "content/main.js"
+      ],
+      "run_at": "document_end"
+    }
+  ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Flow Batch"
+  }
+}

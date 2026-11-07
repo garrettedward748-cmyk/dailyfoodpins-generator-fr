@@ -435,3 +435,58 @@ async def test_an_image_job_without_references_never_uploads(monkeypatch):
     job = await jobs.create("soup", "VERTICAL", "P")
     await processor.WorkerController()._run(job)
     assert (await jobs.get(job["id"]))["status"] == "COMPLETED"
+
+
+# --- The image method (Settings -> Google accounts) ------------------------
+
+def run_with_methods(monkeypatch, methods, flowkit, flowbatch) -> tuple[dict, list]:
+    """One job through _run with both ways stubbed; the row and the ways tried."""
+    tried: list[str] = []
+
+    class FakeClient:
+        connected = True
+
+        async def generate_images(self, **kwargs):
+            tried.append("flowkit")
+            return flowkit
+
+        async def generate_images_flowbatch(self, prompt, project_id, **kwargs):
+            tried.append("flowbatch")
+            return flowbatch
+
+    monkeypatch.setattr(processor, "get_flow_client", lambda: FakeClient())
+    monkeypatch.setattr(processor, "API_COOLDOWN", 0)
+    monkeypatch.setattr(processor, "FLOW_PROJECT_ID", "PROJ-1")
+    monkeypatch.setattr(processor.accounts, "image_methods_in_order", lambda: methods)
+
+    job = asyncio.run(jobs.create("soup"))
+    asyncio.run(processor.WorkerController()._run(job))
+    return asyncio.run(jobs.get(job["id"])), tried
+
+
+def test_flow_batch_alone_makes_the_image(monkeypatch):
+    stored, tried = run_with_methods(monkeypatch, ["flowbatch"], None, ok_response())
+    assert tried == ["flowbatch"]
+    assert stored["status"] == "COMPLETED"
+
+
+def test_a_failed_first_way_hands_the_image_to_the_second(monkeypatch):
+    stored, tried = run_with_methods(
+        monkeypatch, ["flowkit", "flowbatch"], {"error": "PUBLIC_ERROR_UNUSUAL_ACTIVITY"}, ok_response())
+    assert tried == ["flowkit", "flowbatch"]
+    assert stored["status"] == "COMPLETED"
+    assert stored["output_url"] == CDN_URL
+
+
+def test_the_second_way_is_not_tried_when_the_first_worked(monkeypatch):
+    stored, tried = run_with_methods(monkeypatch, ["flowbatch", "flowkit"], None, ok_response())
+    assert tried == ["flowbatch"]
+    assert stored["status"] == "COMPLETED"
+
+
+def test_when_both_ways_fail_the_last_error_is_the_jobs(monkeypatch):
+    stored, tried = run_with_methods(
+        monkeypatch, ["flowkit", "flowbatch"], {"error": "first broke"},
+        {"error": "Flow Batch: Generate stayed disabled"})
+    assert tried == ["flowkit", "flowbatch"]
+    assert "Generate stayed disabled" in (stored["error_message"] or stored.get("last_error") or "")

@@ -58,6 +58,12 @@ ASPECT_RATIOS = {
     "HORIZONTAL": "IMAGE_ASPECT_RATIO_LANDSCAPE",
 }
 
+#: The shape as Flow's settings chip labels it, for the Flow Batch path.
+FLOWBATCH_ASPECTS = {
+    "VERTICAL": "9:16",
+    "HORIZONTAL": "16:9",
+}
+
 VIDEO_ASPECT_RATIOS = {
     "VERTICAL": "VIDEO_ASPECT_RATIO_PORTRAIT",
     "HORIZONTAL": "VIDEO_ASPECT_RATIO_LANDSCAPE",
@@ -306,7 +312,6 @@ class WorkerController:
 
     async def _run_image(self, job: dict) -> None:
         job_id = job["id"]
-        client = get_flow_client()
         # The batch path signs itself inside the Flow tab; REST carries a bearer
         # token sniffed off the page, which Google stopped honouring three days
         # after it stopped honouring the same thing for video. Both answer in the
@@ -319,6 +324,45 @@ class WorkerController:
             aspect_ratio=ASPECT_RATIOS.get(job["orientation"], ASPECT_RATIOS["VERTICAL"]),
         )
 
+        # Which way, or ways, an image is made is chosen on the platform's
+        # Google accounts page (agent/accounts.py, IMAGE_METHODS). With two,
+        # the second runs only when the first came back with an error.
+        methods = accounts.image_methods_in_order()
+        result: dict = {"error": "no image method configured"}
+        for n, method in enumerate(methods):
+            last = n == len(methods) - 1
+            if method == "flowbatch":
+                result = await self._image_via_flowbatch(job, request)
+            else:
+                result = await self._image_via_flowkit(job, job_id, dict(request), fail_job=last)
+                if result is None:
+                    return  # failed and handled already
+            if not is_error(result):
+                break
+            if not last:
+                logger.warning("job %s: %s failed (%s) — trying %s instead",
+                               job_id[:8], method, error_text(result)[:160], methods[n + 1])
+
+        if is_error(result):
+            await self._handle_failure(job, error_text(result))
+            return
+
+        url = extract_output_url(result)
+        if not url:
+            await self._handle_failure(job, f"No image url in response: {str(result)[:300]}")
+            return
+
+        await jobs.complete(job_id, extract_media_id(result), url)
+        accounts.note_success()
+        logger.info("job %s COMPLETED", job_id[:8])
+
+    async def _image_via_flowkit(self, job: dict, job_id: str, request: dict, fail_job: bool = True):
+        """The Flow Kit way: the request is built here and sent from inside the tab.
+
+        None means the job was already failed (a reference that would not
+        upload, with fail_job set); otherwise the answer, error or not.
+        """
+        client = get_flow_client()
         if not IMAGE_USE_BATCH:
             result = await client.generate_images(**request)
         else:
@@ -340,9 +384,11 @@ class WorkerController:
             # is unlimited, so a person picks it there and runs one article.
             # References go up first, so the image can follow them. An image
             # job with none -- every article image -- skips this entirely.
-            ref_media_ids = await self._upload_references_batch(job, request["project_id"])
+            ref_media_ids = await self._upload_references_batch(job, request["project_id"], fail_job=fail_job)
             if ref_media_ids is None:
-                return
+                return None
+            if isinstance(ref_media_ids, dict):
+                return ref_media_ids
             if ref_media_ids:
                 request["ref_media_ids"] = ref_media_ids
 
@@ -362,19 +408,38 @@ class WorkerController:
             else:
                 result = await self._generate_by_model(client, job, job_id, request)
 
-        if is_error(result):
-            await self._handle_failure(job, error_text(result))
-            return
+        return result
 
-        url = extract_output_url(result)
-        if not url:
-            await self._handle_failure(job, f"No image url in response: {str(result)[:300]}")
-            return
+    async def _image_via_flowbatch(self, job: dict, request: dict) -> dict:
+        """The Flow Batch way: the extension drives Flow's page like a person.
 
-        await jobs.complete(job_id, extract_media_id(result), url)
-        accounts.note_success()
-        logger.info("job %s COMPLETED", job_id[:8])
+        References go along as data: Flow Batch uploads them through Flow's own
+        picker. The model is named as the page names it; on Automatic the page
+        is left on whatever it has selected.
+        """
+        try:
+            reference_urls = json.loads(job.get("reference_urls") or "[]")
+        except (TypeError, ValueError):
+            return {"error": "reference_urls is not valid JSON"}
+        images = []
+        for url in reference_urls[:3]:
+            fetched = await self._fetch_reference(url)
+            if "error" in fetched:
+                return {"error": fetched["error"]}
+            name = (url.rsplit("/", 1)[-1].split("?", 1)[0] or "reference.jpg")[:80]
+            images.append({
+                "name": name,
+                "dataUrl": f"data:{fetched['mime']};base64," + base64.b64encode(fetched["bytes"]).decode("ascii"),
+            })
 
+        choice = job.get("image_model") or image_models.AUTO
+        model = "" if choice == image_models.AUTO else (image_models.label(choice) or "")
+        return await get_flow_client().generate_images_flowbatch(
+            request["prompt"], request["project_id"],
+            aspect_ratio=FLOWBATCH_ASPECTS.get(job["orientation"], FLOWBATCH_ASPECTS["VERTICAL"]),
+            model=model,
+            images=images,
+        )
 
     async def _generate_by_model(self, client, job: dict, job_id: str, request: dict) -> dict:
         """The captcha-gated path: walk the models and keep the first Google takes.
@@ -412,16 +477,19 @@ class WorkerController:
             break
         return result
 
-    async def _upload_references_batch(self, job: dict, project_id: str) -> list[str] | None:
+    async def _upload_references_batch(self, job: dict, project_id: str, fail_job: bool = True):
         """Every reference on the job, uploaded into the project; their media ids.
 
-        None means the job was failed here and the caller should stop. The
-        same upload the reel path does, kept apart so an image job with no
-        references never touches it.
+        None means the job was failed here and the caller should stop; with
+        fail_job off the error is returned as {"error": ...} instead, so another
+        image method can be tried. The same upload the reel path does, kept
+        apart so an image job with no references never touches it.
         """
         try:
             reference_urls = json.loads(job.get("reference_urls") or "[]")
         except (TypeError, ValueError):
+            if not fail_job:
+                return {"error": "reference_urls is not valid JSON"}
             await self._handle_failure(job, "reference_urls is not valid JSON")
             return None
         if not reference_urls:
@@ -432,6 +500,8 @@ class WorkerController:
         for url in reference_urls[:3]:
             fetched = await self._fetch_reference(url)
             if "error" in fetched:
+                if not fail_job:
+                    return {"error": fetched["error"]}
                 await self._handle_failure(job, fetched["error"])
                 return None
             uploaded = await client.upload_image_batch(
@@ -441,6 +511,8 @@ class WorkerController:
                 file_name=url.rsplit("/", 1)[-1][:100] or "reference.jpg",
             )
             if uploaded.get("error"):
+                if not fail_job:
+                    return {"error": f"Uploading a reference failed: {uploaded['error']}"}
                 await self._handle_failure(job, f"Uploading a reference failed: {uploaded['error']}")
                 return None
             media_ids.append(uploaded["media_id"])

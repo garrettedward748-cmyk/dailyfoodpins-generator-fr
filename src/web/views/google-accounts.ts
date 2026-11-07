@@ -21,6 +21,39 @@ export interface GoogleAccountView {
   video_reason?: string | null;
 }
 
+/** How images are made: the image service's choice, set from this page. */
+export const IMAGE_METHODS: { value: string; label: string; help: string }[] = [
+  { value: 'flowkit', label: 'Flow Kit (as before)', help: 'Builds Flow\'s request and sends it from inside the tab.' },
+  { value: 'flowbatch', label: 'Flow Batch (drives the page)', help: 'Sets the model and shape, attaches references and presses Generate in Flow, like a person.' },
+  { value: 'flowkit_then_flowbatch', label: 'Flow Kit, then Flow Batch if it fails', help: 'Flow Batch only runs for an image Flow Kit could not make.' },
+  { value: 'flowbatch_then_flowkit', label: 'Flow Batch, then Flow Kit if it fails', help: 'Flow Kit only runs for an image Flow Batch could not make.' },
+];
+
+function imageMethodCard(current: string, connected: boolean | undefined): Html {
+  const chosen = IMAGE_METHODS.find((m) => m.value === current) ?? IMAGE_METHODS[0]!;
+  const usesBatch = chosen.value !== 'flowkit';
+  return html`
+    <form method="post" action="/settings/google/image-method" class="card" style="flex:1 1 320px;max-width:520px;margin:0">
+      <label for="g-method" style="margin-top:0">How images are made</label>
+      <div class="row" style="gap:8px;flex-wrap:nowrap">
+        <select id="g-method" name="image_method" style="flex:1">
+          ${IMAGE_METHODS.map(
+            (m) => html`<option value="${m.value}" ${m.value === chosen.value ? raw('selected') : raw('')}>${m.label}</option>`,
+          )}
+        </select>
+        <button type="submit" class="primary">Save</button>
+      </div>
+      <div class="small muted" style="margin-top:6px">${chosen.help} Applies to article images; reels still use Flow Kit.</div>
+      ${usesBatch && connected === false
+        ? html`<div class="small" style="margin-top:6px;color:var(--danger, #e5484d)">
+            The Flow Batch extension has not checked in from the browser. Redeploy the image service so it is installed, and keep the browser running.
+          </div>`
+        : usesBatch && connected
+          ? html`<div class="small muted" style="margin-top:6px"><span class="badge ok">Flow Batch connected</span></div>`
+          : raw('')}
+    </form>`;
+}
+
 function restEnds(until: number | null): string {
   if (!until) return '';
   const minutes = Math.max(0, Math.round((until * 1000 - Date.now()) / 60_000));
@@ -44,19 +77,26 @@ export function googleAccountsPage(data: {
   login?: { id: number; state: string; message: string; running: boolean } | null;
   /** A saved copy holds accounts the service has lost, e.g. after a restore on a new server. */
   restore?: { count: number } | null;
+  /** How images are made (see IMAGE_METHODS); the service's default when absent. */
+  imageMethod?: string;
+  /** Whether the Flow Batch extension in the browser has polled recently. */
+  flowbatchConnected?: boolean;
 }): Html {
   const many = data.accounts.length > 1;
   const clipCost = data.clipCost ?? 0;
   const blocked = data.accounts.filter((a) => a.video !== false && limitBlocksEveryClip(a, clipCost));
   return html`
     <h1>Google accounts</h1>
-    <p class="subtitle">
-      Images and reels are made in Google Flow with one account at a time. When it runs out of
-      credits, is signed out, or keeps failing, the next account takes over on its own. Only one
-      browser ever runs, so more accounts cost disk space, not speed or memory.
-      Each account uses its own Flow project for every site: a project only works with the
-      account that created it.
-    </p>
+    <div class="row" style="gap:24px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px">
+      <p class="subtitle" style="flex:1 1 360px;max-width:520px;margin:0">
+        Images and reels are made in Google Flow with one account at a time. When it runs out of
+        credits, is signed out, or keeps failing, the next account takes over on its own. Only one
+        browser ever runs, so more accounts cost disk space, not speed or memory.
+        Each account uses its own Flow project for every site: a project only works with the
+        account that created it.
+      </p>
+      ${data.reachable ? imageMethodCard(data.imageMethod ?? 'flowkit', data.flowbatchConnected) : raw('')}
+    </div>
 
     ${!data.reachable
       ? html`<div class="flash error">The image service did not answer${data.error ? `: ${data.error}` : ''}.</div>`

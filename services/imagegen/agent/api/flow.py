@@ -292,7 +292,8 @@ class _NewAccount(BaseModel):
 
 @router.get("/accounts")
 async def accounts_list() -> dict:
-    return accounts.list_accounts()
+    from agent.flowbatch import get_queue as flowbatch_queue
+    return {**accounts.list_accounts(), "flowbatch_connected": flowbatch_queue().connected()}
 
 
 @router.post("/accounts")
@@ -462,6 +463,19 @@ class _ClipCost(BaseModel):
 @router.put("/accounts-clip-cost")
 async def accounts_clip_cost(body: _ClipCost) -> dict:
     accounts.set_clip_cost(body.clip_cost)
+    return accounts.list_accounts()
+
+
+class _ImageMethod(BaseModel):
+    image_method: str = accounts.DEFAULT_IMAGE_METHOD
+
+
+@router.put("/accounts-image-method")
+async def accounts_image_method(body: _ImageMethod) -> dict:
+    try:
+        accounts.set_image_method(body.image_method)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     return accounts.list_accounts()
 
 

@@ -81,6 +81,12 @@ def _by_key(key: str) -> Optional[dict]:
     return None
 
 
+def label(key: str) -> Optional[str]:
+    """A model key's name as Flow's own page shows it ("Nano Banana Pro")."""
+    m = _by_key(key)
+    return m["label"] if m else None
+
+
 def label_of(wire: str) -> str:
     for m in MODELS:
         if m["wire"] == wire:

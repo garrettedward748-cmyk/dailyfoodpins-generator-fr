@@ -23,6 +23,7 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 
 from agent import gemini, watchdog
 from agent.api.ext_host import router as ext_host_router
+from agent.api.flowbatch import extension as flowbatch_extension_router
 from agent.api.flow import router as flow_router
 from agent.api.gemini import extension as gemini_extension_router
 from agent.api.gemini import platform as gemini_router
@@ -129,6 +130,7 @@ app.include_router(flow_router)      # health, API-key gated
 app.include_router(ext_host_router)  # loopback only: Chrome fetches its own CRX
 app.include_router(gemini_router)            # Gemini prompts from the platform, API-key gated
 app.include_router(gemini_extension_router)  # ...and the Gemini Chat extension taking them, loopback only
+app.include_router(flowbatch_extension_router)  # Flow Batch taking image prompts, loopback only
 
 
 @app.post("/api/ext/callback")

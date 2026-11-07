@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flow Batch</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Flow Batch</h1>
+      <span id="tabState" class="pill">checking…</span>
+    </header>
+    <p id="notOnFlow" class="banner" hidden>Open a project on Flow in this window, then reload the tab once.</p>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="queue" aria-selected="true">Queue</button>
+      <button role="tab" data-tab="settings" aria-selected="false">Settings</button>
+      <button role="tab" data-tab="library" aria-selected="false">Library</button>
+      <button role="tab" data-tab="tools" aria-selected="false">Tools</button>
+    </nav>
+
+    <!-- Queue -->
+    <main data-panel="queue">
+      <label for="prompts">Prompts</label>
+      <textarea id="prompts" rows="9" placeholder="One prompt per line. Mention a library image or character by name to attach it inline."></textarea>
+      <div class="row">
+        <label class="inline"><input type="radio" name="split" value="line" checked /> One per line</label>
+        <label class="inline"><input type="radio" name="split" value="blank" /> Blank-line separated</label>
+        <span id="promptCount" class="muted"></span>
+      </div>
+
+      <div class="row">
+        <button id="importCsv">Import CSV / TSV…</button>
+        <input id="csvFile" type="file" accept=".csv,.tsv,.txt" hidden />
+        <span id="importInfo" class="muted"></span>
+        <button id="clearImport" hidden>Clear import</button>
+      </div>
+      <p class="muted">
+        Columns: <code>prompt</code> (required), <code>mode</code>, <code>model</code>, <code>aspect</code>, <code>count</code>,
+        <code>length</code>, <code>quality</code>, <code>images</code> (separate with <code>;</code>), <code>characters</code>, <code>chain</code>.
+        Empty cells use Settings.
+      </p>
+
+      <div class="row">
+        <button id="start" class="primary">Start</button>
+        <button id="stop" disabled>Stop</button>
+      </div>
+
+      <div class="bar"><div id="barFill"></div></div>
+      <p id="summary" class="muted">Idle</p>
+      <ol id="results"></ol>
+    </main>
+
+    <!-- Settings -->
+    <main data-panel="settings" hidden>
+      <h2>Each prompt</h2>
+      <div class="grid">
+        <label>Mode <select id="mode"></select></label>
+        <label>Model <select id="model"></select></label>
+        <label>Aspect ratio <select id="aspectRatio"></select></label>
+        <label>Results per prompt <input id="outputCount" type="number" min="1" max="4" /></label>
+        <label>Clip length (s) <select id="videoLength"></select></label>
+        <label>Download <select id="quality"></select></label>
+      </div>
+      <p class="muted">“Leave as is” skips that control, so the batch uses whatever Flow is already set to.</p>
+
+      <h2>Files</h2>
+      <div class="grid">
+        <label>Folder (inside Downloads) <input id="folder" type="text" placeholder="flow-batch" /></label>
+        <label>Filename prefix <input id="prefix" type="text" placeholder="optional" /></label>
+      </div>
+      <label class="inline"><input id="autoRename" type="checkbox" /> Name files <code>NNN_prompt</code> (otherwise keep Flow’s names)</label>
+
+      <h2>Running</h2>
+      <div class="grid">
+        <label>Prompts rendering at once <input id="maxInFlight" type="number" min="1" max="5" /></label>
+        <label>Retries <input id="retries" type="number" min="0" max="10" /></label>
+        <label>Delay min (s) <input id="delayMin" type="number" min="0" /></label>
+        <label>Delay max (s) <input id="delayMax" type="number" min="0" /></label>
+        <label>Timeout (min) <input id="timeoutMinutes" type="number" min="1" /></label>
+        <label>Max images per prompt <input id="maxImagesPerPrompt" type="number" min="1" max="10" /></label>
+      </div>
+      <label class="inline"><input id="attachAll" type="checkbox" /> Attach every library image to every prompt</label>
+      <label class="inline"><input id="chain" type="checkbox" /> Chain: start each prompt from the previous result’s last frame</label>
+      <label class="inline"><input id="zoomOut" type="checkbox" /> Zoom the tab to 80% while running (shows more tiles)</label>
+    </main>
+
+    <!-- Library -->
+    <main data-panel="library" hidden>
+      <h2>Reference images</h2>
+      <p class="muted">Add pictures once. A prompt that contains an image’s file name (without extension) attaches it and mentions it inline.</p>
+      <div class="row">
+        <button id="addImages">Add images…</button>
+        <input id="imageFiles" type="file" accept="image/*,video/*" multiple hidden />
+      </div>
+      <ul id="library" class="cards"></ul>
+
+      <h2>Characters</h2>
+      <div class="row">
+        <button id="scanCharacters">Scan Flow for characters</button>
+      </div>
+      <p id="characterInfo" class="muted"></p>
+      <div id="characters" class="chips"></div>
+    </main>
+
+    <!-- Tools -->
+    <main data-panel="tools" hidden>
+      <h2>Scan page</h2>
+      <p class="muted">
+        Flow’s markup changes, so most selectors are guesses. Open the settings menu (or hover a finished tile) on Flow, press Scan, and
+        use the output to correct the selector map below.
+      </p>
+      <div class="row">
+        <button id="scanPage">Scan page</button>
+        <button id="copyScan">Copy</button>
+      </div>
+      <textarea id="scanOutput" rows="8" spellcheck="false" readonly></textarea>
+
+      <h2>Selectors</h2>
+      <p class="muted">CSS, <code>text:/regex/i</code> for a button by its label, or <code>contains:/regex/i</code>. <code>{name}</code> is filled in per prompt.</p>
+      <textarea id="selectors" rows="16" spellcheck="false"></textarea>
+      <div class="row">
+        <button id="saveSelectors">Save</button>
+        <button id="testSelectors">Test</button>
+        <button id="resetSelectors">Reset</button>
+      </div>
+      <pre id="testOutput"></pre>
+
+      <h2>Log</h2>
+      <pre id="log"></pre>
+    </main>
+
+    <script src="shared/defaults.js"></script>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

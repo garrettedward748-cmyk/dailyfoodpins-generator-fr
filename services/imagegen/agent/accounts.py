@@ -86,6 +86,12 @@ FAIL_STREAK = int(os.environ.get("ACCOUNT_FAIL_STREAK", "3"))
 # and work goes on until Google itself says the credits are gone.
 DEFAULT_CLIP_COST = 0
 
+#: How images are made (Settings -> Google accounts). Flow Kit builds Flow's
+#: request and sends it from inside the tab; Flow Batch drives Flow's page like
+#: a person. The two "_then_" orders try the second only when the first fails.
+IMAGE_METHODS = ("flowkit", "flowbatch", "flowkit_then_flowbatch", "flowbatch_then_flowkit")
+DEFAULT_IMAGE_METHOD = "flowkit"
+
 
 def _now() -> float:
     return time.time()
@@ -260,6 +266,7 @@ def list_accounts() -> dict:
         "active": data["active"],
         "pending": data.get("pending"),
         "clip_cost": _clip_cost(data),
+        "image_method": _image_method(data),
         "accounts": [
             {**{k: v for k, v in a.items() if k != "spend"},
              "used_today": _used(a, _today_from(a)), "used_month": _used(a, _month_start()),
@@ -610,6 +617,28 @@ def set_limits(account_id: int, daily: Optional[int], monthly: Optional[int]) ->
     if target["status"] == "cooldown" and (target.get("reason") or "").startswith("Reached the credit limit") \
             and _affords(target, _clip_cost(data)):
         target.update(status="ok", until=None, reason=None)
+    _save(data)
+
+
+def _image_method(data: dict) -> str:
+    value = data.get("image_method")
+    return value if value in IMAGE_METHODS else DEFAULT_IMAGE_METHOD
+
+
+def image_method() -> str:
+    return _image_method(_load())
+
+
+def image_methods_in_order() -> list[str]:
+    """The ways to try for an image, first choice first: ["flowkit"], ["flowbatch", "flowkit"], ..."""
+    return image_method().split("_then_")
+
+
+def set_image_method(method: str) -> None:
+    if method not in IMAGE_METHODS:
+        raise ValueError(f"Unknown image method {method!r}.")
+    data = _load()
+    data["image_method"] = method
     _save(data)
 
 

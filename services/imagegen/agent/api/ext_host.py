@@ -61,6 +61,12 @@ async def gemini_crx():
     return _package("gemini.crx")
 
 
+@router.get("/flowbatch.crx")
+async def flowbatch_crx():
+    """The packed Flow Batch extension: the page-driving way of making images."""
+    return _package("flowbatch.crx")
+
+
 FLOW_HOME = "https://flow.google.com/"
 
 
