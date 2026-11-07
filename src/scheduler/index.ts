@@ -17,6 +17,7 @@ import {
   loadGroupLastUsed,
   loadSiteViews,
   pruneDecisions,
+  compactIfBloated,
   pruneEvents,
   blockLink,
   consecutiveFailuresForPair,
@@ -1040,6 +1041,12 @@ export class Scheduler {
     const days = Math.max(1, this.settings.getNumber('retention_days'));
     const removed = pruneDecisions(days) + pruneEvents(days);
     if (removed > 0) log.info(`pruned ${removed} old log rows (retention ${days}d)`);
+    try {
+      const freed = compactIfBloated();
+      if (freed > 0) log.info(`database compacted: ${(freed / 1024 ** 2).toFixed(0)} MB given back to the disk`);
+    } catch (err) {
+      log.warn(`database compaction skipped: ${errorMessage(err)}`);
+    }
   }
 
   stop(): void {
