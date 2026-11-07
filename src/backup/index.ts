@@ -148,7 +148,24 @@ export function pruneBackups(only?: BackupKind, room = 0): void {
   }
 }
 
-/** Make the daily backup when the last one is a day old. */
+/**
+ * Backups are made by hand only (Back up now, and the safety copy before a
+ * restore). The daily automatic backup is gone: a full copy of the platform
+ * every day filled the server disk. Any automatic copies left from before are
+ * removed at start-up. Returns how many went.
+ */
+export function removeAutomaticBackups(): number {
+  let n = 0;
+  for (const b of listBackups()) {
+    if (b.kind !== 'auto') continue;
+    rmSync(join(backupsDir(), b.name), { force: true });
+    n++;
+  }
+  if (n > 0) log.info(`removed ${n} automatic backup(s); backups are now made by hand only`);
+  return n;
+}
+
+/** Make the daily backup when the last one is a day old. No longer scheduled; kept for tests and tools. */
 export async function dailyBackupIfDue(now = Date.now()): Promise<string | null> {
   const last = listBackups().find((b) => b.kind === 'auto');
   if (last && now - last.time < 23 * 3_600_000) return null;

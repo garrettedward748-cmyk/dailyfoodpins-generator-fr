@@ -23,9 +23,8 @@ function schemaPath(): string {
  * ---------------------------------------------------------------------- */
 
 /**
- * How many pre-migration copies to keep before the oldest is removed. Each is a
- * full copy of the database (several GB on a busy instance), and the daily
- * backups already cover anything older, so only the last one stays.
+ * How many pre-migration copies to keep while a migration runs. Each is a full
+ * copy of the database; once the migrations succeed every copy is removed.
  */
 const BACKUPS_KEPT = 1;
 
@@ -63,7 +62,7 @@ function backupBeforeMigrating(db: Db, dbPath: string): string | null {
   }
 }
 
-function pruneBackups(dbPath: string): void {
+function pruneBackups(dbPath: string, keep = BACKUPS_KEPT): void {
   try {
     const directory = dirname(resolve(dbPath));
     const prefix = `${basename(dbPath)}.pre-migration-`;
@@ -76,7 +75,7 @@ function pruneBackups(dbPath: string): void {
       })
       .sort((a, b) => b.at - a.at);
 
-    for (const stale of backups.slice(BACKUPS_KEPT)) {
+    for (const stale of backups.slice(keep)) {
       unlinkSync(stale.full);
       log.debug(`removed old backup ${basename(stale.full)}`);
     }
@@ -129,6 +128,10 @@ export function openDatabase(dbPath: string): Db {
 
     const report = runMigrations(db);
     log.info(`${isNew ? 'initialised' : 'migrated'}: ${report.applied.join(', ')}`);
+
+    // The copy was only for the migration. It worked, so it goes: a full copy
+    // of the database left behind on every update is how the disk filled up.
+    if (!isNew) pruneBackups(dbPath, 0);
   }
 
   log.info(`Database ready at ${dbPath}`);
