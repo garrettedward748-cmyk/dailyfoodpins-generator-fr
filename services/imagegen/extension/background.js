@@ -3145,6 +3145,18 @@ async function uiGenerateImage({
     await loaded.catch(() => {});
     await pause(2500, 4500);
   }
+  uiStep('checking the page language');
+  // The page is driven by its English button names ("Start generation", "Add
+  // ingredients to the prompt box"). A Google account in another language
+  // shows Flow in that language, and every one of them would be missed; said
+  // plainly here rather than as a button that "could not be found".
+  const lang = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: () => document.documentElement.lang || navigator.language || '',
+  }).then((r) => String(r?.[0]?.result || '')).catch(() => '');
+  if (lang && !/^en\b/i.test(lang)) {
+    return { error: `FLOW_NOT_ENGLISH: Flow shows in "${lang}". Set this Google account's language to English (myaccount.google.com/language), then try again` };
+  }
   uiStep('finding the prompt box');
 
   let box = await composerBox(tab.id, ui);
