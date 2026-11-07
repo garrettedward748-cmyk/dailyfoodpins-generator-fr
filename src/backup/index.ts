@@ -24,7 +24,37 @@ const log = createLogger('backup');
  */
 
 export type BackupKind = 'auto' | 'manual' | 'before-restore' | 'uploaded';
-export const KEEP: Record<BackupKind, number> = { auto: 7, manual: 10, 'before-restore': 2, uploaded: 3 };
+/**
+ * How many of each kind are kept. Each backup is a full copy of the database
+ * (often GBs), and many instances share one server disk, so the numbers stay
+ * small. BACKUP_KEEP_AUTO / BACKUP_KEEP_MANUAL in the environment override them.
+ */
+export const KEEP: Record<BackupKind, number> = { auto: 2, manual: 3, 'before-restore': 1, uploaded: 1 };
+
+/** A backup is skipped when the disk would have less than this left. */
+const MIN_FREE_BYTES = 2 * 1024 ** 3;
+
+export function keepFor(kind: BackupKind): number {
+  const env = process.env[`BACKUP_KEEP_${kind.toUpperCase().replace('-', '_')}`];
+  const n = env && /^\d+$/.test(env.trim()) ? Number(env) : NaN;
+  return n >= 1 ? n : KEEP[kind];
+}
+
+/** Refuse to start a backup that would fill the disk: a full disk stops every site on the server. */
+function ensureSpace(): void {
+  let free: number;
+  try {
+    const out = execFileSync('df', ['-Pk', backupsDir()], { encoding: 'utf8' }).trim().split('\n').pop() ?? '';
+    free = Number(out.split(/\s+/)[3]) * 1024;
+  } catch {
+    return;
+  }
+  if (!Number.isFinite(free)) return;
+  const largest = Math.max(0, ...listBackups().map((b) => b.size));
+  if (free - largest * 1.2 < MIN_FREE_BYTES) {
+    throw new Error(`Not enough free disk space for a backup (${(free / 1024 ** 3).toFixed(1)} GB free). Free some space on the server first.`);
+  }
+}
 
 export interface BackupFile {
   name: string;
@@ -77,6 +107,10 @@ const stamp = (d = new Date()): string => d.toISOString().replace(/[-:]/g, '').r
 export async function createBackup(kind: BackupKind = 'manual'): Promise<string> {
   const name = `platform-${stamp()}-${kind}.tar.gz`;
   const final = join(backupsDir(), name);
+  // Make room first (keep one less, the new one fills the gap), so the disk
+  // never holds an extra copy while the new one is being written.
+  pruneBackups(kind, 1);
+  ensureSpace();
   const work = join(backupsDir(), `.work-${process.pid}-${Date.now()}`);
   mkdirSync(work, { recursive: true });
   try {
@@ -104,11 +138,13 @@ export async function createBackup(kind: BackupKind = 'manual'): Promise<string>
   return name;
 }
 
-export function pruneBackups(): void {
+/** Delete the oldest backups beyond the limit; `only` limits it to one kind, `room` keeps that many fewer. */
+export function pruneBackups(only?: BackupKind, room = 0): void {
   const seen: Partial<Record<BackupKind, number>> = {};
   for (const b of listBackups()) {
+    if (only && b.kind !== only) continue;
     seen[b.kind] = (seen[b.kind] ?? 0) + 1;
-    if (seen[b.kind]! > KEEP[b.kind]) rmSync(join(backupsDir(), b.name), { force: true });
+    if (seen[b.kind]! > Math.max(1, keepFor(b.kind) - room)) rmSync(join(backupsDir(), b.name), { force: true });
   }
 }
 
