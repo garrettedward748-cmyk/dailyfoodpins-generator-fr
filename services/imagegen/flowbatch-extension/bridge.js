@@ -13,6 +13,7 @@ const FB_AGENT = 'http://127.0.0.1:8100/ext/flowbatch';
 const FB_FLOW = 'https://flow.google.com/';
 
 let fbPolling = false;
+const fbFresh = new Set(); // tabs this bridge has just (re)loaded
 const fbSleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ─── the Flow tab ─────────────────────────────────────────────
@@ -47,6 +48,7 @@ async function fbProjectTab(projectId) {
     ? await chrome.tabs.update(flow[0].id, { url })
     : await chrome.tabs.create({ url, active: true });
   await fbTabLoaded(tab.id);
+  fbFresh.add(tab.id);
   return chrome.tabs.get(tab.id);
 }
 
@@ -73,6 +75,11 @@ async function fbRun(job) {
   // In front, so the debugger's clicks land on a page that is laid out.
   await chrome.tabs.update(tab.id, { active: true }).catch(() => {});
   const page = await fbReady(tab.id);
+  // A page that has just loaded draws its buttons before it answers them.
+  if (fbFresh.has(tab.id)) {
+    fbFresh.delete(tab.id);
+    await fbSleep(4000);
+  }
   if (!(page.url || '').includes('/project/')) {
     throw new Error('NOT_SIGNED_IN: Flow did not open the project (signed out, or the project belongs to another account)');
   }

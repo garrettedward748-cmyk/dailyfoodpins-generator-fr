@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Flow Batch",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Queue prompts on Google Flow: set the model and shape, attach references, wait for each generation, and download the results.",
   "permissions": [
     "storage",

@@ -61,20 +61,54 @@
     if (model && applied.model === undefined) applied.model = model;
   }
 
-  // The first click can land while another overlay is still closing and only
-  // raise a tooltip. The menu is open once its radios exist; if they do not
-  // appear, click once more (a second click on an open menu would close it).
+  // Any open popover counts as the menu: Flow's menus are popper or dialog
+  // layers. The Image/Video radios are matched by English text, so with Flow
+  // in another language, or after a redesign, the menu can be open with them
+  // unrecognised -- each setting below then warns on its own and the prompt
+  // still goes out, rather than the whole job failing here.
+  const LAYERS = '[role="menu"], [role="dialog"], [role="listbox"], [data-radix-popper-content-wrapper]';
+  const layerOpen = () => [...document.querySelectorAll(LAYERS)].some(C.isVisible);
+
+  // What the page shows a person, short: for an error that has to say why.
+  function describe(s) {
+    const trigger = C.find(s.configButton);
+    const inLayers = [...document.querySelectorAll(LAYERS)]
+      .filter(C.isVisible)
+      .flatMap((layer) => [...layer.querySelectorAll('button, [role="radio"], [role="tab"], [role="menuitem"], [role="option"]')])
+      .filter(C.isVisible)
+      .map((el) => C.labelOf(el).replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+      .slice(0, 15);
+    return [
+      `button: "${trigger ? C.textOf(trigger).replace(/\s+/g, ' ').trim().slice(0, 60) : 'not found'}"`,
+      `page ${window.innerWidth}x${window.innerHeight}`,
+      `zoom ${window.devicePixelRatio}`,
+      document.hasFocus() ? 'focused' : 'not focused',
+      inLayers.length ? `open menu shows: ${inLayers.join(' | ')}` : 'no menu layer on the page',
+    ].join('; ');
+  }
+
+  // The first click can land while another overlay is still closing, or
+  // before a page that has just loaded answers clicks. The menu is open once
+  // its radios exist (or any menu layer does); if not, click again -- after a
+  // look, since a second click on an open menu would close it.
   async function openMenu(s) {
     const isOpen = () => C.find(s.selectImageMode) || C.find(s.selectVideoMode);
     if (isOpen()) return;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 4; attempt++) {
       await C.clickSelector(s.configButton, 'the settings button');
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 12; i++) {
         if (isOpen()) return;
         await C.wait(250);
       }
+      if (layerOpen()) {
+        C.log('warn', `Settings menu open but its Image/Video choices were not recognised (${describe(s)})`);
+        return;
+      }
+      await C.pressKey('Escape').catch(() => {});
+      await C.wait(1000 + attempt * 1000);
     }
-    throw new Error('The settings menu did not open');
+    throw new Error(`The settings menu did not open (${describe(s)})`);
   }
 
   async function configure(item) {
