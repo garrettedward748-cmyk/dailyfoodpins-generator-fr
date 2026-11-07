@@ -22,8 +22,12 @@ function schemaPath(): string {
  * Safety net before a schema change
  * ---------------------------------------------------------------------- */
 
-/** How many pre-migration copies to keep before the oldest is removed. */
-const BACKUPS_KEPT = 5;
+/**
+ * How many pre-migration copies to keep before the oldest is removed. Each is a
+ * full copy of the database (several GB on a busy instance), and the daily
+ * backups already cover anything older, so only the last one stays.
+ */
+const BACKUPS_KEPT = 1;
 
 /**
  * Copy the database before touching its schema.
