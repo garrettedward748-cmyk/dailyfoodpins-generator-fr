@@ -59,7 +59,11 @@ function loaded(tabId, timeoutMs = 60_000) {
 // answer its context), or at a new chat, so it never lands in whatever chat was open last.
 async function openFresh(account, conversationId) {
   const base = /^[A-Za-z0-9_-]+$/.test(conversationId || '') ? `${APP}/${conversationId}` : APP;
-  const url = account ? `${base}?authuser=${encodeURIComponent(account)}` : base;
+  // hl=en: Gemini follows the account's language otherwise, and the page's buttons are found by
+  // their English names (a French account showed "Envoyer le message" and nothing was sent).
+  const params = new URLSearchParams({ hl: 'en' });
+  if (account) params.set('authuser', account);
+  const url = `${base}?${params}`;
   const tab = await geminiTab();
   ports.delete(tab.id);
   const done = loaded(tab.id);

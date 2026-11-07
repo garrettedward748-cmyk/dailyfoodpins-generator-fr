@@ -23,8 +23,14 @@
 
   const editor = () => $('rich-textarea .ql-editor[contenteditable="true"]') || $('div.ql-editor[role="textbox"]');
   const labelOf = (el) => (el.getAttribute('aria-label') || '').trim();
-  const sendButton = () => $$('button').find((b) => /^send( message)?$/i.test(labelOf(b)));
-  const stopButton = () => $$('button').find((b) => /^stop( response| generating)?$/i.test(labelOf(b)));
+  // English first (the page is opened with hl=en), the account's own language as a fallback, and
+  // Gemini's class names last, which no language changes.
+  const SEND = /^(send( message)?|envoyer( le message)?|enviar( mensaje| mensagem)?|senden|invia|إرسال)/i;
+  const STOP = /^(stop( response| generating)?|arr[êe]ter( la r[ée]ponse)?|interrompre|detener|stopp|إيقاف)/i;
+  const sendButton = () =>
+    $$('button').find((b) => SEND.test(labelOf(b))) || $$('button.send-button').find((b) => !b.classList.contains('stop'));
+  const stopButton = () =>
+    $$('button').find((b) => STOP.test(labelOf(b))) || $('button.send-button.stop');
   const isDisabled = (b) => !b || b.disabled || b.getAttribute('aria-disabled') === 'true';
   const responses = () => $$('model-response');
   const conversationId = () => (location.pathname.match(/\/app\/([A-Za-z0-9_-]+)/) || [])[1] || null;
@@ -35,7 +41,8 @@
     $('a[href*="accounts.google.com/ServiceLogin"], a[href*="accounts.google.com/v3/signin"], a[href*="accounts.google.com/AccountChooser"]') ||
     $$('a, button').find((el) => /^sign in$/i.test((el.textContent || '').trim()));
   // The Google bar's account button names the account: "Google Account: Name (name@gmail.com)".
-  const accountLabel = () => $$('a[aria-label], button[aria-label]').map(labelOf).find((l) => /^Google Account/i.test(l)) || '';
+  const accountLabel = () => $$('a[aria-label], button[aria-label]').map(labelOf)
+    .find((l) => /^(Google Account|Compte Google|Cuenta de Google|Google-Konto|حساب Google)/i.test(l) || (/Google/.test(l) && /@/.test(l))) || '';
   const accountEmail = () => (accountLabel().match(/[^\s()]+@[^\s()]+/) || [''])[0].toLowerCase();
 
   async function checkSession(account) {
@@ -57,7 +64,21 @@
   // so it is used only when asked for. The platform's article prompts ask for an ordinary chat,
   // one per article, so each answer has the article's earlier answers in mind. Best effort: if the
   // toggle cannot be found the prompt still goes, as an ordinary chat.
-  const temporaryToggle = () => $$('button').find((b) => /^temporary chat$/i.test(labelOf(b)));
+  const temporaryToggle = () => $$('button').find((b) => /^(temporary chat|chat temporaire|discussion temporaire|chat temporal)$/i.test(labelOf(b)));
+
+  // Notices Gemini lays over the page (about Gemini Apps Activity, new features...). They do not
+  // stop a scripted click, but one can take the prompt box's focus, so each is closed first.
+  // Only a button inside an overlay, and only a "close"-type one: nothing that changes a setting.
+  const CLOSE = /^(close|fermer|dismiss|got it|no thanks|non merci|ok|j'ai compris|cerrar|schlie[ßs]en|إغلاق)$/i;
+  async function closeNotices() {
+    for (let i = 0; i < 3; i++) {
+      const button = $$('mat-dialog-container button, [role="dialog"] button, .cdk-overlay-container button, [role="alertdialog"] button')
+        .find((b) => CLOSE.test((b.textContent || '').trim()) || CLOSE.test(labelOf(b)));
+      if (!button) return;
+      button.click();
+      await sleep(500);
+    }
+  }
   const isPressed = (b) => b.getAttribute('aria-pressed') === 'true' || b.classList.contains('active');
 
   async function setTemporaryChat(on) {
@@ -286,6 +307,7 @@
     // Carrying on a chat is never temporary; a new chat is temporary only when asked.
     const temp = continued ? false : await setTemporaryChat(Boolean(temporary && !wanted));
     await waitFor(editor, 15_000, () => fail('NO_PROMPT_BOX', 'the Gemini page did not show its prompt box'));
+    await closeNotices();
 
     // The answer is the response that was not on the page before Send, at the end of the chat.
     const old = new Set(responses());
@@ -293,7 +315,9 @@
     const before = old.size;
     await setPrompt(prompt);
     await attachFiles(files);
-    const send = await waitFor(() => { const b = sendButton(); return !isDisabled(b) && b; }, 15_000, () => fail('NO_PROMPT_BOX', 'the Send button stayed disabled'));
+    await closeNotices();
+    const send = await waitFor(() => { const b = sendButton(); return !isDisabled(b) && b; }, 15_000,
+      () => fail('NO_PROMPT_BOX', `the Send button ${sendButton() ? 'stayed disabled' : 'was not found'} (page language: ${document.documentElement.lang || 'unknown'})`));
     send.click();
 
     await waitFor(() => responses().length > before && isNew(), 60_000, () => fail('TIMEOUT', 'Gemini did not start answering'));
