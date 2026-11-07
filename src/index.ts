@@ -4,7 +4,7 @@ import { cleanupMedia, configureMediaStore } from './integrations/media-store.js
 import { autoResearchTick } from './research/auto.js';
 import { gscTick, liveGscDeps, minImpressionsFrom } from './gsc/engine.js';
 import { liveRadarDeps, radarOptionsFrom, radarTick } from './research/social/radar.js';
-import { applyPendingRestore, configureBackups, configureSignins, dailyBackupIfDue, restartExitCode } from './backup/index.js';
+import { applyPendingRestore, configureBackups, configureSignins, removeAutomaticBackups, restartExitCode } from './backup/index.js';
 import { imageServiceLink, pushPendingSignins } from './backup/signins.js';
 import { openDatabase, closeDatabase } from './db/index.js';
 import { insertEvent } from './db/repos.js';
@@ -121,10 +121,15 @@ async function main(): Promise<void> {
   const scheduler = new Scheduler(settings, config.encryptionKey);
   scheduler.start();
 
-  // The daily backup: checked hourly, first ten minutes after start.
-  const backupTimer = setInterval(() => void dailyBackupIfDue(), 3_600_000);
-  backupTimer.unref();
-  setTimeout(() => void dailyBackupIfDue(), 600_000).unref();
+  // No automatic backups: they are made by hand from the Backups page. Copies
+  // the old daily backup left behind are cleared out once, shortly after start.
+  setTimeout(() => {
+    try {
+      removeAutomaticBackups();
+    } catch {
+      /* tidying is not worth a crash */
+    }
+  }, 60_000).unref();
 
   // Daily keyword research: each switched-on site once a day, at its hour.
   const researchTimer = setInterval(() => void autoResearchTick(settings, config.encryptionKey), 600_000);

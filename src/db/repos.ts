@@ -1,5 +1,5 @@
 import { halalOnly, haramWord } from '../core/halal.js';
-import { all, fromBool, get, run, toBool, transaction } from './index.js';
+import { all, fromBool, get, getDb, run, toBool, transaction } from './index.js';
 import type { Decision, KeywordView, LinkView, SiteView } from '../core/types.js';
 import { decrypt, encrypt } from '../lib/crypto.js';
 import { DishIndex } from '../core/similar-title.js';
@@ -1783,6 +1783,23 @@ export const clearEvents = (level?: string): number =>
 
 export const pruneEvents = (keepDays: number): number =>
   run("DELETE FROM events WHERE created_at < datetime('now', ?)", `-${keepDays} days`).changes;
+
+/**
+ * Give the disk back after a big prune. Deleted rows leave empty pages that
+ * SQLite reuses but never returns, so a database that once held a month of
+ * logs stays that size for good. VACUUM rewrites it at its real size; it only
+ * runs when at least 200 MB and a third of the file are empty, so in normal
+ * operation it does nothing. Returns the bytes given back.
+ */
+export function compactIfBloated(): number {
+  const pageSize = Number((get<{ page_size: number }>('PRAGMA page_size') ?? { page_size: 4096 }).page_size);
+  const pages = Number((get<{ page_count: number }>('PRAGMA page_count') ?? { page_count: 0 }).page_count);
+  const free = Number((get<{ freelist_count: number }>('PRAGMA freelist_count') ?? { freelist_count: 0 }).freelist_count);
+  const freeBytes = free * pageSize;
+  if (freeBytes < 200 * 1024 * 1024 || free < pages / 3) return 0;
+  getDb().exec('VACUUM');
+  return freeBytes;
+}
 
 /* =========================================================================
  * Prompt overrides
