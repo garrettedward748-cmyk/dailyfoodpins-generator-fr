@@ -1039,7 +1039,18 @@ async function pollGeneration(reel: ReelView, deps: ReelDeps): Promise<boolean> 
     throw new Error('This reel is generating but has no job id to poll.');
   }
 
-  const job = await deps.images.poll(reel.job_id);
+  let job: Awaited<ReturnType<ReelDeps['images']['poll']>>;
+  try {
+    job = await deps.images.poll(reel.job_id);
+  } catch (err) {
+    // The image service restarting (a deploy, a Chrome switch) or slow to
+    // answer is no reason to give up a clip it is still making: that failed
+    // the reel, the clip finished unwatched, and was paid for for nothing.
+    // Only a job the service no longer knows ends it.
+    if (/HTTP 404/.test(errorMessage(err))) throw err;
+    log.warn(`reel ${reel.id}: the image service did not answer about its clip (${errorMessage(err)}); asking again`);
+    return false;
+  }
   const status = (job.status ?? '').toUpperCase();
 
   if (status === 'COMPLETED') {
