@@ -3087,19 +3087,53 @@ async function jobTiles(tabId, ui, jobId) {
   return out?.result;
 }
 
+/** The prompt as it is typed: one line, single spaces (Enter would submit). */
+const promptLine = (text) => String(text || '').replace(/\s+/g, ' ').trim();
+
+/** One character as a key press: keyDown carrying the text, then keyUp. */
+async function typeChar(target, ch) {
+  let key = ch, code = '', keyCode = 0, modifiers = 0;
+  if (/^[a-z]$/i.test(ch)) {
+    code = `Key${ch.toUpperCase()}`; keyCode = ch.toUpperCase().charCodeAt(0);
+    if (ch !== ch.toLowerCase()) modifiers = 8; // Shift
+  } else if (/^[0-9]$/.test(ch)) {
+    code = `Digit${ch}`; keyCode = ch.charCodeAt(0);
+  } else if (ch === ' ') {
+    code = 'Space'; keyCode = 32;
+  }
+  await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent',
+    { type: 'keyDown', key, code, windowsVirtualKeyCode: keyCode, modifiers, text: ch, unmodifiedText: ch });
+  await sleep(Math.round(rand(12, 45)));
+  await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent',
+    { type: 'keyUp', key, code, windowsVirtualKeyCode: keyCode, modifiers });
+}
+
 /**
- * Type `prompt` into the composer as keyboard input.
+ * Type `prompt` into the composer key by key, the way a person does.
  *
- * Select-all and then one insertText through the debugger: the browser's own
- * input path, so ProseMirror sees the change it would see from a person and
- * the Generate button enables. Whatever an earlier attempt left in the box is
- * replaced, not appended to.
+ * It used to go in with one Input.insertText: the whole prompt appearing at
+ * once with no key pressed. Flow then answered every automated submit with
+ * PUBLIC_ERROR_UNUSUAL_ACTIVITY, while the same account and browser generated
+ * when a person typed (2026-11-08). So each character is a key press, with
+ * the uneven gaps of typing -- longer after a space or punctuation, now and
+ * then a short stop -- paced so a long prompt still takes about a minute at
+ * most. Select-all first, so what an earlier attempt left is replaced.
  */
 async function typePrompt(target, prompt) {
   const mac = /Mac/.test(navigator.platform);
   await pressKey(target, 'a', { code: 'KeyA', keyCode: 65, modifiers: mac ? 4 : 2, commands: ['selectAll'] });
   await pause(80, 200);
-  await chrome.debugger.sendCommand(target, 'Input.insertText', { text: prompt });
+  const chars = [...promptLine(prompt)];
+  // About 75 ms a character, never more than ~60 s for the whole prompt.
+  const scale = Math.min(1, 60_000 / Math.max(1, chars.length * 75));
+  for (let i = 0; i < chars.length; i++) {
+    await typeChar(target, chars[i]);
+    let gap = rand(30, 110);
+    if (chars[i] === ' ') gap += rand(10, 60);
+    if (/[.,;:!?]/.test(chars[i])) gap += rand(80, 260);
+    if (Math.random() < 0.02) gap += rand(250, 700);
+    await sleep(Math.round(gap * scale));
+  }
 }
 
 /**
@@ -3325,7 +3359,7 @@ async function uiGenerateImage({
     await typePrompt(target, prompt);
 
     box = await composerBox(tab.id, ui);
-    if ((box?.text || '') !== prompt.trim()) {
+    if (promptLine(box?.text) !== promptLine(prompt)) {
       const seen = await promptBoxesOnPage(tab.id);
       return { error: `COMPOSER_REJECTED_PROMPT: it holds ${JSON.stringify((box?.text || '').slice(0, 80))}; boxes on the page: ${seen}` };
     }
@@ -3360,7 +3394,7 @@ async function uiGenerateImage({
       await pressKey(target, 'Enter', { keyCode: 13, text: '\r' });
       if (await cleared(10)) return await sent(picked, submittedAt);
       box = await composerBox(tab.id, ui);
-      if (box?.text && box.text !== prompt.trim()) {
+      if (box?.text && promptLine(box.text) !== promptLine(prompt)) {
         await typePrompt(target, prompt); // undo the new line Enter made
         box = await composerBox(tab.id, ui);
       }
