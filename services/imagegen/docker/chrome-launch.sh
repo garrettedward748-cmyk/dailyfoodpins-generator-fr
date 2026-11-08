@@ -27,6 +27,13 @@ fi
 # pages load faster and grow without limit -- over 20 GB across the generators
 # before this. Cleared when they pass 300 MB, every profile at once. Sign-ins
 # (Cookies, Local Storage, IndexedDB) are never touched.
+#
+# "Service Worker/ScriptCache" must never be in this list. It is not a cache of
+# web pages: it holds the code of the extensions' background service workers.
+# Deleted, Chrome starts with Flow Kit and Gemini Chat registered but not
+# running (checked 2026-11-08: 2 workers before, 0 after) -- Flow Kit never
+# connects, every image waits out its step timeout, and the watchdog flags the
+# browser as needing a human.
 CACHE_LIMIT_MB="${CHROME_CACHE_LIMIT_MB:-300}"
 CACHE_DIRS=()
 for P in "$DATA_DIR"/chrome-profile "$DATA_DIR"/chrome-profiles/*; do
@@ -34,7 +41,7 @@ for P in "$DATA_DIR"/chrome-profile "$DATA_DIR"/chrome-profiles/*; do
     for C in Cache "Code Cache" GPUCache GrShaderCache ShaderCache GraphiteDawnCache component_crx_cache; do
         for D in "$P/$C" "$P"/*/"$C"; do [[ -d "$D" ]] && CACHE_DIRS+=("$D"); done
     done
-    for D in "$P"/*/"Service Worker/CacheStorage" "$P"/*/"Service Worker/ScriptCache"; do
+    for D in "$P"/*/"Service Worker/CacheStorage"; do
         [[ -d "$D" ]] && CACHE_DIRS+=("$D")
     done
 done
