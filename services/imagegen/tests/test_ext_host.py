@@ -46,6 +46,7 @@ def packed(tmp_path):
     )
     # Cr24, format 3 — the header Chrome checks before anything else.
     (tmp_path / "flowkit.crx").write_bytes(b"Cr24" + struct.pack("<I", 3) + b"\x00" * 64)
+    (tmp_path / "gemini.crx").write_bytes(b"Cr24" + struct.pack("<I", 3) + b"\x01" * 64)
     return tmp_path
 
 
@@ -128,3 +129,21 @@ def test_chrome_lands_on_home_when_nothing_is_queued(packed, monkeypatch):
     monkeypatch.setattr(ext_host, "FLOW_PROJECT_ID", "")
     body = client.get("/ext/landing").json()
     assert body == {"url": "https://flow.google.com/"}
+
+
+def test_the_gemini_extension_is_served_beside_flow_kit(packed):
+    """Gemini Chat is force-installed from the same update manifest, so its CRX
+    has to be on its own route of this service, not mistaken for Flow Kit's."""
+    client = build(packed)
+    response = client.get("/ext/gemini.crx")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/x-chrome-extension"
+    assert response.content[:4] == b"Cr24"
+    assert response.content != client.get("/ext/flowkit.crx").content
+
+
+def test_a_missing_gemini_package_says_it_was_not_packed(tmp_path):
+    response = build(tmp_path).get("/ext/gemini.crx")
+
+    assert response.status_code == 503

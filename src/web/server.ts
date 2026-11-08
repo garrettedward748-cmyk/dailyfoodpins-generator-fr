@@ -348,7 +348,9 @@ import { latestQueueCheck, queuedKeywords, removeFromQueue, startQueueCheck } fr
 import { cleanTopics, DEFAULT_PER_TOPIC, getResearchJob, recallIdeas, rememberIdeas, startResearchJob } from '../research/batch.js';
 import { liveDeps as liveResearchDeps, runAutoResearch, serperStateIn } from '../research/auto.js';
 import { filterWithModel, parseTopicIdeas, researchKeywords, titleCase, topicCandidates, verifyTopics } from '../research/keywords.js';
-import { googleAccountsPage, type GoogleAccountView } from './views/google-accounts.js';
+import { googleAccountsPage, IMAGE_METHODS, type GoogleAccountView } from './views/google-accounts.js';
+import { configureGemini, GEMINI_MODEL } from '../llm/gemini.js';
+import { geminiAccount, registerGeminiRoutes } from './gemini.js';
 import { parseSnapshot, restorableCount, serviceIsBehind, takeSnapshot } from './google-snapshot.js';
 import {
   addBlogQuestions,
@@ -510,6 +512,9 @@ export function buildServer(
   auth: AuthOptions,
 ): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 20 * 1024 * 1024 });
+
+  // Prompts switched to Gemini reach it through chat(), which is not handed Settings.
+  configureGemini({ settings, account: geminiAccount });
 
   void app.register(formbody);
   void app.register(multipart, { limits: { fileSize: 20 * 1024 * 1024 } });
@@ -3200,7 +3205,12 @@ export function buildServer(
     try {
       const response = await imageService('/flow/accounts');
       if (!response.ok) throw new Error(await imageServiceError(response));
-      let data = (await response.json()) as { accounts: GoogleAccountView[]; pending: number | null; clip_cost?: number };
+      let data = (await response.json()) as {
+        accounts: GoogleAccountView[];
+        pending: number | null;
+        clip_cost?: number;
+        image_method?: string;
+      };
       // The project used to be set in Settings or on a site. Carry it over to
       // account 1 once, so nothing needs typing again.
       const first = data.accounts.find((a) => a.id === 1);
@@ -3209,7 +3219,13 @@ export function buildServer(
         const saved = await imageService('/flow/accounts/1/project', { method: 'PUT', body: JSON.stringify({ project_id: legacy }) });
         if (saved.ok) data = (await saved.json()) as typeof data;
       }
-      view = { reachable: true, accounts: data.accounts, pending: data.pending, clipCost: data.clip_cost };
+      view = {
+        reachable: true,
+        accounts: data.accounts,
+        pending: data.pending,
+        clipCost: data.clip_cost,
+        imageMethod: data.image_method,
+      };
       // Keep a copy in the platform's database, so a backup carries the list. A
       // service that holds less than the copy (a new server) is offered the
       // copy back instead of being allowed to overwrite it.
@@ -3377,6 +3393,22 @@ export function buildServer(
       body: JSON.stringify({ code: asString(formBody(request).code) }),
     }).catch(() => null);
     return reply.redirect(`/settings/google?login=${id}`, 303);
+  });
+
+  app.post('/settings/google/image-method', async (request, reply) => {
+    const method = asString(formBody(request).image_method);
+    const known = IMAGE_METHODS.find((m) => m.value === method);
+    if (!known) return redirect(reply, '/settings/google', { kind: 'error', message: 'Unknown image method.' });
+    try {
+      const response = await imageService('/flow/accounts-image-method', {
+        method: 'PUT',
+        body: JSON.stringify({ image_method: method }),
+      });
+      if (!response.ok) throw new Error(await imageServiceError(response));
+      return redirect(reply, '/settings/google', { kind: 'ok', message: `Images are now made with: ${known.label}.` });
+    } catch (err) {
+      return redirect(reply, '/settings/google', { kind: 'error', message: errorMessage(err) });
+    }
   });
 
   app.post('/settings/google/clip-cost', async (request, reply) => {
@@ -5380,12 +5412,18 @@ export function buildServer(
     return redirect(reply, '/settings/reel-structures', { kind: 'ok', message: 'Structure deleted.' });
   });
 
+  registerGeminiRoutes(app, {
+    settings,
+    render: (reply, body, flash) => page(reply, 'Gemini', '/settings', body, flash),
+    readFlash,
+  });
+
   app.get('/settings/prompts', async (request, reply) =>
     page(
       reply,
       'Prompts',
       '/settings',
-      promptsPage(listPromptFiles(), modelChoices(), KNOWN_MODELS),
+      promptsPage(listPromptFiles(), modelChoices(), [...KNOWN_MODELS, GEMINI_MODEL]),
       readFlash(request.query),
     ),
   );

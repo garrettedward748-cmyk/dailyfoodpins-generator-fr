@@ -14,7 +14,7 @@ Two containers come up:
 | Service | What it is | Reachable from outside |
 |---|---|---|
 | `platform` | pipeline, dashboard, scheduler | **yes** — attach your domain here, container port 8080 |
-| `imagegen` | Chrome + the Google Flow extension + an image job queue | **no** — no published port, no domain |
+| `imagegen` | Chrome + the Google Flow and Gemini Chat extensions + their job queues | **no** — no published port, no domain |
 
 Attach your domain to `platform` only. `imagegen` sits on an internal Docker
 network with no route in from anywhere; the platform is the only thing that can
@@ -105,6 +105,12 @@ switching Google accounts all work there.
 It was previously a second public domain guarded by an eight-character VNC
 password. It is not exposed at all now.
 
+The same Chrome also runs **Gemini**. Its extension (Gemini Chat) is packed and
+force-installed with Flow's at build time, and it opens Gemini in a small window
+of its own when the platform sends a prompt, signed in with the same Google
+account. There is nothing to deploy, configure or sign in to separately: once
+Google is signed in for Flow, Gemini works too. See Setup → Gemini.
+
 ---
 
 ## Security
@@ -154,6 +160,8 @@ Give it a domain and you undo all of this — do not.
   project in Flow and take the id from the URL.
 - **General** — timezone
 - **Buffer / Telegram** — on/off switches
+- **Gemini** (optional) — send a test message, then tick the steps Gemini
+  writes. Every step stays on the AI keys until you tick it.
 
 ### 2. Sites (each has its own credentials)
 
@@ -429,6 +437,8 @@ database, and mounts `./prompts` read-write for editing without a rebuild.
 | "Image service unreachable" | `imagegen` is restarting. Chrome takes about a minute |
 | Images fail with no useful error | Check credits on the Flow account, and that the Flow project ID is real |
 | The browser view is blank | Chrome has not finished starting; reload after a minute |
+| Gemini says "Sign-in needed" | Open **Browser** and sign in to Google; Gemini uses the same session as Flow |
+| Gemini "Last prompt failed" with a limit | Gemini's daily limit for that account; those steps use the AI keys until it resets |
 
 **Decisions** — a section of the dashboard — answers "why did nothing happen?":
 every site checked and every keyword skipped, with the reason recorded when the

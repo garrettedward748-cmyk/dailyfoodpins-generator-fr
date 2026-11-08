@@ -21,6 +21,30 @@ export interface GoogleAccountView {
   video_reason?: string | null;
 }
 
+/** How images are made: the image service's choice, set from this page. */
+export const IMAGE_METHODS: { value: string; label: string; help: string }[] = [
+  // Only the page: Flow refuses every generation in a browser whose extension changes Flow's page
+  // (2026-11-08), and the Flow Kit way needed exactly that. See services/imagegen/extension/content.js.
+  { value: 'page', label: 'Flow page (Flow\'s own button)', help: 'Picks the model and shape in Flow\'s composer and presses its button, like a person. Flow Kit no longer changes Flow\'s page, which Flow now refuses.' },
+];
+
+function imageMethodCard(current: string): Html {
+  const chosen = IMAGE_METHODS.find((m) => m.value === current) ?? IMAGE_METHODS[0]!;
+  return html`
+    <form method="post" action="/settings/google/image-method" class="card" style="flex:1 1 320px;max-width:520px;margin:0">
+      <label for="g-method" style="margin-top:0">How images are made</label>
+      <div class="row" style="gap:8px;flex-wrap:nowrap">
+        <select id="g-method" name="image_method" style="flex:1">
+          ${IMAGE_METHODS.map(
+            (m) => html`<option value="${m.value}" ${m.value === chosen.value ? raw('selected') : raw('')}>${m.label}</option>`,
+          )}
+        </select>
+        <button type="submit" class="primary">Save</button>
+      </div>
+      <div class="small muted" style="margin-top:6px">${chosen.help} Applies to article images; reels still use Flow Kit.</div>
+    </form>`;
+}
+
 function restEnds(until: number | null): string {
   if (!until) return '';
   const minutes = Math.max(0, Math.round((until * 1000 - Date.now()) / 60_000));
@@ -44,19 +68,24 @@ export function googleAccountsPage(data: {
   login?: { id: number; state: string; message: string; running: boolean } | null;
   /** A saved copy holds accounts the service has lost, e.g. after a restore on a new server. */
   restore?: { count: number } | null;
+  /** How images are made (see IMAGE_METHODS); the service's default when absent. */
+  imageMethod?: string;
 }): Html {
   const many = data.accounts.length > 1;
   const clipCost = data.clipCost ?? 0;
   const blocked = data.accounts.filter((a) => a.video !== false && limitBlocksEveryClip(a, clipCost));
   return html`
     <h1>Google accounts</h1>
-    <p class="subtitle">
-      Images and reels are made in Google Flow with one account at a time. When it runs out of
-      credits, is signed out, or keeps failing, the next account takes over on its own. Only one
-      browser ever runs, so more accounts cost disk space, not speed or memory.
-      Each account uses its own Flow project for every site: a project only works with the
-      account that created it.
-    </p>
+    <div class="row" style="gap:24px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px">
+      <p class="subtitle" style="flex:1 1 360px;max-width:520px;margin:0">
+        Images and reels are made in Google Flow with one account at a time. When it runs out of
+        credits, is signed out, or keeps failing, the next account takes over on its own. Only one
+        browser ever runs, so more accounts cost disk space, not speed or memory.
+        Each account uses its own Flow project for every site: a project only works with the
+        account that created it.
+      </p>
+      ${data.reachable ? imageMethodCard(data.imageMethod ?? 'flowkit') : raw('')}
+    </div>
 
     ${!data.reachable
       ? html`<div class="flash error">The image service did not answer${data.error ? `: ${data.error}` : ''}.</div>`

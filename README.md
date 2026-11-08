@@ -36,7 +36,7 @@ Two containers come up:
 | | |
 |---|---|
 | `platform` | the pipeline, dashboard and scheduler. The only one with a domain. |
-| `imagegen` | Chrome, the Google Flow extension, and an image job queue. No published port, no domain — the platform reaches it over an internal Docker network. |
+| `imagegen` | Chrome with two extensions — Google Flow for pictures and Gemini Chat for Gemini — and their job queues. No published port, no domain — the platform reaches it over an internal Docker network. |
 
 No environment variables required. On first boot the platform generates its own
 encryption key and admin password, and the image service generates the API key
@@ -71,6 +71,12 @@ See [deploy/DEPLOY.md](deploy/DEPLOY.md) for the full guide.
    the dashboard; the session survives redeploys as long as `imagegen-data`
    does. The dashboard warns you here whenever it needs doing again.
 6. **Settings → General** — enable automation, once **Run once now** succeeds.
+7. **Gemini (optional)** — Setup → **Gemini**. It needs no setup of
+   its own: it runs in the same Chrome as Flow, signed in with the same Google
+   account, and its extension is installed with the image service. Send a test
+   message under **Try Gemini**, then tick the steps Gemini should write. If
+   Gemini cannot answer a prompt (signed out, daily limit), that step is
+   written by your AI keys instead, so nothing stops.
 
 ## Migrating from Google Sheets
 
