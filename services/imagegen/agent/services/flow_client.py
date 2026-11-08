@@ -30,9 +30,10 @@ _UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 #: How often the Flow page is looked at while a picture is being made.
 UI_POLL_S = 2
 #: The longest a picture is waited for while Flow still shows it working.
-# Seconds between two prompts sent on Flow's page, picked at random in this range.
-UI_SUBMIT_GAP_MIN_S = float(os.environ.get("UI_SUBMIT_GAP_MIN_S", "45"))
-UI_SUBMIT_GAP_MAX_S = float(os.environ.get("UI_SUBMIT_GAP_MAX_S", "120"))
+# Seconds between two prompts sent on Flow's page, picked at random in this range
+# (10-30 s, the Automation project's pace; raise both if Flow flags unusual activity).
+UI_SUBMIT_GAP_MIN_S = float(os.environ.get("UI_SUBMIT_GAP_MIN_S", "10"))
+UI_SUBMIT_GAP_MAX_S = float(os.environ.get("UI_SUBMIT_GAP_MAX_S", "30"))
 UI_MAX_WAIT_S = 900
 #: How often a clip sent before a restart is looked for in the project.
 VIDEO_FIND_EVERY_S = 20

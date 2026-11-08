@@ -3090,50 +3090,16 @@ async function jobTiles(tabId, ui, jobId) {
 /** The prompt as it is typed: one line, single spaces (Enter would submit). */
 const promptLine = (text) => String(text || '').replace(/\s+/g, ' ').trim();
 
-/** One character as a key press: keyDown carrying the text, then keyUp. */
-async function typeChar(target, ch) {
-  let key = ch, code = '', keyCode = 0, modifiers = 0;
-  if (/^[a-z]$/i.test(ch)) {
-    code = `Key${ch.toUpperCase()}`; keyCode = ch.toUpperCase().charCodeAt(0);
-    if (ch !== ch.toLowerCase()) modifiers = 8; // Shift
-  } else if (/^[0-9]$/.test(ch)) {
-    code = `Digit${ch}`; keyCode = ch.charCodeAt(0);
-  } else if (ch === ' ') {
-    code = 'Space'; keyCode = 32;
-  }
-  await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent',
-    { type: 'keyDown', key, code, windowsVirtualKeyCode: keyCode, modifiers, text: ch, unmodifiedText: ch });
-  await sleep(Math.round(rand(12, 45)));
-  await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent',
-    { type: 'keyUp', key, code, windowsVirtualKeyCode: keyCode, modifiers });
-}
-
 /**
- * Type `prompt` into the composer key by key, the way a person does.
- *
- * It used to go in with one Input.insertText: the whole prompt appearing at
- * once with no key pressed. Flow then answered every automated submit with
- * PUBLIC_ERROR_UNUSUAL_ACTIVITY, while the same account and browser generated
- * when a person typed (2026-11-08). So each character is a key press, with
- * the uneven gaps of typing -- longer after a space or punctuation, now and
- * then a short stop -- paced so a long prompt still takes about a minute at
- * most. Select-all first, so what an earlier attempt left is replaced.
+ * Put `prompt` in the composer in one go (Input.insertText), as the Automation
+ * project does -- chosen over key-by-key typing for speed (2026-11-08).
+ * Select-all first, so what an earlier attempt left is replaced.
  */
 async function typePrompt(target, prompt) {
   const mac = /Mac/.test(navigator.platform);
   await pressKey(target, 'a', { code: 'KeyA', keyCode: 65, modifiers: mac ? 4 : 2, commands: ['selectAll'] });
   await pause(80, 200);
-  const chars = [...promptLine(prompt)];
-  // About 75 ms a character, never more than ~60 s for the whole prompt.
-  const scale = Math.min(1, 60_000 / Math.max(1, chars.length * 75));
-  for (let i = 0; i < chars.length; i++) {
-    await typeChar(target, chars[i]);
-    let gap = rand(30, 110);
-    if (chars[i] === ' ') gap += rand(10, 60);
-    if (/[.,;:!?]/.test(chars[i])) gap += rand(80, 260);
-    if (Math.random() < 0.02) gap += rand(250, 700);
-    await sleep(Math.round(gap * scale));
-  }
+  await chrome.debugger.sendCommand(target, 'Input.insertText', { text: promptLine(prompt) });
 }
 
 /**
