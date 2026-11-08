@@ -208,7 +208,9 @@ export const SETTING_SPECS: SettingSpec[] = [
     label: 'Automatic attempts',
     group: 'retry',
     secret: false,
-    default: '1',
+    // 3: at 15, 30 and 60 minutes, enough to ride out a busy Flow or a restart
+    // without a person stepping in.
+    default: '3',
     type: 'number',
     help:
       'How many automatic tries before the run stops and waits for you. Each try ' +
