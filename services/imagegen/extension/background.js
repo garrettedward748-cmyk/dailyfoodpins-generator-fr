@@ -2656,12 +2656,97 @@ async function waitUntil(check, ms, every = 250) {
   }
 }
 
-/** Empty the prompt box of text and ingredients an earlier prompt left. */
+/**
+ * The first picture still attached in the prompt box and its remove button,
+ * or null when the box holds none. A picture is an ingredient chip, or a
+ * thumbnail in the composer that is not part of the picker or a menu.
+ */
+async function attachedItem(tabId, ui, all = false) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [ui.ingredientChip, ui.editor, ui.assetList, all],
+    func: (chipSel, editorSel, listSel, wantAll) => {
+      const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+      const editor = [...document.querySelectorAll(editorSel)].filter(visible).pop();
+      if (!editor) return wantAll ? [] : null;
+      let scope = editor;
+      for (let i = 0; i < 8 && scope.parentElement; i++) scope = scope.parentElement;
+      const isRemove = (b) => /remove|delete|close|clear|cancel|discard/i.test(
+        `${b.getAttribute('aria-label') || ''} ${b.getAttribute('title') || ''} ${(b.innerText || '').trim()}`);
+      // The remove button of this picture alone: looked for no higher than
+      // the containers that hold no other picture, so a neighbour's is never
+      // taken for it.
+      const removeOf = (el) => {
+        for (let host = el.parentElement, i = 0; host && i < 3; i++, host = host.parentElement) {
+          if (host.querySelectorAll('img').length > 1 || host.querySelectorAll(chipSel).length > 1) break;
+          const b = [...host.querySelectorAll('button, [role="button"]')].find(isRemove);
+          if (b) return b;
+        }
+        return null;
+      };
+      const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.x, top: r.y, w: r.width, h: r.height }; };
+      const found = [];
+      // An ingredient chip is always an attached picture.
+      for (const chip of scope.querySelectorAll(chipSel)) {
+        if (!visible(chip)) continue;
+        const b = [...chip.querySelectorAll('button, [role="button"]')].find(isRemove) || removeOf(chip);
+        found.push({ item: box(chip), remove: b && visible(b) ? box(b) : null, chip: true });
+      }
+      // A thumbnail counts only with a remove button beside it: an icon in
+      // the composer (the model's, say) has none and is not an attachment.
+      for (const img of scope.querySelectorAll('img')) {
+        if (!visible(img) || img.closest(chipSel) || img.closest(listSel) || img.closest('.cdk-overlay-container')
+          || img.closest('button, [role="button"]')) continue; // an icon on a button, not an attachment
+        const b = removeOf(img);
+        if (b) found.push({ item: box(img), remove: visible(b) ? box(b) : null, chip: false });
+      }
+      return wantAll ? found : (found[0] || null);
+    },
+  }).catch(() => [{ result: all ? [] : null }]);
+  return out?.result ?? (all ? [] : null);
+}
+
+/**
+ * Empty the prompt box of the text and the pictures an earlier prompt left.
+ *
+ * Flow's redesigned composer has no "Clear prompt" button any more (every
+ * prompt logged "could not pick the cleared"), so a reel's clip went out with
+ * pictures an earlier attempt had attached -- another recipe's among them
+ * (seen 2026-11-08). Each attached picture is removed by its own remove
+ * button, shown on hover, and the text is selected and deleted. True when the
+ * box is empty; otherwise why not, and nothing should be sent.
+ */
 async function clearComposer(target, tabId, ui) {
   const clear = await boxOf(tabId, ui.clearPromptButton);
-  if (!clear) return false;
-  await humanClick(target, clear);
-  await pause(300, 700);
+  if (clear) {
+    await humanClick(target, clear);
+    await pause(300, 700);
+  }
+  for (let i = 0; i < 8; i++) {
+    let found = await attachedItem(tabId, ui);
+    if (!found) break;
+    if (!found.remove) {
+      // The remove button shows when the pointer is over the picture.
+      await humanMove(target, found.item.left + found.item.w / 2, found.item.top + found.item.h / 2);
+      await pause(300, 600);
+      found = await attachedItem(tabId, ui);
+      if (!found) break;
+      if (!found.remove) return `a picture stayed in the prompt box: no remove button on it`;
+    }
+    await humanClick(target, found.remove);
+    await pause(400, 900);
+  }
+  if (await attachedItem(tabId, ui)) return 'pictures stayed in the prompt box after removing them';
+  const box = await composerBox(tabId, ui);
+  if (box?.editor && box.text) {
+    await humanClick(target, box.editor);
+    await pause(100, 250);
+    const mac = /Mac/.test(navigator.platform);
+    await pressKey(target, 'a', { code: 'KeyA', keyCode: 65, modifiers: mac ? 4 : 2, commands: ['selectAll'] });
+    await pressKey(target, 'Backspace', { code: 'Backspace', keyCode: 8 });
+    await pause(150, 350);
+  }
   return true;
 }
 
@@ -3290,6 +3375,10 @@ async function uiGenerateImage({
     // would ride along with this one.
     uiStep('clearing the prompt box');
     picked.cleared = await clearComposer(target, tab.id, ui);
+    if (picked.cleared !== true) {
+      // Sent now, the clip or picture would carry another prompt's pictures.
+      return { error: `COMPOSER_NOT_CLEARED: ${picked.cleared}` };
+    }
     for (let i = 0; i < references.length; i++) {
       uiStep(`attaching reference ${i + 1} of ${references.length}`);
       picked[`reference${i + 1}`] = await attachReference(target, tab.id, ui, references[i]);
@@ -3309,6 +3398,13 @@ async function uiGenerateImage({
     if (references.length && notAttached !== undefined) {
       await clearComposer(target, tab.id, ui);
       return { error: `REFERENCES_NOT_ATTACHED: ${notAttached}` };
+    }
+    // Exactly this prompt's pictures and no others.
+    const attachedNow = (await attachedItem(tab.id, ui, true)).length;
+    if (references.length && attachedNow > references.length) {
+      await clearComposer(target, tab.id, ui);
+      return { error: `REFERENCES_MISMATCH: the prompt box holds ${attachedNow} picture(s), `
+        + `this prompt has ${references.length}` };
     }
 
     // Focus by clicking it, not by calling focus(): ProseMirror places the
