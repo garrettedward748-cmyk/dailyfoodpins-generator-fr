@@ -22,4 +22,36 @@ if [[ -f "$PREFS" ]]; then
         "$PREFS" 2>/dev/null || true
 fi
 
-exec /usr/bin/google-chrome --user-data-dir="$PROFILE" "$@"
+# Browser caches: Chrome is not running at this point (only one ever runs and
+# it is stopped between batches), so nothing is mid-generation. They only make
+# pages load faster and grow without limit -- over 20 GB across the generators
+# before this. Cleared when they pass 300 MB, every profile at once. Sign-ins
+# (Cookies, Local Storage, IndexedDB) are never touched.
+#
+# "Service Worker/ScriptCache" must never be in this list. It is not a cache of
+# web pages: it holds the code of the extensions' background service workers.
+# Deleted, Chrome starts with Flow Kit and Gemini Chat registered but not
+# running (checked 2026-11-08: 2 workers before, 0 after) -- Flow Kit never
+# connects, every image waits out its step timeout, and the watchdog flags the
+# browser as needing a human.
+CACHE_LIMIT_MB="${CHROME_CACHE_LIMIT_MB:-300}"
+CACHE_DIRS=()
+for P in "$DATA_DIR"/chrome-profile "$DATA_DIR"/chrome-profiles/*; do
+    [[ -d "$P" ]] || continue
+    for C in Cache "Code Cache" GPUCache GrShaderCache ShaderCache GraphiteDawnCache component_crx_cache; do
+        for D in "$P/$C" "$P"/*/"$C"; do [[ -d "$D" ]] && CACHE_DIRS+=("$D"); done
+    done
+    for D in "$P"/*/"Service Worker/CacheStorage"; do
+        [[ -d "$D" ]] && CACHE_DIRS+=("$D")
+    done
+done
+if (( ${#CACHE_DIRS[@]} > 0 )); then
+    USED_MB=$(du -scm "${CACHE_DIRS[@]}" 2>/dev/null | tail -1 | cut -f1)
+    if (( ${USED_MB:-0} > CACHE_LIMIT_MB )); then
+        echo "chrome-launch: clearing ${USED_MB} MB of browser cache"
+        rm -rf "${CACHE_DIRS[@]}" 2>/dev/null || true
+    fi
+fi
+
+# --disk-cache-size caps the HTTP cache of this run at 100 MB.
+exec /usr/bin/google-chrome --user-data-dir="$PROFILE" --disk-cache-size=104857600 "$@"

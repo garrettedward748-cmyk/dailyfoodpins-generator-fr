@@ -1,0 +1,20 @@
+{
+  "editor": "div.ProseMirror",
+  "generateButton": "button[aria-label=\"Start generation\"]",
+  "stopButton": "button[aria-label=\"Stop\"]",
+  "agentToggle": "button.agent-mode-chip",
+  "menuTriggers": "button, [role=\"button\"], [role=\"combobox\"], [aria-haspopup]",
+  "menuOptions": "[role=\"option\"], [role=\"menuitem\"], [role=\"menuitemradio\"], [role=\"radio\"], [role=\"tab\"], button, li",
+  "errorRegions": "[role=\"alert\"], [role=\"status\"], [aria-live], [data-state=\"error\"]",
+  "errorWords": "unusual activity|something went wrong|couldn.t generate|could not generate|failed to generate|generation failed|violat|against our policies|policy violation|quota|limit reached|try again later|not available in your",
+  "clearPromptButton": "button[aria-label=\"Clear prompt\"]",
+  "addMediaButton": "button[aria-label=\"Add ingredients to the prompt box\"]",
+  "assetSearch": "input[aria-label=\"Search assets\"]",
+  "assetList": "flow-add-menu-asset-list",
+  "assetRow": ".asset-item-container",
+  "ingredientChip": "flow-ingredient-chip",
+  "uploadWords": "upload media",
+  "tile": "flow-tile-container",
+  "tileVideo": "flow-video-tile video",
+  "tileImage": "flow-image-tile img.image"
+}
