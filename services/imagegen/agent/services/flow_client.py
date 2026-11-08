@@ -1232,6 +1232,14 @@ class FlowClient:
     async def _tile_result(self, kind: str, tile: dict, ids: set) -> dict | None:
         """A finished tile's result, or None while it is not to be had yet."""
         if kind == "video":
+            # The clip's own address, as the tile plays it, the way a picture is
+            # taken from its tile. Asking Google for the address instead (the
+            # media RPC below) comes back empty since Flow's change, and the
+            # clip -- made and paid for -- was waited on until it timed out.
+            src = str(tile.get("video") or "")
+            if src.startswith("https://") and "/video/" in src:
+                media_id = src.split("/video/", 1)[1].split("?", 1)[0].split("/", 1)[0]
+                return {"status": 200, "media_id": media_id, "video_url": src}
             found = _UUID_RE.findall(" ".join(str(tile.get(k) or "") for k in ("video", "still", "poster")))
             ordered = [m.lower() for m in found] + sorted(i for i in ids if i not in found)
             return await self._video_from_ids(dict.fromkeys(ordered))

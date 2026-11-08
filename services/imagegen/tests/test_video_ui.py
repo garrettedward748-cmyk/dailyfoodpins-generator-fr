@@ -101,3 +101,19 @@ def test_a_clip_that_timed_out_keeps_its_mark(monkeypatch):
     page = Page(answer={"error": "VIDEO_TIMED_OUT: no clip on the tile in 1200s"})
     stored, _ = run_clip(monkeypatch, page)
     assert json.loads(stored["operation_json"]).get("ui_submitted")
+
+
+def test_a_finished_tile_hands_over_its_own_clip_address():
+    # Read off the tile, the way a picture is: the media RPC no longer answers.
+    from agent.services.flow_client import FlowClient
+
+    class Client(FlowClient):
+        def __init__(self):
+            pass
+
+        async def get_media_urls_batch(self, media_id):
+            raise AssertionError("the tile's own address is used, not the RPC")
+
+    url = "https://flow-content.google/video/ab12cd34-0000-4000-8000-000000000001?sig=x"
+    answer = asyncio.run(Client()._tile_result("video", {"video": url}, set()))
+    assert answer == {"status": 200, "media_id": "ab12cd34-0000-4000-8000-000000000001", "video_url": url}
