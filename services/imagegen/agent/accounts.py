@@ -91,7 +91,7 @@ DEFAULT_CLIP_COST = 0
 #: like a person (the way the Automation project makes them). The two
 #: "_then_" orders try the second only when the first fails.
 IMAGE_METHODS = ("flowkit", "page", "flowkit_then_page", "page_then_flowkit")
-DEFAULT_IMAGE_METHOD = "flowkit"
+DEFAULT_IMAGE_METHOD = "page"
 
 
 def _now() -> float:
@@ -632,8 +632,15 @@ def image_method() -> str:
 
 
 def image_methods_in_order() -> list[str]:
-    """The ways to try for an image, first choice first: ["flowkit"], ["page", "flowkit"], ..."""
-    return image_method().split("_then_")
+    """The ways to try for an image: Flow's own page, and nothing else.
+
+    The Flow Kit way mints its own captcha, which needs scripts in Flow's page;
+    since 2026-11-08 Flow refuses every generation in a browser that changes
+    the page, so those scripts are gone (extension 0.7.0) and that way cannot
+    work. A saved choice naming it is read as the page, so an installation set
+    to "Flow Kit" does not burn through its accounts on refusals.
+    """
+    return ["page"]
 
 
 def set_image_method(method: str) -> None:

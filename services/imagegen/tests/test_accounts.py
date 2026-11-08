@@ -428,21 +428,18 @@ def test_user_quota_reached_is_out_of_credits(isolated):
 
 # --- How images are made ---------------------------------------------------
 
-def test_flow_kit_is_the_default_image_method(isolated):
-    assert accounts.image_methods_in_order() == ["flowkit"]
-    assert accounts.list_accounts()["image_method"] == "flowkit"
+def test_images_are_made_on_flows_own_page(isolated):
+    assert accounts.image_methods_in_order() == ["page"]
+    assert accounts.list_accounts()["image_method"] == "page"
 
 
-def test_the_page_can_come_first_with_flow_kit_behind_it(isolated):
-    accounts.set_image_method("page_then_flowkit")
-    assert accounts.image_methods_in_order() == ["page", "flowkit"]
-
-
-def test_the_choice_saved_under_its_first_name_still_reads(isolated):
-    data = accounts._load()
-    data["image_method"] = "flowkit_then_flowbatch"
-    accounts._save(data)
-    assert accounts.image_methods_in_order() == ["flowkit", "page"]
+def test_a_saved_flow_kit_choice_is_read_as_the_page(isolated):
+    # Flow refuses the Flow Kit way since its page scripts were taken out.
+    for saved in ("flowkit", "flowkit_then_page", "page_then_flowkit", "flowkit_then_flowbatch"):
+        data = accounts._load()
+        data["image_method"] = saved
+        accounts._save(data)
+        assert accounts.image_methods_in_order() == ["page"]
 
 
 def test_an_unknown_image_method_is_refused(isolated):

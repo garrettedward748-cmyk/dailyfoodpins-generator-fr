@@ -23,10 +23,9 @@ export interface GoogleAccountView {
 
 /** How images are made: the image service's choice, set from this page. */
 export const IMAGE_METHODS: { value: string; label: string; help: string }[] = [
-  { value: 'flowkit', label: 'Flow Kit (as before)', help: 'Builds Flow\'s request and sends it from inside the tab.' },
-  { value: 'page', label: 'Flow page (like Automation)', help: 'Picks the model and shape in Flow\'s composer, attaches references with its "+" and presses the button, like a person.' },
-  { value: 'flowkit_then_page', label: 'Flow Kit, then the page if it fails', help: 'The page only runs for an image Flow Kit could not make.' },
-  { value: 'page_then_flowkit', label: 'The page, then Flow Kit if it fails', help: 'Flow Kit only runs for an image the page could not make.' },
+  // Only the page: Flow refuses every generation in a browser whose extension changes Flow's page
+  // (2026-11-08), and the Flow Kit way needed exactly that. See services/imagegen/extension/content.js.
+  { value: 'page', label: 'Flow page (Flow\'s own button)', help: 'Picks the model and shape in Flow\'s composer and presses its button, like a person. Flow Kit no longer changes Flow\'s page, which Flow now refuses.' },
 ];
 
 function imageMethodCard(current: string): Html {
