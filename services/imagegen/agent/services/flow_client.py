@@ -1240,6 +1240,11 @@ class FlowClient:
             if src.startswith("https://") and "/video/" in src:
                 media_id = src.split("/video/", 1)[1].split("?", 1)[0].split("/", 1)[0]
                 return {"status": 200, "media_id": media_id, "video_url": src}
+            seen = (src[:90], str(tile.get("still") or "")[:90], str(tile.get("poster") or "")[:90])
+            if seen != getattr(self, "_last_clip_tile", None):
+                self._last_clip_tile = seen
+                logger.warning("Flow UI: a finished clip tile with no address to take: video=%r "
+                               "still=%r poster=%r ids=%s", *seen, sorted(ids)[:3])
             found = _UUID_RE.findall(" ".join(str(tile.get(k) or "") for k in ("video", "still", "poster")))
             ordered = [m.lower() for m in found] + sorted(i for i in ids if i not in found)
             return await self._video_from_ids(dict.fromkeys(ordered))
