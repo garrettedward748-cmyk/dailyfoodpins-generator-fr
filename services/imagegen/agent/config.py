@@ -115,15 +115,6 @@ VIDEO_FORCE_I2V = os.environ.get("VIDEO_FORCE_I2V", "") not in ("", "0", "false"
 # come back: Flow Kit stopped sending video that way entirely when Flow
 # moved in September 2026. Set to 0 to fall back to the old path.
 VIDEO_USE_BATCH = os.environ.get("VIDEO_USE_BATCH", "1") == "1"
-# Reel clips made on Flow's own page (its composer, Video, the references
-# attached with "+"), like article images. The batch and REST paths mint their
-# own captcha, which needs scripts in Flow's page; Flow refuses every
-# generation in a browser that changes its page (2026-11-08), so those scripts
-# are gone and this is the way that works. Set to 0 only for a Flow that takes
-# those calls again.
-VIDEO_USE_UI = os.environ.get("VIDEO_USE_UI", "1") not in ("", "0", "false", "False")
-# The video model picked in Flow's menu, by the words it shows.
-VIDEO_UI_MODEL = os.environ.get("VIDEO_UI_MODEL", "Veo 3.1 - Fast").strip()
 
 # Same for images. When video moved, images were left on REST because REST
 # images still worked. Three days later they stopped:

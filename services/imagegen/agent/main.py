@@ -21,11 +21,9 @@ from contextlib import asynccontextmanager
 import websockets
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 
-from agent import gemini, watchdog
+from agent import watchdog
 from agent.api.ext_host import router as ext_host_router
 from agent.api.flow import router as flow_router
-from agent.api.gemini import extension as gemini_extension_router
-from agent.api.gemini import platform as gemini_router
 from agent.api.v1 import router as v1_router
 from agent.auth import assert_secure_config
 from agent.config import API_HOST, API_PORT, FLOW_PROJECT_ID, WS_HOST, WS_PORT
@@ -104,14 +102,13 @@ async def lifespan(app: FastAPI):
     ws_task = asyncio.create_task(run_ws_server())
     worker_task = asyncio.create_task(controller.start())
     watchdog_task = asyncio.create_task(watchdog.run(controller))
-    gemini_task = asyncio.create_task(gemini.run_sweeper())
     logger.info("imagegen ready on %s:%d", API_HOST, API_PORT)
 
     yield
 
     controller.request_shutdown()
     await controller.drain()
-    for task in (ws_task, worker_task, watchdog_task, gemini_task):
+    for task in (ws_task, worker_task, watchdog_task):
         task.cancel()
     await close_db()
     logger.info("imagegen stopped")
@@ -127,8 +124,6 @@ app = FastAPI(title="imagegen", version="2.0.0", lifespan=lifespan)
 app.include_router(v1_router)        # public surface, API-key gated
 app.include_router(flow_router)      # health, API-key gated
 app.include_router(ext_host_router)  # loopback only: Chrome fetches its own CRX
-app.include_router(gemini_router)            # Gemini prompts from the platform, API-key gated
-app.include_router(gemini_extension_router)  # ...and the Gemini Chat extension taking them, loopback only
 
 
 @app.post("/api/ext/callback")

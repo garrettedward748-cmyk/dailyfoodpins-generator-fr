@@ -63,7 +63,6 @@ import { assembleMixedReel, assembleProcessReel, assembleReel, hookFromTitle, la
 import { fetchWordTimings } from './word-timings.js';
 import { allMusicUrls, isDidYouKnowSeed, isFinishedSeed, isLocalMusicLine, isMixedSeed, localMusicPath, type MixedSeed, type ReelSeed } from './compose.js';
 import { composeWithRecipe, facebookPost, pickCommentKeyword, parseFacebookLinkMode, parseRecipeInPost, recipeCandidates, recipePostText, type FacebookLinkMode, type RecipeInPost } from './recipe-text.js';
-import { withGeminiChat } from '../llm/gemini.js';
 
 const log = createLogger('reels');
 
@@ -556,9 +555,7 @@ export async function tickReels(
 
   for (const reel of activeReels()) {
     try {
-      // A reel's prompts carry on its article's Gemini chat, so the script knows the recipe.
-      const runId = (reel as { run_id?: number | null }).run_id;
-      const moved = await withGeminiChat(runId ? `run:${runId}` : `reel:${reel.id}`, () => advance(reel, settings, deps));
+      const moved = await advance(reel, settings, deps);
       if (moved) result.advanced += 1;
     } catch (err) {
       const message = errorMessage(err);

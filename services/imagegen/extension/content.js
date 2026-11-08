@@ -1,17 +1,12 @@
 /**
- * Content script (isolated world): finds a project link for background.js.
+ * Content script -- bridge between background.js (isolated world) and
+ * injected.js (MAIN world).
  *
- * Since 0.7.0 nothing is put into Flow's own page. Flow now refuses every
- * generation in a browser whose extension changes the page ("We noticed some
- * unusual activity. Note that browser extensions that modify the page may
- * cause issues") -- measured 2026-11-08: the same account and server generated
- * in an incognito window, where Flow Kit does not run, and was refused in the
- * normal one, even by hand. So the MAIN-world scripts (hijack_bypass.js, the
- * bundled reCAPTCHA copies, injected.js with its fetch patch), the header
- * rewrite (rules.json) and the web-accessible files are out of manifest.json;
- * the files stay in this folder only to be read. Images are made by Flow's own
- * button (the "page" way, agent/worker/processor.py). The GET_CAPTCHA bridge
- * below has nothing on the other side any more and answers CONTENT_TIMEOUT.
+ * The MAIN-world scripts -- hijack_bypass.js, the bundled reCAPTCHA loader and
+ * client, injected.js -- are loaded by manifest.json ("world": "MAIN") at
+ * document_start, from upstream crisng95/flowkit@083fed7. That runs before any
+ * page script, which hijack_bypass.js needs, and is not subject to the page's
+ * Trusted Types CSP the old <script src> injection had to work around.
  */
 
 /**

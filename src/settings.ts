@@ -182,12 +182,11 @@ export const SETTING_SPECS: SettingSpec[] = [
     label: 'Keep logs for (days)',
     group: 'schedule',
     secret: false,
-    default: '3',
+    default: '30',
     type: 'number',
     help:
       'How long to keep the decision and event history before old entries are ' +
-      'deleted. This never affects what gets published. The decision history ' +
-      'grows by hundreds of MB a day on a busy platform, so keep this short.',
+      'deleted. This never affects what gets published.',
   },
 
   // -- Retries -------------------------------------------------------------

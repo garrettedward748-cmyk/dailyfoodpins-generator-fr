@@ -29,7 +29,6 @@ import {
 } from '../db/repos.js';
 import { createLogger } from '../lib/logger.js';
 import { run } from '../db/index.js';
-import { withGeminiChat } from '../llm/gemini.js';
 
 const log = createLogger('pipeline-context');
 
@@ -375,10 +374,7 @@ export class PipelineContext {
     variables: Record<string, unknown>,
     overrides: { model?: string; format?: 'json' | null } = {},
   ): Promise<ChatResult> {
-    // All of a run's prompts are asked in the same Gemini chat (when Gemini answers them).
-    const result = await withGeminiChat(`run:${this.runId}`, () =>
-      askPrompt(this.settings, this.encryptionKey, promptName, variables, overrides),
-    );
+    const result = await askPrompt(this.settings, this.encryptionKey, promptName, variables, overrides);
 
     this.usage.tokensIn += result.tokensIn;
     this.usage.tokensOut += result.tokensOut;

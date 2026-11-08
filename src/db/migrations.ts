@@ -1451,15 +1451,6 @@ export const MIGRATIONS: Migration[] = [
         WHERE last_error LIKE '%RATE_LIMIT_EXCEEDED%' OR last_error LIKE '%HTTP 429%' OR last_error LIKE '%too many requests%'`).run();
     },
   },
-  {
-    id: '068-short-log-retention',
-    description: 'Decision and event history kept 3 days instead of 30: a month of it filled the server disk',
-    up(db) {
-      if (!hasTable(db, 'settings')) return;
-      // A saved value longer than 3 days goes, so the new default applies.
-      db.prepare("DELETE FROM settings WHERE key = 'retention_days' AND CAST(value AS INTEGER) > 3").run();
-    },
-  },
 ];
 
 /* -- The runner ----------------------------------------------------------- */

@@ -1,5 +1,4 @@
 import { candidatesFor, allFor, markFailure, markSuccess, COOLDOWNS } from './pool.js';
-import { GEMINI_MODEL, geminiCompletion } from './gemini.js';
 import { createLogger, errorMessage } from '../lib/logger.js';
 import { LLM_OUT_OF_CREDIT } from '../core/retry.js';
 
@@ -17,11 +16,6 @@ export interface ChatRequest {
   format?: 'json' | null;
   temperature?: number;
   timeoutMs?: number;
-  /**
-   * When `model` is Gemini: the model the prompt goes to if Gemini cannot answer it (signed out,
-   * daily limit, not JSON). Normally the prompt's shipped model.
-   */
-  fallbackModel?: string;
 }
 
 export interface ChatResult {
@@ -135,29 +129,6 @@ export async function chat(
   baseUrl = '',
 ): Promise<ChatResult> {
   const started = Date.now();
-
-  // Gemini is answered in the image service's browser, never by an AI key: a key with no model
-  // list serves every model, and handing it "gemini" would fail it and mark it unhealthy.
-  if (request.model === GEMINI_MODEL) {
-    try {
-      const completion = await geminiCompletion(request);
-      return {
-        content: completion.content,
-        endpoint: 'Gemini',
-        model: GEMINI_MODEL,
-        durationMs: Date.now() - started,
-        attempts: 1,
-        tokensIn: 0,
-        tokensOut: 0,
-      };
-    } catch (err) {
-      const fallback = request.fallbackModel;
-      if (!fallback || fallback === GEMINI_MODEL) throw err;
-      log.warn(`Gemini could not answer, using ${fallback} instead: ${errorMessage(err)}`);
-      request = { ...request, model: fallback };
-    }
-  }
-
   const candidates = candidatesFor(request.model, encryptionKey, baseUrl);
   const tried: string[] = [];
   let lastError = '';

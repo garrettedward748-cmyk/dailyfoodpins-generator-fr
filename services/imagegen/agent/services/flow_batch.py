@@ -478,26 +478,6 @@ def read_images(payload: Any) -> list[GeneratedImage]:
     return images
 
 
-_UUID = re.compile(r"^[0-9a-fA-F-]{36}$")
-
-
-def read_titles(payload: Any) -> dict[str, str]:
-    """Each media id in a project listing and the title Flow shows it under.
-
-    The "+" picker lists a picture by that title -- the file name of an upload,
-    a caption Flow wrote for one it made -- and by nothing else a row carries.
-    Entries hold ``[title, created, null, null, mediaId, ...]``.
-    """
-    titles: dict[str, str] = {}
-    for node in _walk_lists(payload):
-        if len(node) < 5 or not isinstance(node[4], str) or not _UUID.match(node[4]):
-            continue
-        title = node[0]
-        if isinstance(title, str) and title.strip() and not title.startswith("http"):
-            titles.setdefault(node[4], title.strip())
-    return titles
-
-
 def read_uploaded_media_id(payload: Any) -> str:
     """`[[mediaId, projectId, operationId, "CAE", …]]` — the id is the handle a
     later generate passes as a reference."""

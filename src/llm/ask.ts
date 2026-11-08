@@ -31,8 +31,6 @@ export async function askPrompt(
       // modelFor applies any override set on the Prompts page; the shipped
       // default underneath it is still PROMPT_MODELS.
       model: overrides.model ?? modelFor(promptName),
-      // Where a prompt switched to Gemini goes when Gemini cannot answer it.
-      fallbackModel: spec?.model,
       messages,
       format: overrides.format !== undefined ? overrides.format : (spec?.format ?? null),
     },

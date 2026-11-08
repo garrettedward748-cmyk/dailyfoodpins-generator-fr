@@ -18,6 +18,7 @@ const when = (ms: number): string => new Date(ms).toISOString().slice(0, 16).rep
 
 /** Setup -> Backups. */
 export function backupsPage(data: { backups: BackupFile[]; restarting?: boolean }): Html {
+  const lastAuto = data.backups.find((b) => b.kind === 'auto');
   if (data.restarting) {
     return html`
       <h1>Restoring…</h1>
@@ -30,8 +31,8 @@ export function backupsPage(data: { backups: BackupFile[]; restarting?: boolean 
     <p class="subtitle">
       A backup holds everything the platform stores: sites, keywords, articles and runs, settings,
       LLM keys, Buffer accounts and prompts — and the key those tokens are encrypted with.
-      Backups are made <strong>only when you press Back up now</strong> (and one just before a restore);
-      nothing is backed up on its own. The last 3 are kept.
+      One is made <strong>every day</strong> on its own and the last 7 are kept.
+      Last daily backup: <strong>${lastAuto ? when(lastAuto.time) : 'not yet'}</strong>.
     </p>
 
     <div class="card">
