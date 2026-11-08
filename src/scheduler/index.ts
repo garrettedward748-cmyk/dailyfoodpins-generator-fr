@@ -952,9 +952,14 @@ export class Scheduler {
    */
   private async tickReels(): Promise<void> {
     try {
-      const reels = await tickReels(this.settings, defaultDeps(this.settings, this.encryptionKey));
-      if (reels.advanced > 0 || reels.failed > 0) {
-        log.info(`reels: ${reels.advanced} advanced, ${reels.failed} failed`);
+      // The automation switch stops reels too: switched off, nothing asks Flow
+      // for a picture or a clip on its own. A reel part-way through waits where
+      // it is and carries on when the switch is on again.
+      if (this.settings.getBool('automation_enabled')) {
+        const reels = await tickReels(this.settings, defaultDeps(this.settings, this.encryptionKey));
+        if (reels.advanced > 0 || reels.failed > 0) {
+          log.info(`reels: ${reels.advanced} advanced, ${reels.failed} failed`);
+        }
       }
     } catch (err) {
       log.error('the reel tick threw', errorMessage(err));
