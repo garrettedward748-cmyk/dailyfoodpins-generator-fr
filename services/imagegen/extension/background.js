@@ -2478,6 +2478,47 @@ async function pickInMenu(target, tabId, ui, wanted, family) {
  * hidden; the composer's prompt box goes away while it works. It stays on
  * across reloads. Answers true, or why not.
  */
+/**
+ * Close Flow's session panel on the right, so the prompt goes in the composer
+ * at the bottom centre. Measured 2026-11-08: with the panel open the prompt
+ * typed in it never took (COMPOSER_REJECTED_PROMPT: it holds ""); with the
+ * panel closed the centred composer generated. The panel's close button is
+ * told apart from any other "close" by where it is -- the right part of the
+ * window -- and by sharing a container with a prompt box. True when no such
+ * panel is showing (any more).
+ */
+async function closeSessionPanel(target, tabId, ui) {
+  const find = async () => {
+    const [out] = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      args: [ui.editor],
+      func: (editorSel) => {
+        const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+        const isClose = (b) => /^close\b/i.test(b.getAttribute('aria-label') || '')
+          || /^close$/i.test((b.innerText || '').trim());
+        for (const b of document.querySelectorAll('button, [role="button"]')) {
+          if (!visible(b) || !isClose(b)) continue;
+          const r = b.getBoundingClientRect();
+          if (r.x < window.innerWidth * 0.55) continue;
+          let scope = b;
+          for (let i = 0; scope && i < 10; i++, scope = scope.parentElement) {
+            const ed = [...scope.querySelectorAll(editorSel)].find(visible);
+            if (ed) return { left: r.x, top: r.y, w: r.width, h: r.height };
+          }
+        }
+        return null;
+      },
+    }).catch(() => [{ result: null }]);
+    return out?.result || null;
+  };
+  const button = await find();
+  if (!button) return true;
+  await humanClick(target, button);
+  await pause(800, 1500);
+  return (await find()) ? 'the session panel stayed open' : true;
+}
+
 async function agentModeOff(target, tabId, ui) {
   const find = async () => {
     const [out] = await chrome.scripting.executeScript({
@@ -3220,6 +3261,8 @@ async function uiGenerateImage({
 
   return withDebugger(tab.id, async (target) => {
     const picked = {};
+    uiStep('closing the session panel');
+    picked.panelClosed = await closeSessionPanel(target, tab.id, ui);
     uiStep('turning Agent mode off');
     picked.agentOff = await agentModeOff(target, tab.id, ui);
     // One result per prompt: x2 spends twice for a second one nobody takes.
@@ -3272,6 +3315,8 @@ async function uiGenerateImage({
     // caret from the pointer event, and text inserted without a caret goes
     // nowhere.
     await pause(1000, 3500);
+    // Turning Agent mode off, or a menu, can open the panel again.
+    picked.panelClosedAgain = await closeSessionPanel(target, tab.id, ui);
     box = await composerBox(tab.id, ui);
     if (!box?.editor) return { error: 'NO_COMPOSER: it went away while picking settings' };
     uiStep('typing the prompt');
