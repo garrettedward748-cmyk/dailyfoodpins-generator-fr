@@ -198,6 +198,13 @@ class WorkerController:
         logger.info(
             "worker started (concurrency=%d, poll=%ds)", MAX_CONCURRENT_REQUESTS, POLL_INTERVAL
         )
+        # Nothing can be in flight in a process that has just started: a job
+        # still PROCESSING was cut off by the restart. Waiting out the stale
+        # cutoff (10 minutes) outlasted the platform's 8-minute step, so the
+        # picture was given up on although it would have been made a minute
+        # later. Back in the queue now. A clip already sent to Flow carries its
+        # mark and is failed, not sent again (see _run_video_ui).
+        await jobs.reset_stale(0)
 
         while not self._shutdown.is_set():
             try:
