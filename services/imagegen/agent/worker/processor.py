@@ -14,6 +14,7 @@ import base64
 import hashlib
 import json
 import os
+import time
 import logging
 
 import httpx
@@ -34,6 +35,8 @@ from agent.config import (
     VIDEO_LISTING_GIVEUP_S,
     VIDEO_USE_BATCH,
     VIDEO_POLL_INTERVAL,
+    VIDEO_UI_MODEL,
+    VIDEO_USE_UI,
 )
 from agent import chrome, image_models, video_models
 from agent.db import jobs
@@ -738,6 +741,12 @@ class WorkerController:
             await jobs.fail(job_id, "A video needs at least one reference image")
             return
 
+        # On Flow's own page: the only way Flow takes a clip since it refuses
+        # browsers that change its page (see VIDEO_USE_UI in config).
+        if VIDEO_USE_UI:
+            await self._run_video_ui(job, project_id)
+            return
+
         # The transport Flow actually uses for video now. The REST path below is
         # kept -- it is what images use and what video used until Google moved --
         # but video over REST answers INVALID_ARGUMENT, so this goes first.
@@ -805,6 +814,80 @@ class WorkerController:
             f"still have run and the credits are spent. Reply carried: {shape}.\n\n"
             f"{json.dumps(submitted, default=str)[:6000]}",
         )
+
+    async def _run_video_ui(self, job: dict, project_id: str) -> None:
+        """A clip through Flow's composer: Video in its settings, the references
+        attached in the prompt box with "+", the clip read off its own tile.
+        Ported from the Automation project's image service.
+
+        Ingredients mode, the clip composed from the scene's pictures (up to
+        three). A clip that may already have been made is never sent again: a
+        second submit is a second clip paid for. So a job found already sent to
+        Flow -- the service restarted while it rendered -- is failed, not
+        resent, and only a refusal Flow showed on the tile clears the mark.
+        """
+        job_id = job["id"]
+        try:
+            sent = json.loads(job.get("operation_json") or "{}")
+        except (TypeError, ValueError):
+            sent = {}
+        if isinstance(sent, dict) and sent.get("ui_submitted"):
+            await jobs.fail(job_id, "VIDEO_NOT_TRACKED: the clip was sent to Flow before a restart "
+                                    "and its tile was lost. Not sent again, so it is not paid for "
+                                    "twice; it may be in the Flow project.")
+            return
+        if job.get("character_media_id") or job.get("voice_media_id"):
+            logger.warning("job %s: the presenter's character and voice are not attached on the "
+                           "page; the clip is made from the pictures alone", job_id[:8])
+        references = await self._ui_references(job, project_id)
+        if references is None or isinstance(references, dict):
+            return
+
+        # Still alive while Flow renders, so the stale reset does not hand the
+        # job back to the queue -- which would submit, and pay for, it again.
+        async def heartbeat():
+            while True:
+                await jobs.touch(job_id)
+                await asyncio.sleep(60)
+
+        async def submitted(known):
+            await jobs.set_operation(job_id, {"ui_submitted": time.time(), "known": known})
+            accounts.record_clip()
+
+        def film(refs):
+            return get_flow_client().generate_ui(
+                job["prompt"], project_id, job_id=job_id, kind="video",
+                model_label=VIDEO_UI_MODEL or None,
+                aspect_label=UI_ASPECT_LABELS.get(job["orientation"], UI_ASPECT_LABELS["VERTICAL"]),
+                video_mode="Ingredients", references=refs,
+                poll_seconds=VIDEO_POLL_INTERVAL * VIDEO_MAX_POLLS,
+                on_submitted=submitted,
+            )
+
+        beating = asyncio.create_task(heartbeat())
+        try:
+            result = await film(references)
+            if self._media_missing(result):
+                # Nothing was submitted: the picker is checked before the prompt goes.
+                references = await self._ui_references(job, project_id, reuse=False)
+                if references is None or isinstance(references, dict):
+                    return
+                result = await film(references)
+        finally:
+            beating.cancel()
+        if is_error(result):
+            detail = error_text(result)
+            if "FLOW_UI_ERROR" in detail or "SILENT_FAILURE" in detail:
+                # Flow said no on the tile: nothing was made, so another try
+                # may send it. (A job never submitted carries no mark at all.)
+                await jobs.set_operation(job_id, {})
+            if video_models.out_of_credits(detail):
+                detail = "PUBLIC_ERROR_USER_QUOTA_REACHED: no video credits left on this account. " + detail
+            await self._handle_failure(job, detail)
+            return
+        await jobs.complete(job_id, result["media_id"], result["video_url"])
+        accounts.note_success()
+        logger.info("job %s COMPLETED (clip made on Flow's page)", job_id[:8])
 
     async def _fetch_reference(self, url: str):
         """The image bytes and their type. {"error": ...} if it cannot be had.

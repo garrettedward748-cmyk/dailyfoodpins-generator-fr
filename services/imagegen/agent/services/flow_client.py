@@ -7,6 +7,7 @@ extension executes them in browser context (residential IP, cookies, reCAPTCHA).
 import asyncio
 import json
 import logging
+import os
 import random
 import re
 import time
@@ -29,6 +30,9 @@ _UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 #: How often the Flow page is looked at while a picture is being made.
 UI_POLL_S = 2
 #: The longest a picture is waited for while Flow still shows it working.
+# Seconds between two prompts sent on Flow's page, picked at random in this range.
+UI_SUBMIT_GAP_MIN_S = float(os.environ.get("UI_SUBMIT_GAP_MIN_S", "45"))
+UI_SUBMIT_GAP_MAX_S = float(os.environ.get("UI_SUBMIT_GAP_MAX_S", "120"))
 UI_MAX_WAIT_S = 900
 #: How often a clip sent before a restart is looked for in the project.
 VIDEO_FIND_EVERY_S = 20
@@ -41,6 +45,7 @@ class FlowClient:
     """Sends commands to Chrome extension via WebSocket."""
 
     _ui_lock: asyncio.Lock | None = None
+    _last_ui_submit: float = 0.0
 
     def __init__(self):
         self._extension_ws = None  # Set by WS server when extension connects
@@ -1123,6 +1128,16 @@ class FlowClient:
                     logger.warning("Flow UI: job %s: prompts still rendering, the tab is not "
                                    "reloaded; its uploaded references may not be listed",
                                    job_id[:8])
+            # A person does not send a new prompt every half minute all day:
+            # a steady run of submits, one straight after another, is itself
+            # something Flow's check can flag (UNUSUAL_ACTIVITY came back
+            # between successes, 2026-11-08). So prompts are spaced by an
+            # uneven gap, held under the lock so nothing jumps in meanwhile.
+            gap = random.uniform(UI_SUBMIT_GAP_MIN_S, UI_SUBMIT_GAP_MAX_S)
+            wait = self._last_ui_submit + gap - time.monotonic()
+            if self._last_ui_submit and wait > 0:
+                logger.info("Flow UI: job %s waits %.0fs before its prompt goes in", job_id[:8], wait)
+                await asyncio.sleep(wait)
             options = {"kind": kind, "videoMode": video_mode, "references": references or [],
                        "jobId": job_id, "reloadFirst": reload_first}
             if seconds:
@@ -1135,6 +1150,7 @@ class FlowClient:
                 await asyncio.sleep(15)
                 submitted = await self.ui_generate_image(
                     prompt, project_id, model_label, aspect_label, **options)
+            self._last_ui_submit = time.monotonic()
             if reload_first:
                 self._reload_next = False
             if submitted.get("error"):
