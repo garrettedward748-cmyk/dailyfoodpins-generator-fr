@@ -149,6 +149,7 @@ class WorkerController:
     def __init__(self) -> None:
         self._shutdown = asyncio.Event()
         self._running: set[str] = set()
+        self._running_video: set[str] = set()
         self._paused_reason: str | None = None
 
     def request_shutdown(self) -> None:
@@ -232,14 +233,26 @@ class WorkerController:
                 # another is ready (the switch lands once the browser is free).
                 accounts.leave_resting_active()
 
-                free = MAX_CONCURRENT_REQUESTS - len(self._running)
+                # A clip spends most of its time waiting on Flow -- up to half
+                # an hour -- so it does not take a picture's place: pictures
+                # keep their own slots, and one clip at a time is watched. Two
+                # clips used to fill both slots and an article's picture timed
+                # out in the queue behind them.
+                videos = len(self._running_video)
+                free = MAX_CONCURRENT_REQUESTS - (len(self._running) - videos)
                 # No new claims while a Google-account switch waits: the switch
                 # needs the browser free, and a steady queue would never let it.
-                if free > 0 and not self.paused and get_flow_client().connected and not accounts.switch_pending():
+                if (free > 0 or not videos) and not self.paused and get_flow_client().connected \
+                        and not accounts.switch_pending():
                     # Only claim work the account in use is ticked for (images
                     # vs video, set per account in Setup -> Google accounts).
                     allowed = accounts.active_kinds()
-                    claimed = await jobs.claim_pending(free, kinds=list(allowed))
+                    claimed = []
+                    pictures = [k for k in allowed if k != "video"]
+                    if free > 0 and pictures:
+                        claimed += await jobs.claim_pending(free, kinds=pictures)
+                    if "video" in allowed and not videos:
+                        claimed += await jobs.claim_pending(1, kinds=["video"])
                     if not claimed:
                         await self._align_account_to_queue(allowed)
                     # Skipped while other jobs are still in flight, since
@@ -248,6 +261,8 @@ class WorkerController:
                         await self._ensure_token(len(claimed))
                     for job in claimed:
                         self._running.add(job["id"])
+                        if job.get("kind") == "video":
+                            self._running_video.add(job["id"])
                         # Claimed here, before the task exists, so the idle stop
                         # cannot land between creating it and it starting.
                         chrome.hold()
@@ -338,6 +353,7 @@ class WorkerController:
             await self._handle_failure(job, str(exc))
         finally:
             self._running.discard(job_id)
+            self._running_video.discard(job_id)
             chrome.release()
             # Spacing between calls, not between loop iterations: bursts are
             # what earn a rate limit.
@@ -858,10 +874,21 @@ class WorkerController:
 
         # Still alive while Flow renders, so the stale reset does not hand the
         # job back to the queue -- which would submit, and pay for, it again.
+        # And let go once nobody waits for it: a reel made again (a retry) asks
+        # about its new job only, and the old one held the clip slot for half
+        # an hour.
+        main = asyncio.current_task()
+        abandoned = False
+
         async def heartbeat():
+            nonlocal abandoned
             while True:
                 await jobs.touch(job_id)
                 await asyncio.sleep(60)
+                if await jobs.unwatched_for(job_id, ABANDON_UNWATCHED_MINUTES):
+                    abandoned = True
+                    main.cancel()
+                    return
 
         async def submitted(known):
             await jobs.set_operation(job_id, {"ui_submitted": time.time(), "known": known})
@@ -886,6 +913,16 @@ class WorkerController:
                 if references is None or isinstance(references, dict):
                     return
                 result = await film(references)
+        except asyncio.CancelledError:
+            if not abandoned:
+                raise
+            main.uncancel()
+            logger.warning("job %s: nobody asked for this clip for %d minutes (its reel was made "
+                           "again, or given up); no longer watched", job_id[:8], ABANDON_UNWATCHED_MINUTES)
+            await jobs.fail(job_id, f"ABANDONED: nobody asked for this clip for "
+                                    f"{ABANDON_UNWATCHED_MINUTES} minutes; if Flow made it, it is "
+                                    f"in the Flow project")
+            return
         finally:
             beating.cancel()
         if is_error(result):

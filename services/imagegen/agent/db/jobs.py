@@ -86,6 +86,19 @@ async def mark_polled(job_id: str) -> None:
     await db.commit()
 
 
+async def unwatched_for(job_id: str, minutes: int) -> bool:
+    """Whether nobody has asked about this job for `minutes` (never asked: since it was queued)."""
+    if minutes <= 0:
+        return False
+    db = await get_db()
+    async with db.execute(
+        """SELECT 1 FROM job WHERE id = ?
+             AND COALESCE(last_polled_at, created_at) < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)""",
+        (job_id, f"-{int(minutes)} minutes"),
+    ) as cursor:
+        return await cursor.fetchone() is not None
+
+
 async def abandon_unwatched(minutes: int) -> list[str]:
     """Fail queued jobs nobody has asked about for `minutes`, and return them.
 

@@ -160,3 +160,25 @@ def test_a_clip_behind_flows_own_link_is_fetched_by_the_browser():
     assert asked == [("ui_tile_video", src)]
     assert answer == {"status": 200, "media_id": "ab12cd34-0000-4000-8000-000000000003",
                       "video_url": "data:video/mp4;base64,AAAA"}
+
+
+def test_a_clip_nobody_waits_for_any_more_lets_go_of_its_slot(monkeypatch):
+    # The reel was made again: its old job is no longer asked about.
+    async def slow(self, prompt, project_id, **kw):
+        await kw["on_submitted"]([])
+        await asyncio.sleep(30)
+        return dict(CLIP)
+
+    class Slow(Page):
+        generate_ui = slow
+
+    async def never_asked(job_id, minutes):
+        return True
+
+    real_sleep = asyncio.sleep
+    monkeypatch.setattr(processor.asyncio, "sleep", lambda s: real_sleep(0 if s >= 60 else s))
+    monkeypatch.setattr(processor.jobs, "unwatched_for", never_asked)
+    stored, clips = run_clip(monkeypatch, Slow())
+    assert stored["status"] == "FAILED"
+    assert stored["error_message"].startswith("ABANDONED")
+    assert clips == [1]
