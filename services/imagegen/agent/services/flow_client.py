@@ -1317,6 +1317,19 @@ class FlowClient:
                 continue
             lost = 0
 
+            if kind == "video" and submitted_at and self._watching <= 1:
+                # The clip's address as Flow's own answer named it, after this
+                # submit: its tile shows only a still behind an opaque link.
+                for answer in reversed(state.get("videos") or []):
+                    url = str(answer.get("url") or "")
+                    if (answer.get("at") or 0) < submitted_at or "/video/" not in url:
+                        continue
+                    media_id = url.split("/video/", 1)[1].split("?", 1)[0].split("/", 1)[0]
+                    if media_id.lower() in known:
+                        continue
+                    logger.info("Flow UI: job %s's clip read off Flow's answer", job_id[:8])
+                    return {"status": 200, "media_id": media_id, "video_url": url}
+
             done = [t for t in tiles if t.get("image") or t.get("video") or t.get("still")]
             for tile in done:
                 result = await self._tile_result(kind, tile, ids)

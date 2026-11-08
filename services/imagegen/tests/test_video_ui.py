@@ -117,3 +117,24 @@ def test_a_finished_tile_hands_over_its_own_clip_address():
     url = "https://flow-content.google/video/ab12cd34-0000-4000-8000-000000000001?sig=x"
     answer = asyncio.run(Client()._tile_result("video", {"video": url}, set()))
     assert answer == {"status": 200, "media_id": "ab12cd34-0000-4000-8000-000000000001", "video_url": url}
+
+
+def test_a_clip_is_read_off_flows_answer_after_its_submit(monkeypatch):
+    # The tile shows only a still behind an opaque link; Flow's answer names the clip.
+    from agent.services import flow_client as fc
+
+    url = "https://flow-content.google/video/ab12cd34-0000-4000-8000-000000000002?sig=y"
+    old = "https://flow-content.google/video/ab12cd34-0000-4000-8000-000000000009?sig=z"
+
+    class Client(fc.FlowClient):
+        def __init__(self):
+            self._watching = 1
+
+        async def ui_job_tiles(self, job_id):
+            return {"found": True, "tiles": [{"clip": True, "still": "https://flow.google.com/asb/x",
+                                               "video": None, "percent": None, "ids": []}],
+                    "videos": [{"url": old, "at": 500}, {"url": url, "at": 2000}]}
+
+    monkeypatch.setattr(fc, "UI_POLL_S", 0)
+    answer = asyncio.run(Client()._watch_tiles("job-1", "video", "P", {"submittedAt": 1000}, set(), 5))
+    assert answer == {"status": 200, "media_id": "ab12cd34-0000-4000-8000-000000000002", "video_url": url}

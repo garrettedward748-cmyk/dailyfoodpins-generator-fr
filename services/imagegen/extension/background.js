@@ -2056,7 +2056,9 @@ chrome.debugger.onDetach.addListener((source) => {
 // nothing is added to the page.
 
 // Flow's own host, and the storage bucket some answers sign instead.
-const MEDIA_URL_RE = /https:\/\/(?:flow-content\.google|storage\.googleapis\.com\/[A-Za-z0-9_\-.]+)\/image\/[A-Za-z0-9_\-]+(?:\?[^"'\s\\<>\]]*)?/g;
+// Clips' addresses too (/video/): a finished clip's tile shows only a still
+// behind an opaque link until it is played, so its address is read here.
+const MEDIA_URL_RE = /https:\/\/(?:flow-content\.google|storage\.googleapis\.com\/[A-Za-z0-9_\-.]+)\/(?:image|video)\/[A-Za-z0-9_\-]+(?:\?[^"'\s\\<>\]]*)?/g;
 const watchedRequests = new Map(); // tabId -> Set(requestId)
 const answeredImages = []; // { url, at }, newest last, bounded
 // What the page asked Google lately and how many pictures each answer named,
@@ -3148,9 +3150,11 @@ async function jobTiles(tabId, ui, jobId) {
           const ids = new Set();
           for (const el of [tile, ...tile.querySelectorAll('*')]) {
             for (const a of el.attributes) {
+              if (a.name === 'data-vps-job') continue; // our own mark, not a media id
               for (const m of a.value.match(uuidRe) || []) ids.add(m.toLowerCase());
             }
           }
+          const r = tile.getBoundingClientRect();
           // A clip's tile shows a still until its <video> loads; the still
           // says the clip is there, and its media id is in the tile.
           const clip = tile.querySelector('flow-video-tile');
@@ -3165,6 +3169,7 @@ async function jobTiles(tabId, ui, jobId) {
             error: !video && !image && !still && errorRe.test(text) ? text : null,
             queued: !pct && /queue|waiting|starting/i.test(text),
             ids: [...ids],
+            box: { left: r.x, top: r.y, w: r.width, h: r.height },
           };
         });
     },
@@ -3550,9 +3555,24 @@ async function uiJobTiles({ jobId = '', selectors = null } = {}) {
   const tab = await composerTab();
   if (!tab) return { error: 'NO_FLOW_TAB' };
   const ui = uiSelectors(selectors);
-  const tiles = await readAwake(tab, () => jobTiles(tab.id, ui, jobId), null);
+  let tiles = await readAwake(tab, () => jobTiles(tab.id, ui, jobId), null);
   if (!Array.isArray(tiles)) return { error: 'the page did not answer' };
-  return { found: tiles.length > 0, tiles, codes: answeredCodes.slice(-20), now: Date.now() };
+  // A finished clip shows a still and no <video> until the pointer is over
+  // it: hovering loads the clip, and its address, into the tile.
+  const unplayed = tiles.find((t) => t.clip && t.still && !t.video && t.percent == null
+    && t.box && t.box.w > 0 && t.box.h > 0 && t.box.top >= 0 && t.box.top < 2000);
+  if (unplayed) {
+    await withDebugger(tab.id, async (target) => {
+      await humanMove(target, unplayed.box.left + unplayed.box.w * rand(0.35, 0.65),
+        unplayed.box.top + unplayed.box.h * rand(0.35, 0.65));
+      await pause(1500, 2500);
+      return {};
+    }).catch(() => {});
+    const again = await readAwake(tab, () => jobTiles(tab.id, ui, jobId), null);
+    if (Array.isArray(again)) tiles = again;
+  }
+  const videos = answeredImages.filter((a) => a.url.includes('/video/')).slice(-20);
+  return { found: tiles.length > 0, tiles, codes: answeredCodes.slice(-20), videos, now: Date.now() };
 }
 
 /** Error messages on the Flow page now, less the ones in `ignore`. */
