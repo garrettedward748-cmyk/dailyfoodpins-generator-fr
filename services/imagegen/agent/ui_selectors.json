@@ -1,5 +1,5 @@
 {
-  "editor": "div.ProseMirror",
+  "editor": "div.ProseMirror, [contenteditable=\"true\"][role=\"textbox\"], textarea",
   "generateButton": "button[aria-label=\"Start generation\"]",
   "stopButton": "button[aria-label=\"Stop\"]",
   "agentToggle": "button.agent-mode-chip",

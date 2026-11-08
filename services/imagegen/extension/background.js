@@ -1933,7 +1933,9 @@ const CDP_VERSION = '1.3';
 // call (agent/ui_selectors.json, overridable from the data folder without a
 // rebuild); these are only for a call that arrives without one.
 const UI_DEFAULTS = {
-  editor: 'div.ProseMirror',
+  // The visible one is taken (the last on the page): Flow's session panel can
+  // leave another, hidden, prompt box in the page.
+  editor: 'div.ProseMirror, [contenteditable="true"][role="textbox"], textarea',
   generateButton: 'button[aria-label="Start generation"]',
   // While Flow works on a submit, a Stop button sits where Generate was.
   stopButton: 'button[aria-label="Stop"]',
@@ -2143,13 +2145,39 @@ async function withDebugger(tabId, body) {
  * Read immediately before each click rather than once: the composer grows as
  * text is typed into it and the button moves down the page with it.
  */
+/**
+ * Every prompt-box-like element on the page, in a line for the agent's log:
+ * which one the composer is when Flow's layout changes is read from this.
+ */
+async function promptBoxesOnPage(tabId) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    func: () => {
+      const els = [...document.querySelectorAll('[contenteditable], textarea, input[type="text"], [role="textbox"]')];
+      const focused = document.activeElement;
+      return els.slice(0, 8).map((e) => {
+        const r = e.getBoundingClientRect();
+        const label = e.getAttribute('aria-label') || e.getAttribute('placeholder') || e.getAttribute('data-placeholder')
+          || (e.querySelector('[data-placeholder]')?.getAttribute('data-placeholder')) || '';
+        const cls = String(e.className || '').split(/\s+/).slice(0, 3).join('.');
+        const text = String(e.value ?? e.innerText ?? '').trim();
+        return `${e.tagName.toLowerCase()}${cls ? '.' + cls : ''}[ce=${e.getAttribute('contenteditable') || '-'}`
+          + ` label="${label.slice(0, 40)}" ${Math.round(r.width)}x${Math.round(r.height)}@${Math.round(r.x)},${Math.round(r.y)}`
+          + ` text=${text.length}${e === focused || e.contains(focused) ? ' FOCUSED' : ''}]`;
+      }).join(' | ') + ` (focus on ${focused ? focused.tagName.toLowerCase() + '.' + String(focused.className || '').split(/\s+/)[0] : 'nothing'})`;
+    },
+  }).catch((e) => [{ result: `unread: ${e?.message || e}` }]);
+  return out?.result || 'none found';
+}
+
 async function composerBox(tabId, ui) {
   const [out] = await chrome.scripting.executeScript({
     target: { tabId },
     world: 'MAIN',
     args: [ui.editor, ui.generateButton, ui.stopButton],
     func: (editorSel, buttonSel, stopSel) => {
-      const editor = document.querySelector(editorSel);
+      const editor = (() => { const seen = [...document.querySelectorAll(editorSel)].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }); return seen[seen.length - 1] || document.querySelector(editorSel); })();
       const button = document.querySelector(buttonSel);
       const box = (el) => {
         if (!el) return null;
@@ -2165,7 +2193,7 @@ async function composerBox(tabId, ui) {
         editor: box(editor),
         button: box(button),
         ready: !!button && !button.disabled,
-        text: editor ? editor.innerText.trim() : null,
+        text: editor ? String(editor.value ?? editor.innerText ?? '').trim() : null,
         stop,
         working,
       };
@@ -2507,7 +2535,7 @@ async function composerSettingsButton(tabId, ui) {
     world: 'MAIN',
     args: [ui.editor, ui.menuTriggers],
     func: (editorSel, triggerSel) => {
-      const editor = document.querySelector(editorSel);
+      const editor = (() => { const seen = [...document.querySelectorAll(editorSel)].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }); return seen[seen.length - 1] || document.querySelector(editorSel); })();
       if (!editor) return null;
       let scope = editor;
       for (let i = 0; i < 6 && scope.parentElement; i++) scope = scope.parentElement;
@@ -2626,7 +2654,7 @@ async function attachedCount(tabId, ui) {
     args: [ui.ingredientChip, ui.editor, ui.assetList],
     func: (chipSel, editorSel, listSel) => {
       const chips = document.querySelectorAll(chipSel).length;
-      const editor = document.querySelector(editorSel);
+      const editor = (() => { const seen = [...document.querySelectorAll(editorSel)].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }); return seen[seen.length - 1] || document.querySelector(editorSel); })();
       let scope = editor;
       for (let i = 0; scope && i < 8 && scope.parentElement; i++) scope = scope.parentElement;
       const pictures = scope ? [...scope.querySelectorAll('img')]
@@ -2819,7 +2847,7 @@ async function uiProbePicker({ projectId = null, search = '', mediaIds = [], dur
           world: 'MAIN',
           args: [ui.editor],
           func: (editorSel) => {
-            const editor = document.querySelector(editorSel);
+            const editor = (() => { const seen = [...document.querySelectorAll(editorSel)].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }); return seen[seen.length - 1] || document.querySelector(editorSel); })();
             let scope = editor || document.body;
             for (let i = 0; editor && i < 8 && scope.parentElement; i++) scope = scope.parentElement;
             return [...scope.querySelectorAll('button, [role="button"], input[type="file"]')]
@@ -3253,7 +3281,8 @@ async function uiGenerateImage({
 
     box = await composerBox(tab.id, ui);
     if ((box?.text || '') !== prompt.trim()) {
-      return { error: `COMPOSER_REJECTED_PROMPT: it holds ${JSON.stringify((box?.text || '').slice(0, 80))}` };
+      const seen = await promptBoxesOnPage(tab.id);
+      return { error: `COMPOSER_REJECTED_PROMPT: it holds ${JSON.stringify((box?.text || '').slice(0, 80))}; boxes on the page: ${seen}` };
     }
 
     // The button enables on the editor's own change event, which lands a
