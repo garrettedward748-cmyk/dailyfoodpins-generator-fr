@@ -424,27 +424,3 @@ def test_user_quota_reached_is_out_of_credits(isolated):
     accounts.rotate("PUBLIC_ERROR_USER_QUOTA_REACHED")
     a1 = {a["id"]: a for a in accounts.list_accounts()["accounts"]}[1]
     assert a1["reason"] == "Out of credits"
-
-
-# --- How images are made ---------------------------------------------------
-
-def test_flow_kit_is_the_default_image_method(isolated):
-    assert accounts.image_methods_in_order() == ["flowkit"]
-    assert accounts.list_accounts()["image_method"] == "flowkit"
-
-
-def test_the_page_can_come_first_with_flow_kit_behind_it(isolated):
-    accounts.set_image_method("page_then_flowkit")
-    assert accounts.image_methods_in_order() == ["page", "flowkit"]
-
-
-def test_the_choice_saved_under_its_first_name_still_reads(isolated):
-    data = accounts._load()
-    data["image_method"] = "flowkit_then_flowbatch"
-    accounts._save(data)
-    assert accounts.image_methods_in_order() == ["flowkit", "page"]
-
-
-def test_an_unknown_image_method_is_refused(isolated):
-    with pytest.raises(ValueError):
-        accounts.set_image_method("both")

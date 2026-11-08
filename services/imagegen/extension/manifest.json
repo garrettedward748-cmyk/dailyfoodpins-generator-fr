@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Flow Kit",
-  "version": "0.6.1",
-  "description": "Local agent bridge for Google Flow API \u2014 captures tokens, solves reCAPTCHA, proxies API calls",
+  "version": "0.5.0",
+  "description": "Local agent bridge for Google Flow API — captures tokens, solves reCAPTCHA, proxies API calls",
   "permissions": [
     "storage",
     "alarms",
@@ -22,9 +22,7 @@
     "https://labs.google/*",
     "https://aisandbox-pa.googleapis.com/*",
     "http://127.0.0.1:8100/*",
-    "https://accounts.google.com/*",
-    "https://storage.googleapis.com/*",
-    "https://*.googleusercontent.com/*"
+    "https://accounts.google.com/*"
   ],
   "background": {
     "service_worker": "background.js"

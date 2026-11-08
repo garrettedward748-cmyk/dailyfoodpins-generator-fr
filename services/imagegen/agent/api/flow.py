@@ -465,19 +465,6 @@ async def accounts_clip_cost(body: _ClipCost) -> dict:
     return accounts.list_accounts()
 
 
-class _ImageMethod(BaseModel):
-    image_method: str = accounts.DEFAULT_IMAGE_METHOD
-
-
-@router.put("/accounts-image-method")
-async def accounts_image_method(body: _ImageMethod) -> dict:
-    try:
-        accounts.set_image_method(body.image_method)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    return accounts.list_accounts()
-
-
 class _Project(BaseModel):
     project_id: str = ""
 
