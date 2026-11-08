@@ -138,3 +138,25 @@ def test_a_clip_is_read_off_flows_answer_after_its_submit(monkeypatch):
     monkeypatch.setattr(fc, "UI_POLL_S", 0)
     answer = asyncio.run(Client()._watch_tiles("job-1", "video", "P", {"submittedAt": 1000}, set(), 5))
     assert answer == {"status": 200, "media_id": "ab12cd34-0000-4000-8000-000000000002", "video_url": url}
+
+
+def test_a_clip_behind_flows_own_link_is_fetched_by_the_browser():
+    # The tile plays it from flow.google.com/asb/..., which opens only signed in.
+    from agent.services.flow_client import FlowClient
+
+    asked = []
+
+    class Client(FlowClient):
+        def __init__(self):
+            pass
+
+        async def _send_ui(self, method, params, timeout):
+            asked.append((method, params["src"]))
+            return {"dataUrl": "data:video/mp4;base64,AAAA", "size": 3,
+                    "finalUrl": "https://x.googleusercontent.com/v/ab12cd34-0000-4000-8000-000000000003"}
+
+    src = "https://flow.google.com/asb/ANqvLOZWDCdE"
+    answer = asyncio.run(Client()._tile_result("video", {"video": src, "percent": None}, set()))
+    assert asked == [("ui_tile_video", src)]
+    assert answer == {"status": 200, "media_id": "ab12cd34-0000-4000-8000-000000000003",
+                      "video_url": "data:video/mp4;base64,AAAA"}

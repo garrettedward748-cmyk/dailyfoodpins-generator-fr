@@ -1,4 +1,4 @@
-import { readLocalMedia } from '../integrations/media-store.js';
+import { readLocalMedia, saveMediaVideo } from '../integrations/media-store.js';
 import { recipeFileName } from '../lib/file-name.js';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -1043,8 +1043,17 @@ async function pollGeneration(reel: ReelView, deps: ReelDeps): Promise<boolean> 
   const status = (job.status ?? '').toUpperCase();
 
   if (status === 'COMPLETED') {
-    const url = job.image_url;
+    let url = job.image_url;
     if (!url) throw new Error('The video job completed but returned no URL.');
+    // A clip read off Flow's page arrives as data (its link opens only in the
+    // signed-in browser): kept as a file here rather than megabytes in a column.
+    if (url.startsWith('data:')) {
+      try {
+        url = saveMediaVideo(await deps.download(url), `reel-${reel.id}-clip`).url;
+      } catch (err) {
+        log.warn(`reel ${reel.id}: kept the clip as data, it could not be stored as a file: ${errorMessage(err)}`);
+      }
+    }
 
     // Clip + steps: keep the clip on disk now (Google's link expires) and
     // build the rest of the reel around it on the next pass.

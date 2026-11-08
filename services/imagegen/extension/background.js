@@ -582,6 +582,8 @@ function connectToAgent() {
         sendToAgent({ id: msg.id, result: await uiJobTiles(msg.params || {}) });
       } else if (msg.method === 'ui_tile_image') {
         sendToAgent({ id: msg.id, result: await uiTileImage(msg.params || {}) });
+      } else if (msg.method === 'ui_tile_video') {
+        sendToAgent({ id: msg.id, result: await uiTileVideo(msg.params || {}) });
       } else if (msg.method === 'ui_page_errors') {
         sendToAgent({ id: msg.id, result: await uiPageErrors(msg.params || {}) });
       } else if (msg.method === 'ui_probe_picker') {
@@ -3521,6 +3523,66 @@ async function uiPageImages() {
     codes: answeredCodes.slice(-20),
     now: Date.now(),
   };
+}
+
+/**
+ * A finished clip, as a data: URL.
+ *
+ * Since Flow's change a finished clip's tile plays it from an opaque link
+ * (flow.google.com/asb/...) that opens only with the account's cookies, and
+ * Google's media call no longer names it. This worker holds the host
+ * permission and the same cookies, so it fetches the clip -- following the link
+ * to wherever it leads -- without touching the page. The page's own fetch is
+ * the fallback.
+ */
+async function uiTileVideo({ src = '' } = {}) {
+  if (!/^https:/.test(src)) return { error: 'not a link' };
+  const asData = async (blob) => {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return `data:${blob.type.split(';')[0]};base64,${btoa(bin)}`;
+  };
+  let why = '';
+  try {
+    const res = await fetch(src, { credentials: 'include' });
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob.type.startsWith('video/') && blob.size > 10000) {
+        return { dataUrl: await asData(blob), finalUrl: res.url, size: blob.size };
+      }
+      why = `not a clip: ${blob.type} ${blob.size} bytes`;
+    } else {
+      why = `HTTP ${res.status}`;
+    }
+  } catch (e) {
+    why = String(e?.message || e);
+  }
+  const tab = await composerTab();
+  if (!tab) return { error: `worker: ${why}; NO_FLOW_TAB` };
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: 'MAIN',
+    args: [src],
+    func: async (want) => {
+      try {
+        const res = await fetch(want, { credentials: 'include' });
+        if (!res.ok) return { error: `HTTP ${res.status}` };
+        const blob = await res.blob();
+        if (!blob.type.startsWith('video/')) return { error: `not a clip: ${blob.type}` };
+        return await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve({ dataUrl: reader.result, finalUrl: res.url, size: blob.size });
+          reader.onerror = () => resolve({ error: 'unreadable' });
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        return { error: String(e?.message || e) };
+      }
+    },
+  }).catch((e) => [{ result: { error: String(e?.message || e) } }]);
+  const r = out?.result || { error: 'no answer from the page' };
+  return r.dataUrl ? r : { error: `worker: ${why}; page: ${r.error}` };
 }
 
 /** The picture of one tile on the Flow page, as a data: URL. */

@@ -904,6 +904,25 @@ class FlowClient:
                        out.get("error") if isinstance(out, dict) else out)
         return None
 
+    async def _tile_clip(self, src: str) -> dict | None:
+        """A finished clip a tile plays from a link only the browser can open, as data."""
+        failures = self.__dict__.setdefault("_unreadable_clips", {})
+        if failures.get(src, 0) >= 3:
+            return None
+        out = await self._send_ui("ui_tile_video", {"src": src}, timeout=300)
+        data_url = out.get("dataUrl") if isinstance(out, dict) else None
+        if isinstance(data_url, str) and data_url.startswith("data:video/"):
+            final = str(out.get("finalUrl") or "")
+            found = _UUID_RE.search(final) or _UUID_RE.search(src)
+            media_id = found.group(0).lower() if found else "clip-" + uuid.uuid5(uuid.NAMESPACE_URL, src).hex[:16]
+            logger.info("Flow UI: clip read off its tile (%s KB, from %s)",
+                        (out.get("size") or 0) // 1024, (final or src)[:90])
+            return {"status": 200, "media_id": media_id, "video_url": data_url}
+        failures[src] = failures.get(src, 0) + 1
+        logger.warning("Flow UI: could not read the clip %s: %s", src[:120],
+                       out.get("error") if isinstance(out, dict) else out)
+        return None
+
     async def _generate_images_ui_once(self, prompt: str, project_id: str,
                                  model_label: str | None = None,
                                  aspect_label: str | None = None,
@@ -1240,6 +1259,13 @@ class FlowClient:
             if src.startswith("https://") and "/video/" in src:
                 media_id = src.split("/video/", 1)[1].split("?", 1)[0].split("/", 1)[0]
                 return {"status": 200, "media_id": media_id, "video_url": src}
+            if src.startswith("https://") and tile.get("percent") is None:
+                # Flow plays a finished clip through an opaque link of its own
+                # (flow.google.com/asb/...) that only a signed-in browser can
+                # open. The browser fetches it and the clip travels as data.
+                clip = await self._tile_clip(src)
+                if clip:
+                    return clip
             seen = (src[:90], str(tile.get("still") or "")[:90], str(tile.get("poster") or "")[:90])
             if seen != getattr(self, "_last_clip_tile", None):
                 self._last_clip_tile = seen
