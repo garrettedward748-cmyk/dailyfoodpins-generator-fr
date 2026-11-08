@@ -909,7 +909,8 @@ class FlowClient:
         failures = self.__dict__.setdefault("_unreadable_clips", {})
         if failures.get(src, 0) >= 3:
             return None
-        out = await self._send_ui("ui_tile_video", {"src": src}, timeout=300)
+        logger.info("Flow UI: fetching the finished clip %s", src[:90])
+        out = await self._send_ui("ui_tile_video", {"src": src}, timeout=150)
         data_url = out.get("dataUrl") if isinstance(out, dict) else None
         if isinstance(data_url, str) and data_url.startswith("data:video/"):
             final = str(out.get("finalUrl") or "")
@@ -1271,9 +1272,17 @@ class FlowClient:
                 self._last_clip_tile = seen
                 logger.warning("Flow UI: a finished clip tile with no address to take: video=%r "
                                "still=%r poster=%r ids=%s", *seen, sorted(ids)[:3])
+            # Google's media call, one id after another (the scene's pictures
+            # among them), each up to a minute: asked on every look it held the
+            # watch for minutes at a time, so the tile -- and the clip it shows
+            # once hovered -- was hardly looked at. Now once in a while only.
+            now = time.monotonic()
+            if now - self.__dict__.get("_last_clip_rpc", 0.0) < 120:
+                return None
+            self._last_clip_rpc = now
             found = _UUID_RE.findall(" ".join(str(tile.get(k) or "") for k in ("video", "still", "poster")))
             ordered = [m.lower() for m in found] + sorted(i for i in ids if i not in found)
-            return await self._video_from_ids(dict.fromkeys(ordered))
+            return await self._video_from_ids(list(dict.fromkeys(ordered))[:4])
         src = tile.get("image") or ""
         named = self._images_of([src])
         picture = named[0] if named else await self._tile_picture(src)
@@ -1381,7 +1390,9 @@ class FlowClient:
                                      "from Flow; the tab is reloaded before the next prompt"}
             if looks % 15 == 0:
                 logger.info("Flow UI: job %s waiting -- %d tile(s), %s", job_id[:8], len(tiles),
-                            [t.get("percent") for t in tiles])
+                            [t.get("percent") if t.get("percent") is not None else
+                             ("clip" if t.get("video") else "still" if t.get("still") else None)
+                             for t in tiles])
 
         if kind == "video":
             return {"error": f"VIDEO_TIMED_OUT: the clip did not finish in "
