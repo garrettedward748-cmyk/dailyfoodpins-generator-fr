@@ -22,6 +22,7 @@ import httpx
 from agent import accounts
 
 from agent.config import (
+    ABANDON_UNWATCHED_MINUTES,
     API_COOLDOWN,
     FLOW_PROJECT_ID,
     IMAGE_USE_BATCH,
@@ -201,6 +202,11 @@ class WorkerController:
         while not self._shutdown.is_set():
             try:
                 await jobs.reset_stale(STALE_PROCESSING_TIMEOUT)
+                abandoned = await jobs.abandon_unwatched(ABANDON_UNWATCHED_MINUTES)
+                if abandoned:
+                    logger.warning("dropped %d queued job(s) nobody has asked about for %d minutes: %s",
+                                   len(abandoned), ABANDON_UNWATCHED_MINUTES,
+                                   ", ".join(j[:8] for j in abandoned[:10]))
 
                 # Chrome first, and from the queue rather than from what we
                 # managed to claim. The claim below needs a connected extension,

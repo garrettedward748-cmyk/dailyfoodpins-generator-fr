@@ -103,6 +103,9 @@ ADDED_COLUMNS = [
     ("job", "reference_urls", "TEXT NOT NULL DEFAULT '[]'"),
     ("job", "operation_json", "TEXT"),
     ("job", "image_model", "TEXT NOT NULL DEFAULT 'auto'"),
+    # When the platform last asked about the job. A queued job nobody asks
+    # about any more is one nobody is waiting for: it is not made.
+    ("job", "last_polled_at", "TEXT"),
 ]
 
 

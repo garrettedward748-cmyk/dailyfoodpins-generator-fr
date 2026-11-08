@@ -79,6 +79,42 @@ async def get(job_id: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
+async def mark_polled(job_id: str) -> None:
+    """The platform asked about this job: someone is still waiting for it."""
+    db = await get_db()
+    await db.execute(f"UPDATE job SET last_polled_at = {_NOW} WHERE id = ?", (job_id,))
+    await db.commit()
+
+
+async def abandon_unwatched(minutes: int) -> list[str]:
+    """Fail queued jobs nobody has asked about for `minutes`, and return them.
+
+    The platform asks about a job every few seconds while it waits for an
+    image, and every minute for a reel's clip. A queued job it has stopped
+    asking about is one whose article gave up (its step timed out) or whose
+    automation was switched off -- making it now only spends credits and
+    Google's patience on a picture nobody will use. Only PENDING jobs: one
+    already in Flow is left to finish. A job never asked about counts from
+    when it was queued.
+    """
+    if minutes <= 0:
+        return []
+    db = await get_db()
+    async with db.execute(
+        f"""UPDATE job SET status = 'FAILED', updated_at = {_NOW},
+                error_message = ?
+             WHERE status = 'PENDING'
+               AND COALESCE(last_polled_at, created_at)
+                   < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)
+         RETURNING id""",
+        (f"ABANDONED: nobody asked for it for {minutes} minutes (its article gave up, "
+         f"or automation was switched off), so it was not made", f"-{int(minutes)} minutes"),
+    ) as cursor:
+        rows = await cursor.fetchall()
+    await db.commit()
+    return [r["id"] for r in rows]
+
+
 async def claim_pending(limit: int, kinds: Optional[list[str]] = None) -> list[dict]:
     """Move up to `limit` PENDING jobs to PROCESSING and return them.
 

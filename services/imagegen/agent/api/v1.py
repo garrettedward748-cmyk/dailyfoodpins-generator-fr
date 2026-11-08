@@ -189,6 +189,8 @@ async def get_job(job_id: str) -> JobResponse:
     job = await jobs.get(job_id)
     if not job:
         raise HTTPException(404, f"No job with id {job_id}")
+    if job["status"] == "PENDING":
+        await jobs.mark_polled(job_id)  # someone is still waiting for it
 
     kind = job["kind"] if "kind" in job.keys() else "image"
 

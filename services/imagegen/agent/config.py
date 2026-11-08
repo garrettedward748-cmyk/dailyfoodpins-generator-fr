@@ -36,6 +36,10 @@ MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "5"))
 API_COOLDOWN = int(os.environ.get("API_COOLDOWN", "10"))
 MAX_CONCURRENT_REQUESTS = int(os.environ.get("MAX_CONCURRENT_REQUESTS", "2"))
 STALE_PROCESSING_TIMEOUT = int(os.environ.get("STALE_PROCESSING_TIMEOUT", "600"))
+# A queued job the platform has not asked about for this many minutes is
+# failed, not made: its article gave up or automation was switched off. 0 keeps
+# every job, however long it waits.
+ABANDON_UNWATCHED_MINUTES = int(os.environ.get("ABANDON_UNWATCHED_MINUTES", "20"))
 
 # How old a captured bearer may be before the Flow tab is reloaded for a
 # fresh one. 0 means always reload when a reload is due.
