@@ -7,12 +7,12 @@ import { liveRadarDeps, radarOptionsFrom, radarTick } from './research/social/ra
 import { applyPendingRestore, configureBackups, configureSignins, removeAutomaticBackups, restartExitCode } from './backup/index.js';
 import { imageServiceLink, pushPendingSignins } from './backup/signins.js';
 import { openDatabase, closeDatabase } from './db/index.js';
-import { insertEvent } from './db/repos.js';
+import { closeInterruptedRuns, insertEvent } from './db/repos.js';
 import { configurePromptFiles } from './pipeline/prompt-files.js';
 import { normaliseStoredDomains } from './db/repos.js';
 import { normaliseDomain } from './lib/domain.js';
 import { configurePrompts } from './pipeline/prompts.js';
-import { Scheduler } from './scheduler/index.js';
+import { releaseRunLock, Scheduler } from './scheduler/index.js';
 import { Settings } from './settings.js';
 import { buildServer } from './web/server.js';
 import { createLogger, errorMessage, setLogLevel, setLogSink } from './lib/logger.js';
@@ -117,6 +117,13 @@ async function main(): Promise<void> {
   const mediaTimer = setInterval(() => cleanupMedia(), 3_600_000);
   mediaTimer.unref();
   setTimeout(() => cleanupMedia(), 300_000).unref();
+
+  // Nothing can be running yet in this process: a run marked running was cut
+  // off by the restart, and the run lock it held would keep every other run
+  // waiting for 90 minutes. Both are cleared before the scheduler starts.
+  const interrupted = closeInterruptedRuns();
+  if (interrupted.length) log.warn(`closed ${interrupted.length} run(s) the restart interrupted: ${interrupted.join(', ')}`);
+  releaseRunLock();
 
   const scheduler = new Scheduler(settings, config.encryptionKey);
   scheduler.start();

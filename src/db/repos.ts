@@ -1512,6 +1512,40 @@ export const markRunFailed = (id: number, error: string, failedStep: string): vo
   );
 };
 
+/**
+ * Close the runs a restart cut off, and return their ids.
+ *
+ * Called once at start-up, when no run can be in progress in this process: a
+ * run still marked 'running' was interrupted by the restart (a deploy, a
+ * crash). Left as it was it said "running" forever and never moved again --
+ * seen with runs a day and two weeks old. Its step that was running and the
+ * run itself are marked failed with the reason, so the run can be resumed from
+ * that step. One that started in the last `retryHours` is also queued for an
+ * automatic retry, which the scheduler takes (when automation is on) as it
+ * takes any other; an older one waits for a person.
+ */
+export function closeInterruptedRuns(retryHours = 6): number[] {
+  const cut = all<{ id: number; recent: number }>(
+    `SELECT id, (started_at >= datetime('now', ?)) AS recent FROM runs WHERE status = 'running'`,
+    `-${retryHours} hours`,
+  );
+  const reason = 'Interrupted: the platform restarted while this ran. It can be resumed from this step.';
+  for (const { id, recent } of cut) {
+    const step = get<{ step: string }>(
+      "SELECT step FROM run_steps WHERE run_id = ? AND status = 'running' ORDER BY id DESC LIMIT 1",
+      id,
+    )?.step ?? '';
+    run(
+      "UPDATE run_steps SET status = 'failed', finished_at = datetime('now'), error = ? WHERE run_id = ? AND status = 'running'",
+      reason,
+      id,
+    );
+    markRunFailed(id, reason, step);
+    if (recent) scheduleRetry(id, new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'));
+  }
+  return cut.map((r) => r.id);
+}
+
 export interface RunListRow extends RunRow {
   site_domain: string | null;
   seed_keyword: string | null;
