@@ -2182,7 +2182,9 @@ async function composerBox(tabId, ui) {
     args: [ui.editor, ui.generateButton, ui.stopButton],
     func: (editorSel, buttonSel, stopSel) => {
       const editor = (() => { const seen = [...document.querySelectorAll(editorSel)].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }); return seen[seen.length - 1] || document.querySelector(editorSel); })();
-      const button = document.querySelector(buttonSel);
+      // The visible button, as for the editor: a hidden copy of the composer
+      // (the session panel's) carries a disabled one of its own.
+      const button = (() => { const seen = [...document.querySelectorAll(buttonSel)].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }); return seen[seen.length - 1] || document.querySelector(buttonSel); })();
       const box = (el) => {
         if (!el) return null;
         const r = el.getBoundingClientRect();
@@ -2200,6 +2202,25 @@ async function composerBox(tabId, ui) {
         text: editor ? String(editor.value ?? editor.innerText ?? '').trim() : null,
         stop,
         working,
+        // What the composer says around the button: credits, an upload still
+        // going, a limit -- the reason it stays disabled.
+        notes: (() => {
+          let area = button || editor;
+          for (let i = 0; i < 6 && area?.parentElement; i++) {
+            area = area.parentElement;
+            if (editor && area.contains(editor) && button && area.contains(button)) break;
+          }
+          if (!area) return '';
+          const words = [...area.querySelectorAll('*')]
+            .filter((e) => !e.children.length && e.getBoundingClientRect().width > 0)
+            .map((e) => (e.getAttribute('aria-label') || e.textContent || '').trim())
+            .filter((t) => t && t.length < 80);
+          const tips = [...area.querySelectorAll('[aria-label],[title]')]
+            .filter((e) => e.getBoundingClientRect().width > 0)
+            .map((e) => e.getAttribute('title') || '').filter(Boolean);
+          return [...new Set([...words, ...tips])].slice(0, 30).join(' | ');
+        })(),
+        buttonLabel: button ? `${button.getAttribute('aria-label') || ''}${button.disabled ? ' (disabled)' : ''}` : 'no button',
       };
     },
   });
@@ -3435,11 +3456,16 @@ async function uiGenerateImage({
 
     // The button enables on the editor's own change event, which lands a
     // frame or two after the insert.
-    for (let i = 0; i < 20 && !box?.ready; i++) {
-      await sleep(100);
+    // With pictures attached it stays disabled until they have finished
+    // going up, which takes seconds, not frames.
+    const readyBy = Date.now() + (references.length ? 90000 : 2000);
+    while (!box?.ready && Date.now() < readyBy) {
+      await sleep(references.length ? 1000 : 100);
       box = await composerBox(tab.id, ui);
     }
-    if (!box?.ready) return { error: 'GENERATE_DISABLED: the composer did not accept the prompt' };
+    if (!box?.ready) {
+      return { error: `GENERATE_DISABLED: the composer did not accept the prompt; button: ${box?.buttonLabel || 'none'}; the composer shows: ${(box?.notes || '').slice(0, 400)}` };
+    }
 
     uiStep('submitting');
     if (jobId) await markTilesSeen(tab.id, ui);
