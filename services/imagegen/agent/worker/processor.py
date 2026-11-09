@@ -947,15 +947,9 @@ class WorkerController:
         out interchangeable media ids. _upload_reference is left untouched: it is
         what images still use, and images still work.
         """
-        try:
-            async with httpx.AsyncClient(
-                timeout=REFERENCE_DOWNLOAD_TIMEOUT, follow_redirects=True
-            ) as http:
-                response = await http.get(url)
-                response.raise_for_status()
-                data = response.content
-        except Exception as exc:
-            return {"error": f"Could not fetch reference image {url}: {exc}"}
+        data = await _download_reference(url)
+        if isinstance(data, dict):
+            return data
 
         if not data:
             return {"error": f"Reference image {url} was empty"}
@@ -1254,15 +1248,9 @@ class WorkerController:
         through the retry policy -- a transient fetch failure is worth the same
         treatment as a transient Flow failure, not a different one.
         """
-        try:
-            async with httpx.AsyncClient(
-                timeout=REFERENCE_DOWNLOAD_TIMEOUT, follow_redirects=True
-            ) as http:
-                response = await http.get(url)
-                response.raise_for_status()
-                data = response.content
-        except Exception as exc:
-            return {"error": f"Could not fetch reference image {url}: {exc}"}
+        data = await _download_reference(url)
+        if isinstance(data, dict):
+            return data
 
         if not data:
             return {"error": f"Reference image {url} was empty"}
@@ -1482,3 +1470,37 @@ def get_worker_controller() -> WorkerController:
     if _controller is None:
         _controller = WorkerController()
     return _controller
+
+
+# A browser's name: some sites (Cloudflare, security plugins) turn away a
+# client that calls itself python-httpx.
+_REFERENCE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/131.0 Safari/537.36",
+    "Accept": "image/avif,image/webp,image/*,*/*;q=0.8",
+}
+
+
+async def _download_reference(url: str):
+    """An article picture's bytes, or {"error": ...}.
+
+    Three tries a few seconds apart: a site slow to answer once (a timeout,
+    which says nothing on its own) failed the whole reel. The error names
+    what went wrong.
+    """
+    last = ""
+    for attempt in range(3):
+        if attempt:
+            await asyncio.sleep(5 * attempt)
+        try:
+            async with httpx.AsyncClient(timeout=REFERENCE_DOWNLOAD_TIMEOUT, follow_redirects=True,
+                                         headers=_REFERENCE_HEADERS) as http:
+                response = await http.get(url)
+            if response.status_code == 200:
+                return response.content
+            last = f"HTTP {response.status_code}"
+            if response.status_code == 404:
+                break
+        except Exception as exc:  # noqa: BLE001 -- named in the error
+            last = f"{type(exc).__name__}: {exc}".rstrip(": ")
+    return {"error": f"Could not fetch reference image {url}: {last} (3 tries)"}
