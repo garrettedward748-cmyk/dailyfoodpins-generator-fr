@@ -947,16 +947,17 @@ class WorkerController:
         out interchangeable media ids. _upload_reference is left untouched: it is
         what images still use, and images still work.
         """
-        data = await _download_reference(url)
-        if isinstance(data, dict):
-            return data
+        got = await _download_reference(url)
+        if isinstance(got, dict):
+            return got
+        data, content_type = got
 
         if not data:
             return {"error": f"Reference image {url} was empty"}
         if len(data) > MAX_REFERENCE_BYTES:
             return {"error": f"Reference image {url} is {len(data)} bytes, over the limit"}
 
-        mime = response.headers.get("content-type", "image/jpeg").split(";")[0]
+        mime = (content_type or "image/jpeg").split(";")[0]
         return {"bytes": data, "mime": mime}
 
     async def _run_video_batch(self, job, reference_urls, project_id) -> bool:
@@ -1248,9 +1249,10 @@ class WorkerController:
         through the retry policy -- a transient fetch failure is worth the same
         treatment as a transient Flow failure, not a different one.
         """
-        data = await _download_reference(url)
-        if isinstance(data, dict):
-            return data
+        got = await _download_reference(url)
+        if isinstance(got, dict):
+            return got
+        data, content_type = got
 
         if not data:
             return {"error": f"Reference image {url} was empty"}
@@ -1259,7 +1261,7 @@ class WorkerController:
 
         result = await client.upload_image(
             image_base64=base64.b64encode(data).decode("ascii"),
-            mime_type=response.headers.get("content-type", "image/jpeg").split(";")[0],
+            mime_type=(content_type or "image/jpeg").split(";")[0],
             project_id=project_id,
             file_name=url.rsplit("/", 1)[-1][:100] or "reference.jpg",
         )
@@ -1482,7 +1484,7 @@ _REFERENCE_HEADERS = {
 
 
 async def _download_reference(url: str):
-    """An article picture's bytes, or {"error": ...}.
+    """An article picture's bytes and type, or {"error": ...}.
 
     Three tries a few seconds apart: a site slow to answer once (a timeout,
     which says nothing on its own) failed the whole reel. The error names
@@ -1497,7 +1499,7 @@ async def _download_reference(url: str):
                                          headers=_REFERENCE_HEADERS) as http:
                 response = await http.get(url)
             if response.status_code == 200:
-                return response.content
+                return response.content, response.headers.get("content-type", "")
             last = f"HTTP {response.status_code}"
             if response.status_code == 404:
                 break
