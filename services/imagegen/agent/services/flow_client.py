@@ -955,8 +955,9 @@ class FlowClient:
                         (out.get("size") or 0) // 1024, (final or src)[:90])
             return {"status": 200, "media_id": media_id, "video_url": data_url}
         failures[src] = failures.get(src, 0) + 1
-        logger.warning("Flow UI: could not read the clip %s: %s", src[:120],
-                       out.get("error") if isinstance(out, dict) else out)
+        why = out.get("error") if isinstance(out, dict) else out
+        self._clip_note = f"the clip was on its tile but could not be downloaded: {str(why)[:300]}"
+        logger.warning("Flow UI: could not read the clip %s: %s", src[:120], why)
         return None
 
     async def _generate_images_ui_once(self, prompt: str, project_id: str,
@@ -1303,6 +1304,9 @@ class FlowClient:
                 if clip:
                     return clip
             seen = (src[:90], str(tile.get("still") or "")[:90], str(tile.get("poster") or "")[:90])
+            if not self.__dict__.get("_clip_note", "").startswith("the clip was on its tile"):
+                self._clip_note = ("the clip finished but its tile showed no address to take "
+                                   "(hovering it did not bring the clip up)")
             if seen != getattr(self, "_last_clip_tile", None):
                 self._last_clip_tile = seen
                 logger.warning("Flow UI: a finished clip tile with no address to take: video=%r "
@@ -1334,6 +1338,9 @@ class FlowClient:
         reload, the grid drawn anew) are followed by the media ids they
         carried, and for a picture by what is new in the project.
         """
+        if kind == "video":
+            self._clip_note = "no finished clip tile was seen"
+            self._last_tiles = ""
         submitted_at = submitted.get("submittedAt")
         started = time.monotonic()
         deadline = started + poll_seconds
@@ -1423,6 +1430,10 @@ class FlowClient:
                     self._reload_next = True
                     return {"error": "SILENT_FAILURE: this prompt's tiles went blank with no word "
                                      "from Flow; the tab is reloaded before the next prompt"}
+            if kind == "video":
+                self._last_tiles = str([t.get("percent") if t.get("percent") is not None else
+                                        ("clip" if t.get("video") else "still" if t.get("still") else None)
+                                        for t in tiles])
             if looks % 15 == 0:
                 logger.info("Flow UI: job %s waiting -- %d tile(s), %s", job_id[:8], len(tiles),
                             [t.get("percent") if t.get("percent") is not None else
@@ -1432,7 +1443,8 @@ class FlowClient:
         if kind == "video":
             return {"error": f"VIDEO_TIMED_OUT: the clip did not finish in "
                              f"{time.monotonic() - started:.0f}s. Not tried again, so it is not "
-                             f"paid for twice; look for it in the Flow project."}
+                             f"paid for twice; look for it in the Flow project. Last seen: "
+                             f"{self.__dict__.get('_clip_note', '')}; tiles {self.__dict__.get('_last_tiles', '')}"}
         return {"error": f"the composer took the prompt but no image appeared in {poll_seconds:.0f}s"}
 
     async def generate_images_batch(self, prompt: str, project_id: str,
