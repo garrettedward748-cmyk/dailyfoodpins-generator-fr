@@ -182,3 +182,30 @@ def test_a_clip_nobody_waits_for_any_more_lets_go_of_its_slot(monkeypatch):
     assert stored["status"] == "FAILED"
     assert stored["error_message"].startswith("ABANDONED")
     assert clips == [1]
+
+
+def test_a_clip_the_browser_may_not_read_is_downloaded_with_its_cookies(monkeypatch):
+    # "Failed to fetch" in the browser: the agent fetches it with the account's cookies.
+    from agent.services.flow_client import FlowClient
+    got = {}
+
+    class Client(FlowClient):
+        def __init__(self):
+            pass
+
+        async def _send_ui(self, method, params, timeout):
+            return {"error": "worker: Failed to fetch; page: Failed to fetch",
+                    "cookies": [{"name": "SID", "value": "x", "domain": ".google.com", "path": "/"}],
+                    "userAgent": "UA"}
+
+        @staticmethod
+        async def _download_clip(src, cookies, user_agent):
+            got.update(src=src, cookies=cookies, ua=user_agent)
+            return {"dataUrl": "data:video/mp4;base64,BBBB", "size": 3,
+                    "finalUrl": "https://x.googleusercontent.com/ab12cd34-0000-4000-8000-000000000004"}
+
+    src = "https://flow.google.com/asb/QQ"
+    answer = asyncio.run(Client()._tile_result("video", {"video": src, "percent": None}, set()))
+    assert got["src"] == src and got["cookies"][0]["name"] == "SID" and got["ua"] == "UA"
+    assert answer["video_url"] == "data:video/mp4;base64,BBBB"
+    assert answer["media_id"] == "ab12cd34-0000-4000-8000-000000000004"

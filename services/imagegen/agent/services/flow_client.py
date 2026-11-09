@@ -904,6 +904,34 @@ class FlowClient:
                        out.get("error") if isinstance(out, dict) else out)
         return None
 
+    @staticmethod
+    async def _download_clip(src: str, cookies: list, user_agent: str) -> dict:
+        """Download a clip the way the signed-in browser would: its cookies, its redirects."""
+        import base64
+        import httpx
+
+        jar = httpx.Cookies()
+        for c in cookies:
+            if isinstance(c, dict) and c.get("name"):
+                jar.set(c["name"], str(c.get("value") or ""), domain=str(c.get("domain") or ""),
+                        path=str(c.get("path") or "/"))
+        headers = {"Referer": "https://flow.google.com/", "Accept": "video/*,*/*;q=0.8"}
+        if user_agent:
+            headers["User-Agent"] = user_agent
+        try:
+            async with httpx.AsyncClient(cookies=jar, headers=headers, follow_redirects=True,
+                                         timeout=120) as http:
+                res = await http.get(src)
+        except Exception as e:  # noqa: BLE001 -- reported, the watch goes on
+            return {"error": f"{type(e).__name__}: {e}"[:200]}
+        kind = res.headers.get("content-type", "").split(";")[0].strip()
+        if res.status_code != 200:
+            return {"error": f"HTTP {res.status_code} from {str(res.url)[:80]}"}
+        if not kind.startswith("video/") or len(res.content) < 10000:
+            return {"error": f"not a clip: {kind or 'no type'} {len(res.content)} bytes from {str(res.url)[:80]}"}
+        return {"dataUrl": f"data:{kind};base64,{base64.b64encode(res.content).decode()}",
+                "finalUrl": str(res.url), "size": len(res.content)}
+
     async def _tile_clip(self, src: str) -> dict | None:
         """A finished clip a tile plays from a link only the browser can open, as data."""
         failures = self.__dict__.setdefault("_unreadable_clips", {})
@@ -912,6 +940,13 @@ class FlowClient:
         logger.info("Flow UI: fetching the finished clip %s", src[:90])
         out = await self._send_ui("ui_tile_video", {"src": src}, timeout=150)
         data_url = out.get("dataUrl") if isinstance(out, dict) else None
+        if not data_url and isinstance(out, dict) and out.get("cookies"):
+            fetched = await self._download_clip(src, out["cookies"], out.get("userAgent") or "")
+            if isinstance(fetched, dict) and fetched.get("dataUrl"):
+                out = fetched
+                data_url = out["dataUrl"]
+            elif isinstance(fetched, dict):
+                out = {**out, "error": f"{out.get('error')}; agent: {fetched.get('error')}"}
         if isinstance(data_url, str) and data_url.startswith("data:video/"):
             final = str(out.get("finalUrl") or "")
             found = _UUID_RE.search(final) or _UUID_RE.search(src)

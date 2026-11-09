@@ -3582,7 +3582,17 @@ async function uiTileVideo({ src = '' } = {}) {
     },
   }).catch((e) => [{ result: { error: String(e?.message || e) } }]);
   const r = out?.result || { error: 'no answer from the page' };
-  return r.dataUrl ? r : { error: `worker: ${why}; page: ${r.error}` };
+  if (r.dataUrl) return r;
+  // Both fetches are refused ("Failed to fetch": the link leads on to another
+  // host that does not let a script read it). The agent then downloads the
+  // clip itself, as this browser would, with the account's own cookies.
+  const jar = await withDebugger(tab.id, async (target) =>
+    chrome.debugger.sendCommand(target, 'Network.getAllCookies', {}))
+    .catch((e) => ({ error: String(e?.message || e) }));
+  const cookies = (jar?.cookies || [])
+    .filter((c) => /(^|\.)(google\.com|google|googleusercontent\.com|googleapis\.com)$/.test(c.domain.replace(/^\./, '')))
+    .map((c) => ({ name: c.name, value: c.value, domain: c.domain, path: c.path }));
+  return { error: `worker: ${why}; page: ${r.error}`, cookies, userAgent: navigator.userAgent };
 }
 
 /** The picture of one tile on the Flow page, as a data: URL. */
