@@ -1938,26 +1938,27 @@ const UI_DEFAULTS = {
   // The visible one is taken (the last on the page): Flow's session panel can
   // leave another, hidden, prompt box in the page.
   editor: 'div.ProseMirror, [contenteditable="true"][role="textbox"], textarea',
-  generateButton: 'button[aria-label="Start generation"]',
+  // English or French: an account in French shows Flow in French.
+  generateButton: 'button[aria-label="Start generation"], button[aria-label^="Lancer la g" i], button[aria-label^="Démarrer la g" i], button[aria-label="Générer" i]',
   // While Flow works on a submit, a Stop button sits where Generate was.
-  stopButton: 'button[aria-label="Stop"]',
+  stopButton: 'button[aria-label="Stop"], button[aria-label="Arrêter" i], button[aria-label^="Arrêter la g" i]',
   // Flow's Agent mode, on when pressed. It answers a prompt with its own
   // settings (shape, count, model) and hides the composer's, so it is turned off.
   agentToggle: 'button.agent-mode-chip',
   menuTriggers: 'button, [role="button"], [role="combobox"], [aria-haspopup]',
   menuOptions: '[role="option"], [role="menuitem"], [role="menuitemradio"], [role="radio"], [role="tab"], button, li',
   errorRegions: '[role="alert"], [role="status"], [aria-live], [data-state="error"]',
-  errorWords: 'unusual activity|something went wrong|couldn.t generate|could not generate|failed to generate|generation failed|violat|against our policies|policy violation|quota|limit reached|try again later|not available in your',
+  errorWords: 'unusual activity|something went wrong|couldn.t generate|could not generate|failed to generate|generation failed|violat|against our policies|policy violation|quota|limit reached|try again later|not available in your|activité inhabituelle|un problème est survenu|une erreur s.est produite|impossible de générer|échec de la génération|enfrein|nos règles|limite atteinte|réessayez plus tard|pas disponible',
   // Ingredients stay in the prompt box after a submit; this empties it.
-  clearPromptButton: 'button[aria-label="Clear prompt"]',
+  clearPromptButton: 'button[aria-label="Clear prompt"], button[aria-label^="Effacer" i]',
   // The "+" by the prompt box: a picker of the project's media with a search
   // box. A row clicked there attaches it, and a chip shows in the box.
-  addMediaButton: 'button[aria-label="Add ingredients to the prompt box"]',
-  assetSearch: 'input[aria-label="Search assets"]',
+  addMediaButton: 'button[aria-label="Add ingredients to the prompt box"], button[aria-label^="Ajouter des ingrédients" i], button[aria-label^="Ajouter un ingrédient" i]',
+  assetSearch: 'input[aria-label="Search assets"], input[aria-label^="Rechercher" i]',
   assetList: 'flow-add-menu-asset-list',
   assetRow: '.asset-item-container',
   ingredientChip: 'flow-ingredient-chip',
-  uploadWords: 'upload media',
+  uploadWords: 'upload media|importer des médias|importer un média|importer|téléverser|ajouter des médias',
   // One generation slot in the results grid: a percent while it renders,
   // then the picture or the clip. The element stays from one to the other.
   tile: 'flow-tile-container',
@@ -2403,7 +2404,11 @@ async function pickInMenu(target, tabId, ui, wanted, family) {
         const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         // The name as words of its own: "Nano Banana 2" is not in "Nano Banana
         // 2.1", and "9:16" is in "crop_9_16 9:16".
-        const named = (t, n) => new RegExp(`(^|[\\s(])${esc(n)}($|[\\s)])`).test(t);
+        // A French account shows Flow in French: each name is matched in
+        // either language.
+        const FRENCH = { Video: ['Vidéo'], Ingredients: ['Ingrédients'], Frames: ['Images clés', 'Trames', 'Cadres', 'Images'], Start: ['Début', 'Départ'], End: ['Fin'] };
+        const named = (t, n) => [n, ...(FRENCH[n] || [])]
+          .some((f) => new RegExp(`(^|[\\s(])${esc(f)}($|[\\s)])`).test(t));
         if (how === 'trigger') {
           // A dropdown that shows the current choice. One that opens a menu is
           // preferred, so the model's own dropdown wins over the chip by the
@@ -2520,8 +2525,8 @@ async function closeSessionPanel(target, tabId, ui) {
       args: [ui.editor],
       func: (editorSel) => {
         const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
-        const isClose = (b) => /^close\b/i.test(b.getAttribute('aria-label') || '')
-          || /^close$/i.test((b.innerText || '').trim());
+        const isClose = (b) => /^(close|fermer)\b/i.test(b.getAttribute('aria-label') || '')
+          || /^(close|fermer)$/i.test((b.innerText || '').trim());
         for (const b of document.querySelectorAll('button, [role="button"]')) {
           if (!visible(b) || !isClose(b)) continue;
           const r = b.getBoundingClientRect();
@@ -2605,10 +2610,10 @@ async function composerSettingsButton(tabId, ui) {
       if (!editor) return null;
       let scope = editor;
       for (let i = 0; i < 6 && scope.parentElement; i++) scope = scope.parentElement;
-      const words = /setting|tune|option|model|aspect|ratio|config|banana|imagen|^\s*x\s*\d|\d\s*x\s*$|×/i;
+      const words = /setting|tune|option|model|aspect|ratio|config|banana|imagen|paramètre|réglage|modèle|format|proportion|^\s*x\s*\d|\d\s*x\s*$|×/i;
       for (const el of scope.querySelectorAll(triggerSel)) {
         const t = `${el.innerText || ''} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`;
-        if (/start generation|send|submit|attach|upload|add/i.test(t) || !words.test(t)) continue;
+        if (/start generation|send|submit|attach|upload|add|lancer|démarrer|générer|envoyer|joindre|importer|ajouter/i.test(t) || !words.test(t)) continue;
         const r = el.getBoundingClientRect();
         if (r.width && r.height) return { left: r.x, top: r.y, w: r.width, h: r.height };
       }
@@ -2697,7 +2702,7 @@ async function attachedItem(tabId, ui, all = false) {
       if (!editor) return wantAll ? [] : null;
       let scope = editor;
       for (let i = 0; i < 8 && scope.parentElement; i++) scope = scope.parentElement;
-      const isRemove = (b) => /remove|delete|close|clear|cancel|discard/i.test(
+      const isRemove = (b) => /remove|delete|close|clear|cancel|discard|supprimer|retirer|fermer|effacer|annuler/i.test(
         `${b.getAttribute('aria-label') || ''} ${b.getAttribute('title') || ''} ${(b.innerText || '').trim()}`);
       // The remove button of this picture alone: looked for no higher than
       // the containers that hold no other picture, so a neighbour's is never
@@ -3134,7 +3139,7 @@ async function claimNewTiles(tabId, ui, jobId) {
       // percent, a queue note, or nothing in it yet (a clip's may show its
       // start frame while it works).
       const working = (t) => [...t.querySelectorAll('div, span')].some((d) => !d.childElementCount
-        && /^\s*\d{1,3}\s*%\s*$|queue|waiting|starting/i.test(d.textContent || ''));
+        && /^\s*\d{1,3}\s*%\s*$|queue|waiting|starting|file d.attente|en attente|démarrage/i.test(d.textContent || ''));
       const filled = (t) => [...t.querySelectorAll('img, video')].some((m) => (m.currentSrc || m.src)
         && m.getBoundingClientRect().width >= 120);
       const fresh = [...document.querySelectorAll(sel)].filter((t) => !t.hasAttribute('data-vps-seen')
@@ -3190,7 +3195,7 @@ async function jobTiles(tabId, ui, jobId) {
             poster: video ? video.poster || null : null,
             image: image ? (image.currentSrc || image.src) : null,
             error: !video && !image && !still && errorRe.test(text) ? text : null,
-            queued: !pct && /queue|waiting|starting/i.test(text),
+            queued: !pct && /queue|waiting|starting|file d.attente|en attente|démarrage/i.test(text),
             ids: [...ids],
             box: { left: r.x, top: r.y, w: r.width, h: r.height },
           };
@@ -3337,7 +3342,7 @@ async function uiGenerateImage({
     func: () => document.documentElement.lang || navigator.language || '',
   }).then((r) => String(r?.[0]?.result || '')).catch(() => '');
   let lang = await pageLang();
-  if (lang && !/^en\b/i.test(lang)) {
+  if (lang && !/^(en|fr)\b/i.test(lang)) {
     // Google pages take ?hl=en over the account's language: asked once, so a
     // French account still gets Flow in English without touching its settings.
     const now = await chrome.tabs.get(tab.id).catch(() => null);
@@ -3349,8 +3354,8 @@ async function uiGenerateImage({
       lang = await pageLang();
     }
   }
-  if (lang && !/^en\b/i.test(lang)) {
-    return { error: `FLOW_NOT_ENGLISH: Flow shows in "${lang}". Set this Google account's language to English (myaccount.google.com/language), then try again` };
+  if (lang && !/^(en|fr)\b/i.test(lang)) {
+    return { error: `FLOW_NOT_ENGLISH: Flow shows in "${lang}". Set this Google account's language to English or French (myaccount.google.com/language), then try again` };
   }
   uiStep('finding the prompt box');
 

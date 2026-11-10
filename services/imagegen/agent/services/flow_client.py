@@ -1649,6 +1649,9 @@ class FlowClient:
 _MESSAGE_CODES = (
     ("usage limit", "PUBLIC_ERROR_PER_MODEL_DAILY_QUOTA_REACHED"),
     ("unusual activity", "PUBLIC_ERROR_UNUSUAL_ACTIVITY"),
+    # Flow in French, for an account set to French.
+    ("limite d'utilisation", "PUBLIC_ERROR_PER_MODEL_DAILY_QUOTA_REACHED"),
+    ("activité inhabituelle", "PUBLIC_ERROR_UNUSUAL_ACTIVITY"),
 )
 
 
