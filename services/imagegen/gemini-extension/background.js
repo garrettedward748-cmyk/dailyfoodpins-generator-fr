@@ -65,6 +65,13 @@ async function openFresh(account, conversationId) {
   if (account) params.set('authuser', account);
   const url = `${base}?${params}`;
   const tab = await geminiTab();
+  // Minimized (from the Browser page, say), the page is hidden and may not
+  // draw the reply as it streams in: every prompt then failed with HIDDEN.
+  // Put the window back without taking the focus from Flow's.
+  const win = await chrome.windows.get(tab.windowId).catch(() => null);
+  if (win && win.state !== 'normal') {
+    await chrome.windows.update(tab.windowId, { state: 'normal' }).catch(() => {});
+  }
   ports.delete(tab.id);
   const done = loaded(tab.id);
   await chrome.tabs.update(tab.id, { url });
