@@ -93,6 +93,9 @@ describe('a prompt as Gemini sees it', () => {
     expect(unusableReply('')).toMatch(/empty/);
     expect(unusableReply("You've reached your limit for today. Try again tomorrow.")).toMatch(/did not answer/);
     expect(unusableReply('I can’t help with that.')).toMatch(/did not answer/);
+    // Gemini's own page error, written where the answer goes: asked again, never parsed.
+    expect(unusableReply("Sorry, something went wrong. Please try your request again.")).toMatch(/did not answer/);
+    expect(unusableReply("I'm having a hard time fulfilling your request. Can I help you with something else instead?")).toMatch(/did not answer/);
     expect(unusableReply(`${'A long recipe. '.repeat(50)} Keep the speed limit in mind; try again later if it sinks.`)).toBeNull();
   });
 });

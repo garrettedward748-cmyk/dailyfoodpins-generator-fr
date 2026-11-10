@@ -98,7 +98,7 @@ export function jsonFrom(reply: Pick<GeminiReply, 'code_blocks' | 'text' | 'mark
 // What Gemini says instead of an answer. Short replies only: a long one that merely mentions a
 // limit is an answer.
 const NOT_AN_ANSWER =
-  /reached your (daily )?limit|you('ve| have) reached the (daily )?limit|limit resets|try again (later|tomorrow)|I('m| am) (not able|unable) to help|I can('|’)t help with (that|this)|I('m| am) just a language model/i;
+  /reached your (daily )?limit|you('ve| have) reached the (daily )?limit|limit resets|try again (later|tomorrow)|I('m| am) (not able|unable) to help|I can('|’)t help with (that|this)|I('m| am) just a language model|something went wrong|there was (a|an) (problem|error)|an error (has )?occurred|I('m| am) having (a hard time|trouble)|(please )?try again in a (moment|few)|network (error|connection)|I encountered an error/i;
 
 /** Why a reply cannot be used as an answer, or null when it can. */
 export function unusableReply(text: string): string | null {
