@@ -147,7 +147,8 @@ export class GeminiClient {
   }
 
   status(): Promise<GeminiStatus> {
-    return this.call<GeminiStatus>('/v1/gemini/status', {}, 5_000);
+    // Busy making pictures, the service can take a few seconds: 5 s called it down.
+    return this.call<GeminiStatus>('/v1/gemini/status', {}, 15_000);
   }
 
   /** Queue a prompt and wait for its reply. Throws GeminiError on failure or when time runs out. */

@@ -129,6 +129,12 @@ async function callOllama(
  * The caller never learns which endpoint served it until it succeeds — and
  * the endpoint name comes back in the result so the run log can record it.
  */
+/** Pause before asking Gemini again: 15 s, then 60 s. */
+export let GEMINI_RETRY_WAIT_MS = 15_000;
+export function setGeminiRetryWait(ms: number): void {
+  GEMINI_RETRY_WAIT_MS = ms;
+}
+
 export async function chat(
   request: ChatRequest,
   encryptionKey: Buffer,
@@ -139,10 +145,12 @@ export async function chat(
   // Gemini is answered in the image service's browser, never by an AI key: a key with no model
   // list serves every model, and handing it "gemini" would fail it and mark it unhealthy.
   if (request.model === GEMINI_MODEL) {
-    // Asked twice: a slow page or a reply that was not JSON is often fine the
-    // second time, and the keys it falls back to may have no credit left.
+    // Asked up to three times, a little apart: the image service restarting
+    // (a deploy, a Chrome account switch) forgets a prompt or does not answer
+    // for a minute, a page may be slow, a reply may not be JSON -- all fine a
+    // moment later. Only what needs a person (signing in, the key) stops it.
     let geminiFailure = '';
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const completion = await geminiCompletion(request);
         return {
@@ -157,8 +165,11 @@ export async function chat(
       } catch (err) {
         geminiFailure = errorMessage(err);
         const code = (err as { code?: string }).code ?? '';
-        if (['SETUP', 'NOT_SIGNED_IN', 'WRONG_ACCOUNT', 'SERVICE'].includes(code)) break;
-        if (attempt === 1) log.warn(`Gemini could not answer, asking once more: ${geminiFailure}`);
+        if (['SETUP', 'NOT_SIGNED_IN', 'WRONG_ACCOUNT', 'KEY'].includes(code)) break;
+        if (attempt < 3) {
+          log.warn(`Gemini could not answer (attempt ${attempt}/3), asking again: ${geminiFailure}`);
+          await new Promise((r) => setTimeout(r, GEMINI_RETRY_WAIT_MS * attempt * attempt));
+        }
       }
     }
     const fallback = request.fallbackModel;

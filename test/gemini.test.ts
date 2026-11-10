@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeDatabase, openDatabase } from '../src/db/index.js';
 import { GeminiClient, GeminiError } from '../src/integrations/gemini.js';
-import { chat } from '../src/llm/client.js';
+import { chat, setGeminiRetryWait } from '../src/llm/client.js';
 import { configureGemini, GEMINI_LAST_ERROR, GEMINI_LAST_OK, GEMINI_MODEL, geminiChatFor, joinMessages, jsonFrom, rememberGeminiChat, unusableReply, withGeminiChat } from '../src/llm/gemini.js';
 import { listEndpointRows, upsertEndpoint } from '../src/llm/pool.js';
 import { Settings } from '../src/settings.js';
@@ -108,6 +108,7 @@ describe('chat() with Gemini as the model', () => {
     settings.set('image_base_url', BASE);
     process.env.IMAGE_API_KEY = 'test-key';
     ollamaModels.length = 0;
+    setGeminiRetryWait(0);
     // One AI key with no model list: it serves every model, so a stray "gemini" would reach it.
     upsertEndpoint({ name: 'Main', baseUrl: 'https://ollama.test', apiKey: 'x', models: [], enabled: true }, KEY);
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
@@ -150,7 +151,29 @@ describe('chat() with Gemini as the model', () => {
     const result = await chat({ model: GEMINI_MODEL, messages: [{ role: 'user', content: 'x' }], format: 'json', fallbackModel: 'gemma4:31b' }, KEY);
     expect(result.model).toBe('gemma4:31b');
     expect(settings.get(GEMINI_LAST_ERROR)).toMatch(/NOT_JSON/);
-  });
+  }, 30_000);
+
+  it('asks Gemini again after a passing failure instead of falling back at once', async () => {
+    const answer: { result?: unknown; error?: string } = { error: 'TIMEOUT: slow page' };
+    const { fetchImpl, sent } = service(answer);
+    configureGemini({ settings, account: () => '', fetchImpl });
+    const asking = chat({ model: GEMINI_MODEL, messages: [{ role: 'user', content: 'x' }], fallbackModel: 'gpt-oss:120b' }, KEY);
+    await new Promise((r) => setTimeout(r, 2500));
+    delete answer.error;
+    answer.result = reply({ text: 'second time lucky', markdown: 'second time lucky' });
+    const result = await asking;
+    expect(result).toMatchObject({ endpoint: 'Gemini', content: 'second time lucky' });
+    expect(sent.length).toBeGreaterThanOrEqual(2);
+    expect(ollamaModels).toEqual([]);
+  }, 30_000);
+
+  it('names Gemini first when the keys it falls back to fail too', async () => {
+    const { fetchImpl } = service({ error: 'TIMEOUT: slow page' });
+    configureGemini({ settings, account: () => '', fetchImpl });
+    vi.stubGlobal('fetch', vi.fn(async () => json({ error: 'Add usage credits' }, 402)));
+    await expect(chat({ model: GEMINI_MODEL, messages: [{ role: 'user', content: 'x' }], fallbackModel: 'gpt-oss:120b' }, KEY))
+      .rejects.toThrow(/Gemini could not answer \(.*slow page.*\), and the AI keys/);
+  }, 30_000);
 
   it("asks an article's prompts in one ordinary chat, carried on from prompt to prompt", async () => {
     const answer: { result?: unknown; error?: string } = { result: reply({ conversation_id: 'c1' }) };
@@ -212,5 +235,5 @@ describe('chat() with Gemini as the model', () => {
     const result = await chat({ model: GEMINI_MODEL, messages: [{ role: 'user', content: 'x' }], fallbackModel: 'gpt-oss:120b' }, KEY);
     expect(result.model).toBe('gpt-oss:120b');
     expect(ollamaModels).toEqual(['gpt-oss:120b']);
-  });
+  }, 30_000);
 });
