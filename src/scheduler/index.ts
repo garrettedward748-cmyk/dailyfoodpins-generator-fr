@@ -150,6 +150,17 @@ function considerRetry(
     return 'Buffer API limit on every token: trying again in 1 hour.';
   }
 
+  // Every AI key is out of credit: no new article can be written until someone
+  // pays or Gemini takes the steps. Starting one a minute anyway failed 591
+  // runs in an afternoon, each one a keyword spent. New work waits half an
+  // hour (retries keep their own schedule, and may get through on Gemini);
+  // the hold lifts on its own.
+  if (isOutOfCredit(error)) {
+    const until = new Date(Date.now() + CREDIT_HOLD_MINUTES * 60_000).toISOString();
+    settings.set(CREDIT_HOLD_UNTIL, until);
+    log.warn(`every AI key is out of credit: no new article starts for ${CREDIT_HOLD_MINUTES} minutes`);
+  }
+
   // No Google research yet (every Serper key and web search failed): not a
   // broken run. It waits an hour and tries again without spending the retry
   // budget; after six hours the research step writes it without research.
@@ -173,6 +184,10 @@ function considerRetry(
 
   return held ? `${decision.reason} ${held}` : decision.reason;
 }
+
+/** Settings key: until when no new article starts because every AI key is out of credit. */
+export const CREDIT_HOLD_UNTIL = 'llm_credit_hold_until';
+const CREDIT_HOLD_MINUTES = 30;
 
 /**
  * Stop offering a pair that keeps failing the same way.
@@ -333,6 +348,11 @@ export async function tick(
     return { cycleId, outcome: 'disabled' };
   }
 
+  // Held after the AI keys ran out of credit (see failureNote). Retries still
+  // go -- one may now be written by Gemini -- but no new keyword is spent.
+  const heldUntil = settings.get(CREDIT_HOLD_UNTIL);
+  const creditHeld = mode === 'live' && !pick && heldUntil !== '' && Date.parse(heldUntil) > Date.now();
+
   const problems = settings.validate();
   if (problems.length > 0) {
     log.warn('cannot run: configuration incomplete', problems);
@@ -367,6 +387,12 @@ export async function tick(
       const result = await resumeRun(retry.id, settings, encryptionKey);
       await announce(settings);
       return { ...result, cycleId };
+    }
+
+    if (creditHeld) {
+      const reason = `Every AI key is out of credit: no new article starts until ${heldUntil}.`;
+      log.info(`nothing to publish: ${reason}`);
+      return { cycleId, outcome: 'no-task', detail: reason };
     }
 
     const timezone = settings.get('timezone');

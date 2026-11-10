@@ -5,7 +5,7 @@ import { closeDatabase, openDatabase } from '../src/db/index.js';
 import { insertKeyword, markRunPublished, createRun, setLink, upsertSite } from '../src/db/repos.js';
 import { Settings } from '../src/settings.js';
 import { buildServer } from '../src/web/server.js';
-import { tick } from '../src/scheduler/index.js';
+import { CREDIT_HOLD_UNTIL, tick } from '../src/scheduler/index.js';
 import { setLogLevel } from '../src/lib/logger.js';
 
 /**
@@ -162,6 +162,20 @@ describe('a hand-picked run', () => {
     const result = await tick(settings, KEY, { pick: { siteId, keywordId } });
     expect(result.outcome).not.toBe('disabled');
     expect(result.runId).toBeGreaterThan(0);
+  });
+
+  it('starts no new article while every AI key is out of credit, but a picked one still runs', async () => {
+    seed();
+    const settings = configured();
+    settings.set('automation_enabled', 'true');
+    settings.set(CREDIT_HOLD_UNTIL, new Date(Date.now() + 10 * 60_000).toISOString());
+
+    const held = await tick(settings, KEY);
+    expect(held.outcome).toBe('no-task');
+    expect(held.detail).toMatch(/out of credit/);
+
+    settings.set(CREDIT_HOLD_UNTIL, new Date(Date.now() - 60_000).toISOString());
+    expect((await tick(settings, KEY, { mode: 'dry' })).detail ?? '').not.toMatch(/out of credit/);
   });
 
   it('still refuses when automation is off and nothing was picked', async () => {
