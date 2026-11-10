@@ -139,22 +139,37 @@ export async function chat(
   // Gemini is answered in the image service's browser, never by an AI key: a key with no model
   // list serves every model, and handing it "gemini" would fail it and mark it unhealthy.
   if (request.model === GEMINI_MODEL) {
+    // Asked twice: a slow page or a reply that was not JSON is often fine the
+    // second time, and the keys it falls back to may have no credit left.
+    let geminiFailure = '';
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const completion = await geminiCompletion(request);
+        return {
+          content: completion.content,
+          endpoint: 'Gemini',
+          model: GEMINI_MODEL,
+          durationMs: Date.now() - started,
+          attempts: attempt,
+          tokensIn: 0,
+          tokensOut: 0,
+        };
+      } catch (err) {
+        geminiFailure = errorMessage(err);
+        const code = (err as { code?: string }).code ?? '';
+        if (['SETUP', 'NOT_SIGNED_IN', 'WRONG_ACCOUNT', 'SERVICE'].includes(code)) break;
+        if (attempt === 1) log.warn(`Gemini could not answer, asking once more: ${geminiFailure}`);
+      }
+    }
+    const fallback = request.fallbackModel;
+    if (!fallback || fallback === GEMINI_MODEL) throw new Error(`Gemini could not answer: ${geminiFailure}`);
+    log.warn(`Gemini could not answer, using ${fallback} instead: ${geminiFailure}`);
     try {
-      const completion = await geminiCompletion(request);
-      return {
-        content: completion.content,
-        endpoint: 'Gemini',
-        model: GEMINI_MODEL,
-        durationMs: Date.now() - started,
-        attempts: 1,
-        tokensIn: 0,
-        tokensOut: 0,
-      };
+      return await chat({ ...request, model: fallback }, encryptionKey, baseUrl);
     } catch (err) {
-      const fallback = request.fallbackModel;
-      if (!fallback || fallback === GEMINI_MODEL) throw err;
-      log.warn(`Gemini could not answer, using ${fallback} instead: ${errorMessage(err)}`);
-      request = { ...request, model: fallback };
+      // The keys' failure (no credit, say) hid the real one: Gemini's.
+      throw new Error(`Gemini could not answer (${geminiFailure}), and the AI keys it fell back to `
+        + `could not either: ${errorMessage(err)}`);
     }
   }
 
