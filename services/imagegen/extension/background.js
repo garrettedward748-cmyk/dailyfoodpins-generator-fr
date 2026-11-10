@@ -3332,10 +3332,23 @@ async function uiGenerateImage({
   // ingredients to the prompt box"). A Google account in another language
   // shows Flow in that language, and every one of them would be missed; said
   // plainly here rather than as a button that "could not be found".
-  const lang = await chrome.scripting.executeScript({
+  const pageLang = () => chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: () => document.documentElement.lang || navigator.language || '',
   }).then((r) => String(r?.[0]?.result || '')).catch(() => '');
+  let lang = await pageLang();
+  if (lang && !/^en\b/i.test(lang)) {
+    // Google pages take ?hl=en over the account's language: asked once, so a
+    // French account still gets Flow in English without touching its settings.
+    const now = await chrome.tabs.get(tab.id).catch(() => null);
+    const url = now?.url ? new URL(now.url) : null;
+    if (url && url.searchParams.get('hl') !== 'en') {
+      url.searchParams.set('hl', 'en');
+      await chrome.tabs.update(tab.id, { url: url.toString() }).catch(() => {});
+      await pause(6000, 9000);
+      lang = await pageLang();
+    }
+  }
   if (lang && !/^en\b/i.test(lang)) {
     return { error: `FLOW_NOT_ENGLISH: Flow shows in "${lang}". Set this Google account's language to English (myaccount.google.com/language), then try again` };
   }
