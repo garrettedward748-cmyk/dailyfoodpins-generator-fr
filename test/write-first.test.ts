@@ -18,6 +18,7 @@ import { upsertEndpoint } from '../src/llm/pool.js';
 import { Settings } from '../src/settings.js';
 import { configurePrompts } from '../src/pipeline/prompts.js';
 import { executePipeline } from '../src/pipeline/index.js';
+import { parallelLanes, resetParallelLanes, tickPictures } from '../src/scheduler/index.js';
 import { postRetry } from '../src/pipeline/steps/article.js';
 import { PipelineContext } from '../src/pipeline/context.js';
 import { setLogLevel } from '../src/lib/logger.js';
@@ -148,5 +149,30 @@ describe('write first, pictures after', () => {
     const done = Object.fromEntries(listSteps(runId).map((s) => [s.step, s.status]));
     expect(done['post-article']).toBe('ok');
     expect(getRun(runId)?.post_url).toBeTruthy();
+  });
+
+  it('beside the writing, the pictures lane makes the pictures and publishes, without the writing lock', async () => {
+    vi.stubGlobal('fetch', buildWorld().fetchStub);
+    const runId = createRun(keywordId, siteId);
+    await executePipeline(ctx(runId));
+
+    settings.set('automation_enabled', 'true');
+    settings.set('parallel_lanes', 'true');
+    resetParallelLanes(true); // as if Gemini's own browser said it is on
+    expect(await parallelLanes(settings)).toBe(true);
+    dbRun("UPDATE scheduler_lock SET locked_at = datetime('now') WHERE id = 1"); // the writing is busy
+
+    vi.stubGlobal('fetch', buildWorld().fetchStub);
+    const result = await tickPictures(settings, KEY);
+    expect(result).toMatchObject({ outcome: 'published', runId });
+    expect(getRun(runId)?.status).toBe('published');
+    resetParallelLanes();
+  });
+
+  it('stays out of the way unless switched on', async () => {
+    settings.set('automation_enabled', 'true');
+    resetParallelLanes();
+    expect(await parallelLanes(settings)).toBe(false);
+    expect(await tickPictures(settings, KEY)).toBeNull();
   });
 });

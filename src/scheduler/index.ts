@@ -38,6 +38,7 @@ import { runStep } from '../pipeline/engine.js';
 import { generatePinDescription, publishToBuffer, resolveBufferTarget } from '../pipeline/steps/publish.js';
 import { collagePostStep } from '../pipeline/steps/collage.js';
 import { getCompletedStep, listImageWaits, nextImageWait } from '../db/repos.js';
+import { geminiClient } from '../llm/gemini.js';
 import type { Settings } from '../settings.js';
 import { createLogger, errorMessage } from '../lib/logger.js';
 import { backfillNativeFeedPostIds, backfillNativeVideoIds, defaultDeps, tickReels } from '../reels/engine.js';
@@ -393,8 +394,9 @@ export async function tick(
     }
 
     if (creditHeld) {
-      // Pictures need no AI key: the wait for them goes on meanwhile.
-      const waiting = nextImageWait();
+      // Pictures need no AI key: the wait for them goes on meanwhile (by the
+      // pictures lane when the two run side by side).
+      const waiting = (await parallelLanes(settings)) ? undefined : nextImageWait();
       if (waiting) {
         releaseLock();
         log.info(`run ${waiting.id}: making the pictures of "${waiting.title}" (writing is held)`);
@@ -436,7 +438,17 @@ export async function tick(
     // Writing comes first; the pictures are made when nothing is due to be
     // written, or before writing more once IMAGE_BACKLOG articles wait, so the
     // wait cannot grow for ever.
-    if (!pick && mode === 'live') {
+    const parallel = await parallelLanes(settings);
+    if (!pick && mode === 'live' && parallel) {
+      // The pictures lane has them (tickPictures): writing runs alongside, and
+      // only waits when it is this far ahead of the pictures.
+      const backlog = Math.max(1, settings.getNumber('image_backlog') || IMAGE_BACKLOG);
+      if (task && listImageWaits().length > backlog) {
+        const reason = `${listImageWaits().length} written articles wait for their pictures; writing waits for them.`;
+        log.info(`nothing to publish: ${reason}`);
+        return { cycleId, outcome: 'no-task', detail: reason };
+      }
+    } else if (!pick && mode === 'live') {
       const waiting = nextImageWait();
       const backlog = Math.max(1, settings.getNumber('image_backlog') || IMAGE_BACKLOG);
       if (waiting && (!task || listImageWaits().length >= backlog)) {
@@ -638,11 +650,12 @@ export async function resumeRun(
   runId: number,
   settings: Settings,
   encryptionKey: Buffer,
-  options: { pictures?: boolean } = {},
+  options: { pictures?: boolean; lane?: boolean } = {},
 ): Promise<TickResult> {
   const cycleId = randomUUID();
 
-  if (!acquireLock()) return { cycleId, outcome: 'busy' };
+  // The pictures lane runs beside the writing and does not take its lock.
+  if (!options.lane && !acquireLock()) return { cycleId, outcome: 'busy' };
 
   try {
     const runRow = get<{
@@ -669,9 +682,9 @@ export async function resumeRun(
        WHERE id = ?`,
       runId,
     );
-    attachRunToLock(runId);
+    if (!options.lane) attachRunToLock(runId);
 
-    log.info(`resuming run ${runId}`);
+    log.info(`resuming run ${runId}${options.lane ? ' (pictures lane)' : ''}`);
 
     // Approving a held run means publishing it, so the resume is always live —
     // resuming a dry run is exactly the "publish it after all" action — and it
@@ -703,8 +716,44 @@ export async function resumeRun(
 
     return { cycleId, outcome: outcome.status, runId, detail, hold: outcome.hold };
   } finally {
-    releaseLock();
+    if (!options.lane) releaseLock();
   }
+}
+
+/**
+ * Whether the writing and the pictures run side by side: Setup's switch, and
+ * Gemini's own browser on -- otherwise both are in Flow's browser and must
+ * take turns. Asked of the image service at most once a minute.
+ */
+let parallelSeen: { at: number; on: boolean } = { at: 0, on: false };
+export async function parallelLanes(settings: Settings): Promise<boolean> {
+  if (!settings.getBool('parallel_lanes') || !settings.getBool('write_first')) return false;
+  if (Date.now() - parallelSeen.at < 60_000) return parallelSeen.on;
+  let on = false;
+  try {
+    on = Boolean((await geminiClient(settings)?.browser())?.enabled);
+  } catch {
+    on = parallelSeen.on; // the service restarting: keep the last answer
+  }
+  parallelSeen = { at: Date.now(), on };
+  return on;
+}
+
+/** For tests: forget the last answer about Gemini's own browser. */
+export function resetParallelLanes(on?: boolean): void {
+  parallelSeen = on === undefined ? { at: 0, on: false } : { at: Date.now(), on };
+}
+
+/**
+ * The pictures lane: makes the pictures of the oldest written article and
+ * publishes it, beside the writing (see parallelLanes). One at a time.
+ */
+export async function tickPictures(settings: Settings, encryptionKey: Buffer): Promise<TickResult | null> {
+  if (!settings.getBool('automation_enabled') || !(await parallelLanes(settings))) return null;
+  const waiting = nextImageWait();
+  if (!waiting) return null;
+  log.info(`run ${waiting.id}: making the pictures of "${waiting.title}" (pictures lane)`);
+  return resumeRun(waiting.id, settings, encryptionKey, { pictures: true, lane: true });
 }
 
 /**
@@ -830,6 +879,8 @@ export class Scheduler {
   private taxoRunning = false;
   private aboutTimer: NodeJS.Timeout | null = null;
   private aboutRunning = false;
+  private picturesTimer: NodeJS.Timeout | null = null;
+  private picturesRunning = false;
   private stopped = false;
   private announcedMinutes = 0;
   private lastCheckEndedAt = 0;
@@ -880,6 +931,21 @@ export class Scheduler {
 
     // The About page, once a week and only when the site has grown.
     this.aboutTimer = setInterval(() => void this.safeTickAbout(), ABOUT_TICK_MS);
+
+    // Pictures beside the writing, when the two may run side by side.
+    this.picturesTimer = setInterval(() => void this.safeTickPictures(), 60_000);
+  }
+
+  private async safeTickPictures(): Promise<void> {
+    if (this.picturesRunning || this.stopped) return;
+    this.picturesRunning = true;
+    try {
+      await tickPictures(this.settings, this.encryptionKey);
+    } catch (err) {
+      log.error('pictures lane threw', errorMessage(err));
+    } finally {
+      this.picturesRunning = false;
+    }
   }
 
   private async safeTickAbout(): Promise<void> {
@@ -1119,6 +1185,7 @@ export class Scheduler {
     if (this.blogTimer) clearInterval(this.blogTimer);
     this.blogTimer = null;
     if (this.aboutTimer) clearInterval(this.aboutTimer);
+    if (this.picturesTimer) clearInterval(this.picturesTimer);
     this.aboutTimer = null;
     if (this.taxoTimer) clearInterval(this.taxoTimer);
     this.taxoTimer = null;

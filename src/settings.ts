@@ -506,6 +506,17 @@ export const SETTING_SPECS: SettingSpec[] = [
       'Off: the pictures are made in the middle of the writing, as before.',
   },
   {
+    key: 'parallel_lanes',
+    label: 'Write and make pictures at the same time',
+    group: 'schedule',
+    secret: false,
+    default: 'false',
+    help:
+      "With Gemini's own browser on (Setup -> Gemini), the next article is written while the " +
+      "last one's pictures are made in Flow's browser: about four articles an hour instead of " +
+      "three. Off, or with Gemini's own browser off: one thing at a time, as before.",
+  },
+  {
     key: 'image_backlog',
     label: 'Pictures first once this many articles wait',
     group: 'schedule',
