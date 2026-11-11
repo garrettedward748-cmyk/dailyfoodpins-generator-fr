@@ -200,6 +200,16 @@ async def complete(job_id: str, media_id: Optional[str], output_url: str) -> Non
     await db.commit()
 
 
+async def media_taken(media_id: str, job_id: str) -> bool:
+    """Whether another job already completed with this Flow media id."""
+    db = await get_db()
+    async with db.execute(
+        "SELECT 1 FROM job WHERE media_id = ? AND id != ? AND status = 'COMPLETED' LIMIT 1",
+        (media_id, job_id),
+    ) as cursor:
+        return await cursor.fetchone() is not None
+
+
 async def fail(job_id: str, error: str) -> None:
     """Record why a job died.
 

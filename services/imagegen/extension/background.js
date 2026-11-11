@@ -3145,12 +3145,24 @@ async function claimNewTiles(tabId, ui, jobId) {
       // page but not this prompt's; a new one starts as a placeholder -- a
       // percent, a queue note, or nothing in it yet (a clip's may show its
       // start frame while it works).
-      const working = (t) => [...t.querySelectorAll('div, span')].some((d) => !d.childElementCount
-        && /^\s*\d{1,3}\s*%\s*$|queue|waiting|starting|file d.attente|en attente|démarrage/i.test(d.textContent || ''));
+      //
+      // Only a tile at its very start, though: one already well on its way is
+      // an earlier prompt's that Flow drew again (a reload, the grid redrawn),
+      // and claiming it handed one article another article's picture -- it
+      // finished first, so it was taken (a tuna salad on a pancake article).
+      const working = (t) => [...t.querySelectorAll('div, span')].some((d) => {
+        if (d.childElementCount) return false;
+        const text = d.textContent || '';
+        const percent = /^\s*(\d{1,3})\s*%\s*$/.exec(text);
+        if (percent) return Number(percent[1]) <= 15;
+        return /queue|waiting|starting|file d.attente|en attente|démarrage/i.test(text);
+      });
+      const late = (t) => [...t.querySelectorAll('div, span')].some((d) => !d.childElementCount
+        && Number((/^\s*(\d{1,3})\s*%\s*$/.exec(d.textContent || '') || [])[1]) > 15);
       const filled = (t) => [...t.querySelectorAll('img, video')].some((m) => (m.currentSrc || m.src)
         && m.getBoundingClientRect().width >= 120);
       const fresh = [...document.querySelectorAll(sel)].filter((t) => !t.hasAttribute('data-vps-seen')
-        && (working(t) || !filled(t)));
+        && !late(t) && (working(t) || !filled(t)));
       fresh.forEach((t) => {
         t.setAttribute('data-vps-seen', '1');
         t.setAttribute('data-vps-job', job);

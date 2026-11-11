@@ -542,3 +542,13 @@ async def test_a_clip_in_flight_does_not_hold_the_reload_forever(monkeypatch):
     assert await controller._reload_if_due(1) is False
     assert fake.refresh_calls == []
     assert controller._reload_due_at is None
+
+
+def test_a_picture_another_job_already_has_is_not_given_twice(monkeypatch):
+    first = asyncio.run(jobs.create("tuna salad"))
+    asyncio.run(jobs.complete(first["id"], MEDIA_UUID, CDN_URL))
+
+    stored = run_one(monkeypatch, ok_response(), attempts=1)
+
+    assert stored["status"] == "PENDING"
+    assert "WRONG_PICTURE" in stored["error_message"]

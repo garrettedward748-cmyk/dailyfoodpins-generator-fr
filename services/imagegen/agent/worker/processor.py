@@ -447,7 +447,16 @@ class WorkerController:
             await self._handle_failure(job, f"No image url in response: {str(result)[:300]}")
             return
 
-        await jobs.complete(job_id, extract_media_id(result), url)
+        # A picture already handed to another job is that job's, not this
+        # one's: taken from the page by mistake, it put one article's picture
+        # on another. Tried again rather than published on the wrong article.
+        media_id = extract_media_id(result)
+        if media_id and await jobs.media_taken(media_id, job_id):
+            await self._handle_failure(job, f"WRONG_PICTURE: Flow's picture {media_id} already belongs "
+                                            "to another job (taken off the page by mistake); timeout")
+            return
+
+        await jobs.complete(job_id, media_id, url)
         accounts.note_success()
         logger.info("job %s COMPLETED", job_id[:8])
 
