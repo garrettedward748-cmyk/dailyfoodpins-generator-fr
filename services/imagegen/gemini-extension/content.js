@@ -323,7 +323,8 @@
       () => fail('NO_PROMPT_BOX', `the Send button ${sendButton() ? 'stayed disabled' : 'was not found'} (page language: ${document.documentElement.lang || 'unknown'})`));
     send.click();
 
-    await waitFor(() => responses().length > before && isNew(), 60_000, () => fail('TIMEOUT', 'Gemini did not start answering'));
+    await waitFor(() => responses().length > before && isNew(), 60_000,
+      () => fail(limitShown() ? 'LIMIT' : 'TIMEOUT', limitShown() ? `Gemini's usage limit is reached (${limitShown()})` : 'Gemini did not start answering'));
     // Done when the reply's action row (copy, redo) is shown and no Stop button is left, for 1.5 s.
     let stableSince = 0;
     const end = Date.now() + timeoutMs;
@@ -335,10 +336,24 @@
       } else {
         stableSince = 0;
       }
-      if (Date.now() > end) fail('TIMEOUT', 'Gemini was still answering when the time ran out');
+      if (Date.now() > end) {
+        if (limitShown()) fail('LIMIT', `Gemini's usage limit is reached (${limitShown()})`);
+        fail('TIMEOUT', 'Gemini was still answering when the time ran out');
+      }
       await sleep(400);
     }
     return { ...(await extract(responses().at(-1), images)), account: email, temporary: temp, continued };
+  }
+
+  // The free plan's banner over the prompt box: "Limit reached · Resets at
+  // 10:44" (or in French). With it shown, a prompt waits or is cut short;
+  // said as such rather than as a timeout.
+  function limitShown() {
+    const banner = $$('div, span, p').find((el) => !el.childElementCount
+      && /^(limit reached|limite atteinte|limite d.utilisation atteinte)\b/i.test((el.textContent || '').trim()));
+    if (!banner) return '';
+    const around = (banner.parentElement?.textContent || banner.textContent || '').replace(/\s+/g, ' ').trim();
+    return around.slice(0, 80);
   }
 
   window.__geminiChat = { chat, setPrompt, toMarkdown, plainText };

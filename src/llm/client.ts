@@ -179,7 +179,8 @@ export async function chat(
       } catch (err) {
         geminiFailure = errorMessage(err);
         const code = (err as { code?: string }).code ?? '';
-        if (['SETUP', 'NOT_SIGNED_IN', 'WRONG_ACCOUNT', 'KEY'].includes(code)) break;
+        // LIMIT: Gemini's free plan is spent until the time its banner says.
+        if (['SETUP', 'NOT_SIGNED_IN', 'WRONG_ACCOUNT', 'KEY', 'LIMIT'].includes(code)) break;
         const wait = GEMINI_RETRY_WAIT_MS * attempt * attempt;
         if (attempt < 3 && budgetEnd - Date.now() - wait > 45_000) {
           log.warn(`Gemini could not answer (attempt ${attempt}/3), asking again: ${geminiFailure}`);

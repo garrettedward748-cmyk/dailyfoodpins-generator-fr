@@ -103,6 +103,8 @@ export function geminiProblem(code: string, message: string): string {
       return `${message} The Browser page is where accounts are signed in.`;
     case 'TIMEOUT':
       return 'Gemini did not answer in time. Try again in a minute.';
+    case 'LIMIT':
+      return `${message}. The Gemini account's free plan allows only so many prompts; it answers again after the reset, or with another Google account.`;
     case 'NOT_AN_ANSWER':
     case 'NOT_JSON':
       return `${message}. The step used your AI keys instead.`;
