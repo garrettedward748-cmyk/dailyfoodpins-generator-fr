@@ -1213,7 +1213,9 @@ export function buildServer(
   app.post('/runs/:id/resume', async (request, reply) => {
     const id = asNumber((request.params as { id: string }).id, 0);
     try {
-      const result = await resumeRun(id, settings, encryptionKey);
+      // Resumed by hand: wanted now, so its pictures are made in the same go
+      // rather than waiting for the scheduler (write first, pictures after).
+      const result = await resumeRun(id, settings, encryptionKey, { pictures: true });
       return redirect(reply, `/runs/${id}`, {
         kind: result.outcome === 'published' ? 'ok' : 'error',
         message:
