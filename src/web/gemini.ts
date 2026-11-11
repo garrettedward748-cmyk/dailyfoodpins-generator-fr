@@ -127,10 +127,21 @@ export interface GeminiState {
 export async function geminiState(settings: Settings, fetchImpl?: typeof fetch): Promise<GeminiState> {
   const client = geminiClient(settings, fetchImpl);
   if (!client) return { kind: 'bad', label: 'Not available', detail: 'The image service is not configured, and Gemini runs there.' };
+  let live: Awaited<ReturnType<typeof client.status>>;
   try {
-    await client.status();
+    live = await client.status();
   } catch {
     return { kind: 'bad', label: 'Not answering', detail: 'The image service is not answering. Gemini runs there, beside Google Flow.' };
+  }
+  // What the service sees now, which a stored "last prompt failed" cannot say:
+  // whether the Gemini extension is there at all, and how much is waiting.
+  const queue = `${live.queued} prompt(s) waiting, ${live.running} being answered.`;
+  if (!live.extension_connected && live.queued + live.running > 0) {
+    return {
+      kind: 'bad',
+      label: 'Gemini page not connected',
+      detail: `${queue} The Gemini page in the image service's browser is not picking prompts up: open the Browser page and check that a gemini.google.com window is open and signed in (it opens itself when Chrome starts; restarting Chrome from the Browser page brings it back).`,
+    };
   }
 
   const okAt = settings.get(GEMINI_LAST_OK);
@@ -141,7 +152,7 @@ export async function geminiState(settings: Settings, fetchImpl?: typeof fetch):
     return {
       kind: 'bad',
       label: code === 'NOT_SIGNED_IN' || code === 'WRONG_ACCOUNT' ? 'Sign-in needed' : 'Last prompt failed',
-      detail: `${geminiProblem(code, message)} (${at.slice(0, 16).replace('T', ' ')})`,
+      detail: `${geminiProblem(code, message)} (${at.slice(0, 16).replace('T', ' ')}). Now: ${queue}`,
     };
   }
   if (okAt) return { kind: 'ok', label: 'Working', detail: `Last answer ${okAt.slice(0, 16).replace('T', ' ')}.` };
