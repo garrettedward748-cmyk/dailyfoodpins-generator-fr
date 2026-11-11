@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeDatabase, openDatabase } from '../src/db/index.js';
 import { GeminiClient, GeminiError } from '../src/integrations/gemini.js';
 import { chat, setGeminiRetryWait } from '../src/llm/client.js';
+import { ARTICLE_CHAT_PROMPTS, askPrompt } from '../src/llm/ask.js';
+import { setModelOverride } from '../src/db/repos.js';
+import { invalidatePromptCache } from '../src/pipeline/prompts.js';
 import { configureGemini, GEMINI_LAST_ERROR, GEMINI_LAST_OK, GEMINI_MODEL, geminiChatFor, joinMessages, jsonFrom, rememberGeminiChat, unusableReply, withGeminiChat } from '../src/llm/gemini.js';
 import { listEndpointRows, upsertEndpoint } from '../src/llm/pool.js';
 import { Settings } from '../src/settings.js';
@@ -199,6 +202,21 @@ describe('chat() with Gemini as the model', () => {
     await ask();
     expect(sent[3]).toMatchObject({ temporary: true, conversation_id: '' });
     expect(geminiChatFor(settings, 'run:7')).toBe('c1');
+  }, 30_000);
+
+  it("keeps only the article's own prompts in its chat; the rest go to short chats of their own", async () => {
+    const { fetchImpl, sent } = service({ result: reply({ conversation_id: 'c9' }) });
+    configureGemini({ settings, account: () => '', fetchImpl });
+    for (const name of ['recipe-generator', 'pin-description']) setModelOverride(name, GEMINI_MODEL);
+    invalidatePromptCache();
+    expect(ARTICLE_CHAT_PROMPTS.has('part-2')).toBe(true);
+
+    await withGeminiChat('run:42', () => askPrompt(settings, KEY, 'recipe-generator', {}));
+    await withGeminiChat('run:42', () => askPrompt(settings, KEY, 'pin-description', {}));
+    expect(sent[0]).toMatchObject({ temporary: false });
+    expect(sent[1]).toMatchObject({ temporary: true, conversation_id: '' });
+    expect(geminiChatFor(settings, 'run:42')).toBe('c9');
+    invalidatePromptCache();
   }, 30_000);
 
   it('moves to the new chat when the old one was gone, and lets go of one whose page failed', async () => {
