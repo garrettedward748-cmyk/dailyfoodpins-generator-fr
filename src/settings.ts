@@ -506,6 +506,18 @@ export const SETTING_SPECS: SettingSpec[] = [
       'Off: the pictures are made in the middle of the writing, as before.',
   },
   {
+    key: 'image_backlog',
+    label: 'Pictures first once this many articles wait',
+    group: 'schedule',
+    secret: false,
+    default: '1',
+    type: 'number',
+    help:
+      '1: each written article gets its pictures and goes out before the next is written, ' +
+      'usually within the hour. Higher lets the writing run ahead (more articles written in a ' +
+      'row while Gemini is fresh), each one then waiting longer for its pictures.',
+  },
+  {
     key: 'image_deadline_hours',
     label: 'Publish anyway after (hours)',
     group: 'schedule',

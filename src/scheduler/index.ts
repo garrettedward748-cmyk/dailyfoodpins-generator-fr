@@ -186,7 +186,7 @@ function considerRetry(
 }
 
 /** Written articles waiting for pictures before the scheduler makes pictures ahead of writing. */
-const IMAGE_BACKLOG = 3;
+const IMAGE_BACKLOG = 1;
 
 /** Settings key: until when no new article starts because every AI key is out of credit. */
 export const CREDIT_HOLD_UNTIL = 'llm_credit_hold_until';
@@ -438,7 +438,8 @@ export async function tick(
     // wait cannot grow for ever.
     if (!pick && mode === 'live') {
       const waiting = nextImageWait();
-      if (waiting && (!task || listImageWaits().length >= IMAGE_BACKLOG)) {
+      const backlog = Math.max(1, settings.getNumber('image_backlog') || IMAGE_BACKLOG);
+      if (waiting && (!task || listImageWaits().length >= backlog)) {
         releaseLock();
         log.info(`run ${waiting.id}: making the pictures of "${waiting.title}"`);
         const result = await resumeRun(waiting.id, settings, encryptionKey, { pictures: true });
@@ -496,6 +497,8 @@ export async function tick(
       encryptionKey,
       shareImages: getLinkShare(keyword.id, site.id),
       mode,
+      // Picked by hand ("Run now"): wanted now, so written and pictured in one go.
+      picturesNow: Boolean(pick),
     });
     const work = executePipeline(ctx);
     let outcome: Awaited<typeof work>;
