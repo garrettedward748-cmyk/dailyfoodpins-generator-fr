@@ -91,6 +91,13 @@ export class PipelineContext {
    */
   readonly approved: boolean;
 
+  /**
+   * Make the pictures now. With Setup -> "Write first, pictures after" on, a
+   * new run writes its article and stops, waiting for its pictures; the
+   * scheduler resumes it later with this set, when no writing is due.
+   */
+  readonly picturesNow: boolean;
+
   /** Whether this keyword-site link reuses images rather than generating them. */
   readonly shareImages: boolean;
   readonly sharedImages: SharedImageStore;
@@ -286,6 +293,7 @@ export class PipelineContext {
     sharedImages?: SharedImageStore;
     mode?: 'live' | 'dry';
     approved?: boolean;
+    picturesNow?: boolean;
   }) {
     this.runId = init.runId;
     this.site = init.site;
@@ -296,6 +304,7 @@ export class PipelineContext {
     this.allowResume = init.allowResume ?? true;
     this.mode = init.mode ?? 'live';
     this.approved = init.approved ?? false;
+    this.picturesNow = init.picturesNow ?? false;
     this.shareImages = init.shareImages ?? false;
     this.sharedImages = init.sharedImages ?? databaseImageStore;
 

@@ -1460,6 +1460,16 @@ export const MIGRATIONS: Migration[] = [
       db.prepare("DELETE FROM settings WHERE key = 'retention_days' AND CAST(value AS INTEGER) > 3").run();
     },
   },
+  {
+    id: '069-runs-waiting-images',
+    description: 'Write first, pictures after: a written article waiting for its pictures',
+    up(db) {
+      // A column of its own rather than a new `hold` value: runs.hold has a
+      // CHECK on its three values in databases made from schema.sql, and
+      // SQLite cannot change a CHECK without rewriting the table.
+      addColumn(db, 'runs', 'waiting_images', 'INTEGER NOT NULL DEFAULT 0');
+    },
+  },
 ];
 
 /* -- The runner ----------------------------------------------------------- */

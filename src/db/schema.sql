@@ -155,6 +155,10 @@ CREATE TABLE IF NOT EXISTS runs (
   -- completed step — so approval costs one HTTP post, not a whole pipeline.
   hold          TEXT    NOT NULL DEFAULT '' CHECK (hold IN ('', 'awaiting', 'dry')),
 
+  -- 1: written in full and waiting, unpublished, for its pictures (Setup ->
+  -- "Write first, pictures after"). Held as `cancelled` like the holds above.
+  waiting_images INTEGER NOT NULL DEFAULT 0,
+
   -- Automatic retries already spent on this run.
   attempts      INTEGER NOT NULL DEFAULT 0,
   retry_after   TEXT,

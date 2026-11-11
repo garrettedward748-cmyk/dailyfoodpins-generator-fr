@@ -788,19 +788,25 @@ export function loadSiteViews(dayKey: string, timezone: string): SiteView[] {
 
   const rows = all<Row>(
     `SELECT s.*,
+            -- A written article waiting for its pictures counts as the
+            -- day's article already: it is published once they are made.
             (SELECT COUNT(*) FROM runs r
               WHERE r.site_id = s.id
-                AND r.status = 'published'
-                AND date(r.published_at, ?) = ?)          AS published_today,
-            (SELECT MAX(r2.published_at) FROM runs r2
+                AND ((r.status = 'published' AND date(r.published_at, ?) = ?)
+                  OR (r.waiting_images = 1 AND date(r.started_at, ?) = ?)))
+                                                          AS published_today,
+            (SELECT MAX(COALESCE(r2.published_at, r2.finished_at)) FROM runs r2
               WHERE r2.site_id = s.id
-                AND r2.status = 'published')              AS last_publish_at,
+                AND (r2.status = 'published' OR r2.waiting_images = 1))
+                                                          AS last_publish_at,
             -- Every run, not just the successful ones: this is what makes the
             -- sites take turns even when one of them keeps failing.
             (SELECT MAX(r3.started_at) FROM runs r3
               WHERE r3.site_id = s.id)                    AS last_attempt_at
        FROM sites s
       ORDER BY s.name`,
+    tzModifier(timezone),
+    dayKey,
     tzModifier(timezone),
     dayKey,
   );
@@ -1359,6 +1365,8 @@ export interface RunRow {
   failed_step: string | null;
   mode: 'live' | 'dry';
   hold: '' | 'awaiting' | 'dry';
+  /** 1 while written and waiting for its pictures (write first, pictures after). */
+  waiting_images?: number;
   attempts: number;
   retry_after: string | null;
   title: string;
@@ -1392,7 +1400,7 @@ export const markRunPublished = (
   run(
     `UPDATE runs SET status = 'published', published_at = datetime('now'),
        finished_at = datetime('now'), post_id = ?, post_url = ?,
-       error = NULL, failed_step = NULL, hold = '', retry_after = NULL,
+       error = NULL, failed_step = NULL, hold = '', retry_after = NULL, waiting_images = 0,
        title = CASE WHEN ? = '' THEN title ELSE ? END
      WHERE id = ?`,
     postId,
@@ -3865,3 +3873,56 @@ export const recentFormatsForPage = (pageRowId: number, limit = 4): string[] =>
     pageRowId,
     limit,
   ).map((r) => r.format);
+
+/* -------------------------------------------------------------------------
+ * Written articles waiting for their pictures (Setup -> write first)
+ * ---------------------------------------------------------------------- */
+
+export interface ImageWaitRow {
+  id: number;
+  site_id: number;
+  title: string;
+  started_at: string;
+  retry_after: string | null;
+}
+
+/** Written in full: held, unpublished, until its pictures are made. */
+export const holdForImages = (id: number, title: string): void => {
+  run(
+    `UPDATE runs SET status = 'cancelled', finished_at = datetime('now'), hold = '', waiting_images = 1,
+       title = ?, error = NULL, failed_step = NULL, retry_after = NULL
+     WHERE id = ?`,
+    title,
+    id,
+  );
+};
+
+/** Written articles waiting for their pictures, oldest first. */
+export const listImageWaits = (): ImageWaitRow[] =>
+  all<ImageWaitRow>(
+    `SELECT id, site_id, title, started_at, retry_after FROM runs
+      WHERE waiting_images = 1 AND status = 'cancelled'
+      ORDER BY started_at ASC, id ASC`,
+  );
+
+/** The next one whose pictures are due: oldest first, past any wait after a failure. */
+export const nextImageWait = (): ImageWaitRow | undefined =>
+  get<ImageWaitRow>(
+    `SELECT id, site_id, title, started_at, retry_after FROM runs
+      WHERE waiting_images = 1 AND status = 'cancelled'
+        AND (retry_after IS NULL OR retry_after <= datetime('now'))
+      ORDER BY started_at ASC, id ASC LIMIT 1`,
+  );
+
+/** Back to waiting for its pictures after one failed, tried again in `minutes`. */
+export const holdForImagesAgain = (id: number, minutes: number, why: string): void => {
+  run(
+    `UPDATE runs SET status = 'cancelled', finished_at = datetime('now'), hold = '', waiting_images = 1,
+       error = ?, failed_step = NULL,
+       retry_after = datetime('now', ?)
+     WHERE id = ?`,
+    `Pictures not done yet, tried again later: ${why}`.slice(0, 1000),
+    `+${Math.max(1, Math.round(minutes))} minutes`,
+    id,
+  );
+};

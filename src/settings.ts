@@ -494,6 +494,30 @@ export const SETTING_SPECS: SettingSpec[] = [
   },
 
   {
+    key: 'write_first',
+    label: 'Write first, pictures after',
+    group: 'schedule',
+    secret: false,
+    default: 'true',
+    help:
+      'Each article is written in full first (research, recipe, picture prompts, the ' +
+      'three parts) and kept back, unpublished, while its pictures are made at a quiet ' +
+      'pace between articles. It is published, pinned and posted once they are done. ' +
+      'Off: the pictures are made in the middle of the writing, as before.',
+  },
+  {
+    key: 'image_deadline_hours',
+    label: 'Publish anyway after (hours)',
+    group: 'schedule',
+    secret: false,
+    default: '24',
+    type: 'number',
+    help:
+      'A written article whose pictures still are not all made after this long is ' +
+      'published with the ones that are: a missing method photo is left out, a missing ' +
+      'main photo is replaced by a method photo.',
+  },
+  {
     key: 'run_step_timeout_minutes',
     label: 'Step timeout (minutes)',
     group: 'schedule',

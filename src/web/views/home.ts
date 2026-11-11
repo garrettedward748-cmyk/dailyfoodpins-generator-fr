@@ -207,10 +207,12 @@ export function mergeRecent(runs: RunListRow[], reels: ReelView[], limit = 12): 
       detail:
         r.status === 'failed'
           ? `failed at ${r.failed_step ?? '?'}`
-          : r.status === 'cancelled' && r.hold
-            ? r.hold === 'awaiting'
-              ? 'waiting for approval'
-              : 'dry run'
+          : r.status === 'cancelled' && (r as { waiting_images?: number }).waiting_images === 1
+            ? `written, pictures next${r.error ? ' (one failed, tried again soon)' : ''}`
+            : r.status === 'cancelled' && r.hold
+              ? r.hold === 'awaiting'
+                ? 'waiting for approval'
+                : 'dry run'
             : r.pinned_on
               ? `pinned on ${r.pinned_on}`
               : '',

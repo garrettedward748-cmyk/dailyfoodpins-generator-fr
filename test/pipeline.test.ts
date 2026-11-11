@@ -52,6 +52,7 @@ describe('pipeline end to end', () => {
     configurePrompts(PROMPT_DIR);
 
     settings = new Settings(KEY);
+    settings.set('write_first', 'false'); // the pictures in the middle of the writing, as these tests were written for
     settings.set('image_api_key', 'image-key');
     settings.set('image_base_url', 'https://imggen.test');
     settings.set('image_poll_interval_seconds', '0');
@@ -459,6 +460,7 @@ describe('a run end to end, with the pieces combined', () => {
     configurePrompts(PROMPT_DIR);
 
     settings = new Settings(KEY);
+    settings.set('write_first', 'false'); // the pictures in the middle of the writing, as these tests were written for
     settings.set('image_api_key', 'image-key');
     settings.set('image_base_url', 'https://imggen.test');
     settings.set('image_poll_interval_seconds', '0');

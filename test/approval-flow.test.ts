@@ -100,6 +100,7 @@ describe('holding an article before it is published', () => {
     setLogLevel('error');
     openDatabase(':memory:');
     settings = new Settings(KEY);
+    settings.set('write_first', 'false'); // the pictures in the middle of the writing, as these tests were written for
     settings.set('buffer_enabled', 'false');
     settings.set('telegram_enabled', 'false');
   });

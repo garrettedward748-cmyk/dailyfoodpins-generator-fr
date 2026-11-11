@@ -220,6 +220,7 @@ describe('social-only accounts: a run end to end', () => {
     configureMediaStore({ dir, publicUrl: () => 'https://platform.test', keepDays: () => 7 });
 
     settings = new Settings(KEY);
+    settings.set('write_first', 'false');
     settings.set('image_api_key', 'image-key');
     settings.set('image_base_url', 'https://imggen.test');
     settings.set('image_poll_interval_seconds', '0');

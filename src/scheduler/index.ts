@@ -37,7 +37,7 @@ import { articleTitle, executePipeline, PipelineContext } from '../pipeline/inde
 import { runStep } from '../pipeline/engine.js';
 import { generatePinDescription, publishToBuffer, resolveBufferTarget } from '../pipeline/steps/publish.js';
 import { collagePostStep } from '../pipeline/steps/collage.js';
-import { getCompletedStep } from '../db/repos.js';
+import { getCompletedStep, listImageWaits, nextImageWait } from '../db/repos.js';
 import type { Settings } from '../settings.js';
 import { createLogger, errorMessage } from '../lib/logger.js';
 import { backfillNativeFeedPostIds, backfillNativeVideoIds, defaultDeps, tickReels } from '../reels/engine.js';
@@ -107,7 +107,7 @@ export interface TickResult {
   runId?: number;
   detail?: string;
   /** Set when the outcome is 'held': why it stopped before publishing. */
-  hold?: 'awaiting' | 'dry';
+  hold?: 'awaiting' | 'dry' | 'images';
 }
 
 /** The automatic-retry settings, read once per tick. */
@@ -184,6 +184,9 @@ function considerRetry(
 
   return held ? `${decision.reason} ${held}` : decision.reason;
 }
+
+/** Written articles waiting for pictures before the scheduler makes pictures ahead of writing. */
+const IMAGE_BACKLOG = 3;
 
 /** Settings key: until when no new article starts because every AI key is out of credit. */
 export const CREDIT_HOLD_UNTIL = 'llm_credit_hold_until';
@@ -390,6 +393,14 @@ export async function tick(
     }
 
     if (creditHeld) {
+      // Pictures need no AI key: the wait for them goes on meanwhile.
+      const waiting = nextImageWait();
+      if (waiting) {
+        releaseLock();
+        log.info(`run ${waiting.id}: making the pictures of "${waiting.title}" (writing is held)`);
+        const result = await resumeRun(waiting.id, settings, encryptionKey, { pictures: true });
+        return { ...result, cycleId };
+      }
       const reason = `Every AI key is out of credit: no new article starts until ${heldUntil}.`;
       log.info(`nothing to publish: ${reason}`);
       return { cycleId, outcome: 'no-task', detail: reason };
@@ -419,6 +430,20 @@ export async function tick(
       recordDecisions(cycleId, selection.decisions);
       task = selection.task;
       decisions = selection.decisions;
+    }
+
+    // Written articles waiting for their pictures (Setup -> write first).
+    // Writing comes first; the pictures are made when nothing is due to be
+    // written, or before writing more once IMAGE_BACKLOG articles wait, so the
+    // wait cannot grow for ever.
+    if (!pick && mode === 'live') {
+      const waiting = nextImageWait();
+      if (waiting && (!task || listImageWaits().length >= IMAGE_BACKLOG)) {
+        releaseLock();
+        log.info(`run ${waiting.id}: making the pictures of "${waiting.title}"`);
+        const result = await resumeRun(waiting.id, settings, encryptionKey, { pictures: true });
+        return { ...result, cycleId };
+      }
     }
 
     if (!task) {
@@ -610,6 +635,7 @@ export async function resumeRun(
   runId: number,
   settings: Settings,
   encryptionKey: Buffer,
+  options: { pictures?: boolean } = {},
 ): Promise<TickResult> {
   const cycleId = randomUUID();
 
@@ -622,7 +648,8 @@ export async function resumeRun(
       attempts: number;
       mode: 'live' | 'dry';
       hold: string;
-    }>('SELECT keyword_id, site_id, attempts, mode, hold FROM runs WHERE id = ?', runId);
+      waiting_images: number | null;
+    }>('SELECT keyword_id, site_id, attempts, mode, hold, waiting_images FROM runs WHERE id = ?', runId);
     if (!runRow?.site_id || !runRow.keyword_id) {
       return { cycleId, outcome: 'failed', detail: `Run ${runId} not found` };
     }
@@ -635,7 +662,7 @@ export async function resumeRun(
 
     run(
       `UPDATE runs SET status = 'running', error = NULL, failed_step = NULL,
-         hold = '', retry_after = NULL
+         hold = '', retry_after = NULL, waiting_images = 0
        WHERE id = ?`,
       runId,
     );
@@ -655,6 +682,8 @@ export async function resumeRun(
       shareImages: getLinkShare(keyword.id, site.id),
       mode: 'live',
       approved: true,
+      // A written article waiting for its pictures: resumed, they are made now.
+      picturesNow: options.pictures || runRow.waiting_images === 1,
     });
     const outcome = await executePipeline(ctx);
 

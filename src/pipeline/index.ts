@@ -17,7 +17,7 @@ import {
   type ArticleImageUploads,
   type Uploaded,
 } from './steps/images.js';
-import { generateArticle, postArticle } from './steps/article.js';
+import { attachSiteFields, generateArticle, postArticle } from './steps/article.js';
 import { createReelStep } from './steps/reel.js';
 import {
   generatePinDescription,
@@ -30,6 +30,8 @@ import {
   markRunFailed,
   markRunSkipped,
   markRunHeld,
+  holdForImagesAgain,
+  holdForImages,
   invalidateStep,
   markRunPublished,
   publishedTitles,
@@ -38,6 +40,7 @@ import {
   setRunTitle,
   getLinksForKeyword,
   getCompletedStep,
+  getRun,
 } from '../db/repos.js';
 import { findDuplicate, type DuplicateMatch } from '../core/similar-title.js';
 import { AlreadyOnSiteError, checkNotOnSite, NotHalalError } from './steps/duplicate.js';
@@ -82,7 +85,7 @@ export interface PipelineOutcome {
   error?: string;
   failedStep?: string;
   /** Why it stopped short of publishing, when it did. */
-  hold?: 'awaiting' | 'dry';
+  hold?: 'awaiting' | 'dry' | 'images';
 }
 
 /**
@@ -119,10 +122,72 @@ export async function executePipeline(ctx: PipelineContext): Promise<PipelineOut
     ctx.research = await runStep(ctx, researchGoogle, seo);
     const recipe = await runStep(ctx, generateRecipe, seo);
     const imagePrompts = await runStep(ctx, generateImagePrompts, { seo, recipe });
+    const social = isSocialOnly(ctx.site);
+
+    // Setup -> "Write first, pictures after": the whole article is written
+    // now -- its further method shots' prompts and its three parts too -- and
+    // the run waits, unpublished, for its pictures. The scheduler comes back
+    // to it with picturesNow when no writing is due, so Gemini's prompts and
+    // Flow's pictures are not interleaved. The pictures are fitted in after.
+    const writeFirst = ctx.settings.getBool('write_first') && ctx.mode === 'live';
+    let writtenShots: { step: number; prompt: string }[] | null = null;
+    let written: Record<string, unknown> | null = null;
+    if (writeFirst) {
+      if (!(ctx.allowResume && getCompletedStep(ctx.runId, generateArticleImages.name))) {
+        try {
+          writtenShots = await runStep(ctx, generateExtraStepPrompts, { seo, recipe, prompts: imagePrompts });
+        } catch (err) {
+          const cause = err instanceof StepFailedError ? err.cause : err;
+          log.warn(`run ${ctx.runId}: extra method shots skipped — ${errorMessage(cause)}`);
+          writtenShots = [];
+        }
+      }
+      if (!social) {
+        written = await runStep(ctx, generateArticle, { seo, recipe, images: NO_IMAGES });
+        const writtenTitle = articleTitle(written);
+        if (writtenTitle) setRunTitle(ctx.runId, writtenTitle);
+      }
+      if (!ctx.picturesNow) {
+        const title = (written && articleTitle(written)) || seo.title;
+        holdForImages(ctx.runId, title);
+        log.info(`run ${ctx.runId}: written; waiting for its pictures, made when no writing is due`);
+        return { status: 'held', hold: 'images' };
+      }
+    }
+
+    // Past this many hours a written article goes out with the pictures it has.
+    const pastDeadline = writeFirst && ctx.picturesNow && runAgeHours(ctx.runId)
+      >= Math.max(1, ctx.settings.getNumber('image_deadline_hours') || 24);
+
     // One step per image, so a resume owes only the ones that are missing.
     const uploads = {} as ArticleImageUploads;
-    for (const step of ARTICLE_IMAGE_STEPS) {
-      uploads[step.slot] = await runStep(ctx, step, imagePrompts[step.slot]);
+    try {
+      for (const step of ARTICLE_IMAGE_STEPS) {
+        try {
+          uploads[step.slot] = await runStep(ctx, step, imagePrompts[step.slot]);
+        } catch (err) {
+          if (!pastDeadline) throw err;
+          const cause = err instanceof StepFailedError ? err.cause : err;
+          log.warn(`run ${ctx.runId}: past its deadline, published without the ${step.slot} picture — ${errorMessage(cause)}`);
+          uploads[step.slot] = { path: '', absolute: '' };
+        }
+      }
+    } catch (err) {
+      // Written and waiting: a picture that fails puts it back in the wait, to
+      // be tried again later, rather than failing an article that is done.
+      if (writeFirst && ctx.picturesNow) {
+        const cause = err instanceof StepFailedError ? err.cause : err;
+        const minutes = Math.max(5, ctx.settings.getNumber('auto_retry_delay_minutes') || 15);
+        holdForImagesAgain(ctx.runId, minutes, errorMessage(cause));
+        log.warn(`run ${ctx.runId}: a picture failed, tried again in ${minutes} minutes — ${errorMessage(cause)}`);
+        return { status: 'held', hold: 'images' };
+      }
+      throw err;
+    }
+    // A missing main picture is replaced by a method picture.
+    if (!uploads.hero.path) {
+      const stand = [uploads.stepA, uploads.stepB, uploads.stepC].find((u) => u.path);
+      if (stand) uploads.hero = stand;
     }
     // Setup -> Photo styles on 5 or every step: the further method shots,
     // each its own checkpoint. On 3 this is an empty list and no model call.
@@ -132,7 +197,8 @@ export async function executePipeline(ctx: PipelineContext): Promise<PipelineOut
     const extras: { step: number; upload: Uploaded | null }[] = [];
     if (!(ctx.allowResume && getCompletedStep(ctx.runId, generateArticleImages.name))) {
       try {
-        const extraShots = await runStep(ctx, generateExtraStepPrompts, { seo, recipe, prompts: imagePrompts });
+        const extraShots = writtenShots
+          ?? await runStep(ctx, generateExtraStepPrompts, { seo, recipe, prompts: imagePrompts });
         for (const shot of extraShots) {
           let upload: Uploaded | null = null;
           try {
@@ -156,8 +222,11 @@ export async function executePipeline(ctx: PipelineContext): Promise<PipelineOut
 
     // A social-only account has no website to publish an article on: the
     // recipe is written (the posts carry it) but the article is not.
-    const social = isSocialOnly(ctx.site);
-    const article = social ? {} : await runStep(ctx, generateArticle, { seo, recipe, images });
+    const article = social
+      ? {}
+      : written
+        ? attachSiteFields(written, { seo, recipe, images })
+        : await runStep(ctx, generateArticle, { seo, recipe, images });
     const title = social ? seo.title : articleTitle(article);
 
     // Recorded before publishing, so a run held for approval is listed under
@@ -317,6 +386,16 @@ export async function executePipeline(ctx: PipelineContext): Promise<PipelineOut
 
     return { status: 'failed', error: message, failedStep };
   }
+}
+
+/** The article written before its pictures: the parts are written without them and fitted after. */
+const NO_IMAGES = { hero: '', stepA: '', stepB: '', stepC: '', stepNumbers: [] as number[] };
+
+/** How long ago this run started, in hours. */
+function runAgeHours(runId: number): number {
+  const started = getRun(runId)?.started_at;
+  if (!started) return 0;
+  return (Date.now() - Date.parse(`${started.replace(' ', 'T')}Z`)) / 3_600_000;
 }
 
 /**

@@ -549,12 +549,13 @@ export function formatTokens(n: number): string {
  * that way would tell you an article was thrown away when it is sitting there
  * finished, waiting for you.
  */
-export function runBadge(run: { status: string; hold?: string; research?: string }): Html {
+export function runBadge(run: { status: string; hold?: string; research?: string; waiting_images?: number | null }): Html {
   const noResearch =
     run.research === 'none'
       ? html` <span class="badge warn" title="Written without Google research: every search failed for 6 hours">no research</span>`
       : raw('');
   if (run.hold === 'awaiting') return html`<span class="badge warn">awaiting approval</span>${noResearch}`;
+  if (run.waiting_images === 1) return html`<span class="badge brand" title="Written in full; published once its pictures are made">written, pictures next</span>${noResearch}`;
   if (run.hold === 'dry') return html`<span class="badge brand">dry run</span>${noResearch}`;
   return html`${statusBadge(run.status)}${noResearch}`;
 }

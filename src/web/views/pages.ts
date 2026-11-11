@@ -446,7 +446,7 @@ export function runDetailPage(data: RunDetailData): Html {
       </div>
     </div>
 
-    ${run.hold ? approvalBar(run, data.duplicate) : raw('')}
+    ${run.hold || run.waiting_images === 1 ? approvalBar(run, data.duplicate) : raw('')}
 
     ${run.error
       ? html`<div class="flash error">
@@ -525,6 +525,27 @@ function approvalBar(
   run: RunRow,
   duplicate: { title: string; url: string | null; similarity: number } | null,
 ): Html {
+  if (run.waiting_images === 1) {
+    return html`
+      <div class="flash ok">
+        <strong>Written — its pictures are next</strong>
+        <div class="small" style="margin-top:6px">
+          The article is written in full. Its pictures are made between articles, at a quiet
+          pace, and it is published, pinned and posted once they are done (or, past the
+          deadline in Setup, with the pictures it has).
+          ${run.error ? html`<br />Last try: ${run.error}` : raw('')}
+        </div>
+        <div class="row wrap" style="margin-top:12px">
+          <form method="post" action="/runs/${run.id}/resume">
+            <button class="primary" type="submit">Make the pictures now</button>
+          </form>
+          <form method="post" action="/runs/${run.id}/discard"
+                onsubmit="return confirm('Discard this article? The keyword goes back to go so it can be written again.')">
+            <button class="danger" type="submit">Discard</button>
+          </form>
+        </div>
+      </div>`;
+  }
   return html`
     <div class="flash warn">
       <strong>
