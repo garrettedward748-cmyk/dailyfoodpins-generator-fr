@@ -95,7 +95,7 @@ ENV FLOW_AGENT_DIR=/data \
     WS_PORT=9222 \
     CHROME_PROFILE_DIR=/data/chrome-profile
 
-EXPOSE 8100 6080
+EXPOSE 8100 6080 6081
 
 # 8100 is the API; 6080 is noVNC. Neither is published to the host or given a
 # domain: both are reachable only from the platform container across an

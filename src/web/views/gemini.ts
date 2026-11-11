@@ -94,10 +94,16 @@ function browserCard(b: GeminiBrowserState | null): Html {
       Gemini's allowance is no longer spent on Flow's accounts. When one account's Gemini limit is
       reached, the next one writes. Off: Gemini runs in Flow's browser, as before.
     </p>
-    <form method="post" action="/settings/gemini/browser" class="row" style="gap:8px">
-      <input type="hidden" name="enabled" value="${b.enabled ? '0' : '1'}">
-      <button class="${b.enabled ? '' : 'primary'}" type="submit">${b.enabled ? 'Switch off' : 'Switch on'}</button>
-    </form>
+    <div class="row" style="gap:8px">
+      <form method="post" action="/settings/gemini/browser">
+        <input type="hidden" name="enabled" value="${b.enabled ? '0' : '1'}">
+        <button class="${b.enabled ? '' : 'primary'}" type="submit">${b.enabled ? 'Switch off' : 'Switch on'}</button>
+      </form>
+      ${b.enabled
+        ? html`<a class="button" href="/gemini-browser" target="_blank" rel="noopener"
+             title="Gemini's browser alone, on its own screen: sign accounts in or out, check what Gemini shows">Browser</a>`
+        : raw('')}
+    </div>
 
     ${b.enabled
       ? html`

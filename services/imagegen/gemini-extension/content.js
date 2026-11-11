@@ -299,13 +299,18 @@
   }
 
   // ── the job ────────────────────────────────────────────────────────────────
-  async function chat({ prompt = '', files = [], account = '', temporary = true, conversationId: wanted = '', images = true, timeoutMs = 240_000 }) {
+  async function chat({ prompt = '', files = [], account = '', temporary = true, conversationId: wanted = '', images = true, timeoutMs = 240_000, allowed = [] }) {
     // A page that is not visible may not draw the reply as it streams in.
     // The service worker restores a minimized window before each prompt; give
     // it a moment, then go on regardless -- Chrome here runs with background
     // throttling off, and a hidden page answering late beats one never asked.
     for (let i = 0; i < 20 && document.visibilityState !== 'visible'; i++) await sleep(250);
     const email = await checkSession(account);
+    // Gemini's own browser: an account removed from Setup -> Gemini is still
+    // signed in there, but is not written with -- the next one is.
+    if (allowed.length && email && !allowed.map((a) => a.toLowerCase()).includes(email)) {
+      fail('NOT_ALLOWED', `removed from Gemini's accounts in Setup, so not written with, as ${email}`);
+    }
     const continued = await settleHistory(wanted);
     // Carrying on a chat is never temporary; a new chat is temporary only when asked.
     const temp = continued ? false : await setTemporaryChat(Boolean(temporary && !wanted));

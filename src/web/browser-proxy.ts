@@ -30,6 +30,11 @@ const log = createLogger('browser-proxy');
 export interface BrowserProxyOptions {
   /** Base URL of imagegen's noVNC server, e.g. http://imagegen:6080 */
   targetUrl: string;
+  /**
+   * Where it is served, '/browser' by default. Gemini's own browser has a
+   * display of its own and is served at '/gemini-browser'.
+   */
+  prefix?: string;
   /** HMAC secret for session cookies. */
   secret: Buffer;
   /**
@@ -62,8 +67,16 @@ function parseTarget(targetUrl: string): { host: string; port: number } {
   return { host: url.hostname, port: Number(url.port || 80) };
 }
 
+/**
+ * One `upgrade` listener for every viewer: the server has a single listener
+ * slot in practice, and each one would otherwise refuse the other's paths.
+ */
+const upgradeRoutes = new WeakMap<FastifyInstance, Map<string, (request: IncomingMessage, socket: Duplex, head: Buffer) => void>>();
+
 export function registerBrowserProxy(app: FastifyInstance, options: BrowserProxyOptions): void {
   const target = parseTarget(options.targetUrl);
+  const prefix = options.prefix ?? '/browser';
+  const prefixRe = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\/?`);
 
   /**
    * Every socket pair this proxy is currently relaying.
@@ -135,7 +148,7 @@ export function registerBrowserProxy(app: FastifyInstance, options: BrowserProxy
    * covers these, so they inherit the session check for free.
    */
   const forward = async (request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply> => {
-    const suffix = (request.url.split('?')[0] ?? '').replace(/^\/browser\/?/, '');
+    const suffix = (request.url.split('?')[0] ?? '').replace(prefixRe, '');
     const path = suffix === '' ? 'vnc.html' : suffix;
 
     // The page itself, not its scripts and images — one call per open rather
@@ -176,10 +189,10 @@ export function registerBrowserProxy(app: FastifyInstance, options: BrowserProxy
    * `resize=scale` fits the remote screen to the tab rather than showing it at
    * 1:1 inside a black frame.
    */
-  app.get('/browser', async (_request, reply) =>
-    reply.redirect('/browser/?autoconnect=true&resize=scale', 302),
+  app.get(prefix, async (_request, reply) =>
+    reply.redirect(`${prefix}/?autoconnect=true&resize=scale`, 302),
   );
-  app.get('/browser/*', forward);
+  app.get(`${prefix}/*`, forward);
 
   /* -- The WebSocket itself -----------------------------------------------
    *
@@ -192,10 +205,30 @@ export function registerBrowserProxy(app: FastifyInstance, options: BrowserProxy
    * the raw sockets is transparent to whatever the two ends agree on, and
    * needs no dependency at all.
    */
-  app.server.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+  let routes = upgradeRoutes.get(app);
+  if (!routes) {
+    const table = new Map<string, (request: IncomingMessage, socket: Duplex, head: Buffer) => void>();
+    routes = table;
+    upgradeRoutes.set(app, table);
+    app.server.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+      const path = (request.url ?? '').split('?')[0] ?? '';
+      const owner = [...table.keys()].find((p) => path === p || path.startsWith(`${p}/`));
+      if (owner) {
+        table.get(owner)!(request, socket, head);
+        return;
+      }
+      // Node destroys an upgrade only when nothing is listening for one. This
+      // handler counts as listening, so a path it does not own would leave a
+      // socket attached to no reader and closed by nobody — a slow leak, and
+      // one that also hangs shutdown. Refuse it explicitly.
+      socket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');
+      socket.destroy();
+    });
+  }
+  routes.set(prefix, (request: IncomingMessage, socket: Duplex, head: Buffer) => {
     const path = (request.url ?? '').split('?')[0] ?? '';
 
-    if (!path.startsWith('/browser')) {
+    if (!path.startsWith(prefix)) {
       // Node destroys an upgrade only when nothing is listening for one. This
       // handler counts as listening, so a path it does not own would leave a
       // socket attached to no reader and closed by nobody — a slow leak, and
@@ -214,7 +247,7 @@ export function registerBrowserProxy(app: FastifyInstance, options: BrowserProxy
       return;
     }
 
-    const upstreamPath = path.replace(/^\/browser\/?/, '/') || '/';
+    const upstreamPath = path.replace(prefixRe, '/') || '/';
     const upstream = connect(target.port, target.host, () => {
       live.add(socket);
       live.add(upstream);

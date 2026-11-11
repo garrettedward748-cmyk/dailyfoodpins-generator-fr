@@ -54,6 +54,12 @@ describe('browser proxy', () => {
       targetUrl: `http://127.0.0.1:${upstreamPort}`,
       secret: SECRET,
     });
+    // Gemini's own browser, a second viewer on the same server.
+    registerBrowserProxy(app, {
+      prefix: '/gemini-browser',
+      targetUrl: `http://127.0.0.1:${upstreamPort}`,
+      secret: SECRET,
+    });
     await app.listen({ port: 0, host: '127.0.0.1' });
     appPort = (app.server.address() as AddressInfo).port;
   });
@@ -139,6 +145,13 @@ describe('browser proxy', () => {
 
       // noVNC serves its socket at /websockify, not /browser/websockify.
       expect(upgradesSeen).toEqual(['/websockify']);
+    });
+
+    it("serves Gemini's own browser beside Flow's, each on its own path", async () => {
+      const reply = await rawUpgrade('/gemini-browser/websockify', validCookie());
+      expect(reply).toContain('HELLO-FROM-VNC');
+      expect(upgradesSeen).toEqual(['/websockify']);
+      expect(await rawUpgrade('/gemini-browser/websockify')).toContain('401');
     });
 
     it('refuses upgrades for paths it does not own', async () => {

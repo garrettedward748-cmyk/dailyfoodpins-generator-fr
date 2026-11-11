@@ -144,9 +144,15 @@ async def poll(browser: str = "flow"):
         left = end - asyncio.get_running_loop().time()
         job = await queue.next_job(min(3.0, max(0.0, left)) if own else max(0.0, left))
         if job:
+            payload = job.payload
             if own:
                 gemini_browser.touch()
-            return {"job": {"id": job.id, "payload": job.payload}}
+                # Only the accounts listed in Setup -> Gemini write; one removed
+                # there stays signed in to the browser but is passed over.
+                listed = [a["email"] for a in gemini_browser.accounts() if a.get("state") == "signed_in"]
+                if listed:
+                    payload = {**payload, "allowed": listed}
+            return {"job": {"id": job.id, "payload": payload}}
         if asyncio.get_running_loop().time() >= end:
             return Response(status_code=204)
 
@@ -183,6 +189,14 @@ class GeminiAccount(BaseModel):
 @platform.get("/browser")
 async def browser_state() -> dict:
     await gemini_browser.running()
+    return gemini_browser.state()
+
+
+@platform.post("/browser/open")
+async def browser_open() -> dict:
+    """Someone opened its window on the platform: start it if it sleeps, and keep it up."""
+    if gemini_browser.enabled():
+        await gemini_browser.ensure_running("its window was opened")
     return gemini_browser.state()
 
 

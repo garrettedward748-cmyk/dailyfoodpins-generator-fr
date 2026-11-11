@@ -39,7 +39,8 @@ STATE_PATH = BASE_DIR / "gemini-browser.json"
 PROFILE_DIR = BASE_DIR / "gemini-profile"
 #: Stopped after this long with no prompt and no sign-in: an idle Chrome still costs CPU.
 IDLE_STOP_S = int(os.environ.get("GEMINI_BROWSER_IDLE_STOP_S", "900"))
-DISPLAY = os.environ.get("DISPLAY_FOR_INPUT", ":99")
+#: Its own X display (Xvfb :100 in supervisord), apart from Flow's :99.
+DISPLAY = os.environ.get("GEMINI_DISPLAY", ":100")
 _SUPERVISORCTL = ["supervisorctl", "-c", "/etc/supervisor/supervisord.conf"]
 
 TOTAL_TIMEOUT_S = 300
@@ -274,7 +275,7 @@ async def _xdo(*args: str) -> str:
 
 
 async def _focus_window() -> None:
-    """Keyboard focus to Gemini's browser, not Flow's, which shares the display."""
+    """Keyboard focus to Gemini's browser window on its display."""
     browser = await pid()
     if browser:
         try:

@@ -573,6 +573,29 @@ export function buildServer(
     },
   });
 
+  // Gemini's own browser, on a display of its own (Setup -> Gemini -> Browser):
+  // only that window, never Flow's. It sleeps when idle; opening it wakes it.
+  registerBrowserProxy(app, {
+    prefix: '/gemini-browser',
+    targetUrl:
+      process.env.IMAGEGEN_GEMINI_VNC_URL
+      ?? (process.env.IMAGEGEN_VNC_URL ?? 'http://imagegen:6080').replace(/:6080\b/, ':6081'),
+    secret: auth.secret,
+    onOpen: async () => {
+      const base = settings.get('image_base_url').replace(/\/+$/, '');
+      if (!base) return;
+      try {
+        await fetch(`${base}/v1/gemini/browser/open`, {
+          method: 'POST',
+          headers: { 'X-API-Key': settings.get('image_api_key') },
+          signal: AbortSignal.timeout(20_000),
+        });
+      } catch {
+        // The viewer will show an empty display until the service answers.
+      }
+    },
+  });
+
   /* -- Site tabs: one site at a time on the Content pages ---------------------- */
 
   const SCOPED = new Set(['/runs', '/keywords', '/research', '/radar', '/blog', '/site-pages', '/more-posts', '/reels']);
