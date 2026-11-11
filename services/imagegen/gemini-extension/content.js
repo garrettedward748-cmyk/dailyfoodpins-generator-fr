@@ -12,7 +12,7 @@
   const fail = (code, message) => { throw new Error(`${code}: ${message}`); };
 
   async function waitFor(fn, timeoutMs, onTimeout, every = 250) {
-    const end = sentAt + timeoutMs;
+    const end = Date.now() + timeoutMs;
     for (;;) {
       const v = fn();
       if (v) return v;
@@ -341,7 +341,7 @@
       () => fail(limitShown() ? 'LIMIT' : 'TIMEOUT', limitShown() ? `Gemini's usage limit is reached (${limitShown()}) as ${email || 'this account'}` : 'Gemini did not start answering'));
     // Done when the reply's action row (copy, redo) is shown and no Stop button is left, for 1.5 s.
     let stableSince = 0;
-    const end = Date.now() + timeoutMs;
+    const end = sentAt + timeoutMs;
     for (;;) {
       const last = responses().at(-1);
       if (last && $('message-actions', last) && !stopButton()) {
