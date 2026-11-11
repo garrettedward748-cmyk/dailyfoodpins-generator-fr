@@ -11,6 +11,9 @@
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
   const fail = (code, message) => { throw new Error(`${code}: ${message}`); };
 
+  // No first words this long after Send, Stop still shown: Gemini is stuck.
+  const STUCK_MS = 120_000;
+
   async function waitFor(fn, timeoutMs, onTimeout, every = 250) {
     const end = Date.now() + timeoutMs;
     for (;;) {
@@ -318,30 +321,62 @@
     await closeNotices();
 
     // The answer is the response that was not on the page before Send, at the end of the chat.
-    const old = new Set(responses());
+    let old = new Set(responses());
     const isNew = () => { const last = responses().at(-1); return last && !old.has(last) ? last : null; };
-    const before = old.size;
-    await setPrompt(prompt);
-    await attachFiles(files);
-    await closeNotices();
-    const send = await waitFor(() => { const b = sendButton(); return !isDisabled(b) && b; }, 15_000,
-      () => fail('NO_PROMPT_BOX', `the Send button ${sendButton() ? 'stayed disabled' : 'was not found'} (page language: ${document.documentElement.lang || 'unknown'})`));
-    send.click();
-    const sentAt = Date.now();
+    let sentAt = 0;
+    const submit = async () => {
+      // An earlier prompt still stuck on its dots holds the Send button: stopped first.
+      if (stopButton()) {
+        stopButton().click();
+        await waitFor(() => !stopButton(), 10_000, () => {});
+        await sleep(1500);
+      }
+      old = new Set(responses());
+      await setPrompt(prompt);
+      await attachFiles(files);
+      await closeNotices();
+      const send = await waitFor(() => { const b = sendButton(); return !isDisabled(b) && b; }, 15_000,
+        () => fail('NO_PROMPT_BOX', `the Send button ${sendButton() ? 'stayed disabled' : 'was not found'} (page language: ${document.documentElement.lang || 'unknown'})`));
+      send.click();
+      sentAt = Date.now();
+    };
+    await submit();
+    const firstSent = sentAt;
+    const deadline = firstSent + timeoutMs;
 
-    // A minute for the reply to show -- but while Gemini shows its Stop
-    // button it is working on it (the dots before a long prompt's answer
-    // can last minutes when it is busy), so it is waited for, not given up
-    // on and asked again on top of itself.
-    await waitFor(() => {
-      if (responses().length > before && isNew()) return true;
-      return Date.now() - sentAt > 60_000 && !stopButton();
-    }, timeoutMs, () => {});
-    await waitFor(() => responses().length > before && isNew(), 0,
-      () => fail(limitShown() ? 'LIMIT' : 'TIMEOUT', limitShown() ? `Gemini's usage limit is reached (${limitShown()}) as ${email || 'this account'}` : 'Gemini did not start answering'));
+    // Wait for the reply's first words. While Gemini shows its Stop button it
+    // is working on it, so it is not given up on after a minute. But Gemini
+    // sometimes sits on its loading dots for good (seen 2026-11-11: minutes,
+    // nothing): then its Stop is pressed and the prompt sent again, once.
+    let resent = false;
+    for (;;) {
+      const r = isNew();
+      const words = r ? (($('.markdown', r) || $('message-content', r))?.innerText || '').trim() : '';
+      if (words) break;
+      const waited = Date.now() - sentAt;
+      if (!stopButton() && waited > 60_000) {
+        if (limitShown()) fail('LIMIT', `Gemini's usage limit is reached (${limitShown()}) as ${email || 'this account'}`);
+        if (r) break; // a reply with no words (a picture, an empty answer): read as it is
+        fail('TIMEOUT', 'Gemini did not start answering');
+      }
+      // Thinking out loud first (a thinking model) is working, not stuck.
+      const thinking = r && ($('model-thoughts', r)?.innerText || '').trim();
+      if (!resent && !thinking && waited > STUCK_MS && Date.now() + 60_000 < deadline) {
+        resent = true;
+        stopButton()?.click();
+        await sleep(3000);
+        await submit();
+        continue;
+      }
+      if (Date.now() > deadline) {
+        if (limitShown()) fail('LIMIT', `Gemini's usage limit is reached (${limitShown()}) as ${email || 'this account'}`);
+        fail('TIMEOUT', `Gemini showed no answer in ${Math.round(timeoutMs / 1000)}s${resent ? ', asked twice' : ''}`);
+      }
+      await sleep(400);
+    }
     // Done when the reply's action row (copy, redo) is shown and no Stop button is left, for 1.5 s.
     let stableSince = 0;
-    const end = sentAt + timeoutMs;
+    const end = deadline;
     for (;;) {
       const last = responses().at(-1);
       if (last && $('message-actions', last) && !stopButton()) {
