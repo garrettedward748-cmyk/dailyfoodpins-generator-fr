@@ -69,14 +69,16 @@ def test_accounts_are_listed_and_forgotten():
     assert [a["email"] for a in gemini_browser.accounts()] == ["one@gmail.com"]
 
 
-def test_only_the_accounts_listed_in_setup_are_written_with(isolated):
+def test_an_account_removed_in_setup_is_passed_over_and_any_other_writes(isolated):
     queue = isolated
     gemini_browser.set_enabled(True)
     gemini_browser._put_account("one@gmail.com", state="signed_in")
-    gemini_browser._put_account("gone@gmail.com", state="failed")
+    gemini_browser.remove_account("One@gmail.com")
 
     async def go():
         queue.submit({"prompt": "hi"}, timeout_s=60)
         return await api.poll(browser="gemini")
 
-    assert asyncio.run(go())["job"]["payload"]["allowed"] == ["one@gmail.com"]
+    assert asyncio.run(go())["job"]["payload"]["excluded"] == ["one@gmail.com"]
+    gemini_browser._put_account("one@gmail.com", state="signed_in")  # signed in again
+    assert gemini_browser.removed() == []

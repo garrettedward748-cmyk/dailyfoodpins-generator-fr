@@ -161,7 +161,7 @@ async function run(job) {
   }
   const next = Object.values(limits).sort((a, b) => a - b)[0];
   if (!Object.keys(limits).length && !last) {
-    throw new Error("NOT_SIGNED_IN: none of the Google accounts in Setup -> Gemini is signed in to Gemini's browser. Sign one in there.");
+    throw new Error("NOT_SIGNED_IN: every Google account signed in to Gemini's browser was removed in Setup -> Gemini. Sign another one in there.");
   }
   throw new Error(`LIMIT: every Google account's Gemini limit is reached${next ? `; the first comes back at ${new Date(next).toTimeString().slice(0, 5)}` : ''}. Add another account in the Gemini window on the Browser page for more.${last ? ` (${last.message})` : ''}`);
 }

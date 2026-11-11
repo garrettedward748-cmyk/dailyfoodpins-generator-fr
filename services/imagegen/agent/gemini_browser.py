@@ -91,14 +91,27 @@ def _put_account(email: str, **fields) -> None:
     else:
         rows.append({"email": email, "added_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **fields})
     data["accounts"] = rows
+    if fields.get("state") == "signed_in":  # signed in again: written with again
+        data["removed"] = [e for e in data.get("removed", []) if e.lower() != email.lower()]
     _save(data)
 
 
 def remove_account(email: str) -> None:
-    """Forgotten here. The Google session stays in the browser until signed out there."""
+    """Forgotten here, and passed over from now on.
+
+    The Google session stays in the browser until signed out there, so the
+    address is kept on a list of accounts Gemini must not write with.
+    """
     data = _load()
     data["accounts"] = [a for a in data.get("accounts", []) if a.get("email", "").lower() != email.lower()]
+    removed = [e for e in data.get("removed", []) if e.lower() != email.lower()]
+    data["removed"] = [*removed, email.lower()]
     _save(data)
+
+
+def removed() -> list[str]:
+    """Accounts removed in Setup: still signed in to the browser perhaps, but not written with."""
+    return [e for e in _load().get("removed", []) if isinstance(e, str)]
 
 
 def state() -> dict:

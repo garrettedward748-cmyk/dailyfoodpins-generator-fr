@@ -147,11 +147,12 @@ async def poll(browser: str = "flow"):
             payload = job.payload
             if own:
                 gemini_browser.touch()
-                # Only the accounts listed in Setup -> Gemini write; one removed
-                # there stays signed in to the browser but is passed over.
-                listed = [a["email"] for a in gemini_browser.accounts() if a.get("state") == "signed_in"]
-                if listed:
-                    payload = {**payload, "allowed": listed}
+                # An account removed in Setup -> Gemini stays signed in to the
+                # browser but is passed over. Any other signed-in account writes,
+                # one signed in by hand on the Browser page too.
+                excluded = gemini_browser.removed()
+                if excluded:
+                    payload = {**payload, "excluded": excluded}
             return {"job": {"id": job.id, "payload": payload}}
         if asyncio.get_running_loop().time() >= end:
             return Response(status_code=204)
