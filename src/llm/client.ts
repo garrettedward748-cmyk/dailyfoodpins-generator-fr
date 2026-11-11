@@ -129,8 +129,10 @@ async function callOllama(
  * The caller never learns which endpoint served it until it succeeds — and
  * the endpoint name comes back in the result so the run log can record it.
  */
-/** Pause before asking Gemini again: 15 s, then 60 s. */
-export let GEMINI_RETRY_WAIT_MS = 15_000;
+/** Pause before asking Gemini again: 10 s, then 40 s. */
+export let GEMINI_RETRY_WAIT_MS = 10_000;
+/** Gemini's share of a step: under the 8-minute step timeout, with room for the fallback to report. */
+const GEMINI_BUDGET_MS = 6.5 * 60_000;
 export function setGeminiRetryWait(ms: number): void {
   GEMINI_RETRY_WAIT_MS = ms;
 }
@@ -150,9 +152,21 @@ export async function chat(
     // for a minute, a page may be slow, a reply may not be JSON -- all fine a
     // moment later. Only what needs a person (signing in, the key) stops it.
     let geminiFailure = '';
+    // All of it inside the step's time (8 minutes by default): a step cut off
+    // by its own timeout said only "timed out", never what Gemini was doing.
+    // Left over, the reason reaches the step's error.
+    const budgetEnd = started + GEMINI_BUDGET_MS;
     for (let attempt = 1; attempt <= 3; attempt++) {
+      const left = budgetEnd - Date.now();
+      if (left < 30_000) {
+        geminiFailure ||= 'no time left in the step';
+        break;
+      }
       try {
-        const completion = await geminiCompletion(request);
+        const completion = await geminiCompletion({
+          ...request,
+          timeoutMs: Math.min(request.timeoutMs ?? 300_000, left - 20_000),
+        });
         return {
           content: completion.content,
           endpoint: 'Gemini',
@@ -166,9 +180,12 @@ export async function chat(
         geminiFailure = errorMessage(err);
         const code = (err as { code?: string }).code ?? '';
         if (['SETUP', 'NOT_SIGNED_IN', 'WRONG_ACCOUNT', 'KEY'].includes(code)) break;
-        if (attempt < 3) {
+        const wait = GEMINI_RETRY_WAIT_MS * attempt * attempt;
+        if (attempt < 3 && budgetEnd - Date.now() - wait > 45_000) {
           log.warn(`Gemini could not answer (attempt ${attempt}/3), asking again: ${geminiFailure}`);
-          await new Promise((r) => setTimeout(r, GEMINI_RETRY_WAIT_MS * attempt * attempt));
+          await new Promise((r) => setTimeout(r, wait));
+        } else {
+          break;
         }
       }
     }
