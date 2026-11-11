@@ -87,8 +87,66 @@ async function openFresh(account, conversationId) {
   return port;
 }
 
+// ── several Google accounts, one after another ───────────────────────────────
+// Each signed-in Google account has its own free Gemini allowance. When the one
+// in use shows "Limit reached · Resets at 10:44", the prompt goes to the next
+// account signed in to this browser (?authuser=1, 2, ...), and the spent one is
+// left alone until its reset. Accounts are added on the Browser page: in the
+// Gemini window, the account picture, then "Add another account".
+const MAX_ACCOUNTS = 6;
+
+/** When a limit lifts, from "Resets at 10:44" (this browser's clock); three hours when unsaid. */
+function resetsAt(message) {
+  const m = /(\d{1,2}):(\d{2})\s*(am|pm)?/i.exec(message || '');
+  if (!m) return Date.now() + 3 * 3600_000;
+  let h = Number(m[1]);
+  const half = (m[3] || '').toLowerCase();
+  if (half === 'pm' && h < 12) h += 12;
+  if (half === 'am' && h === 12) h = 0;
+  const at = new Date();
+  at.setHours(h, Number(m[2]), 0, 0);
+  if (at.getTime() <= Date.now()) at.setDate(at.getDate() + 1);
+  return at.getTime() + 60_000;
+}
+
+async function rotation() {
+  const { geminiLimits = {}, geminiAccounts = MAX_ACCOUNTS } = await chrome.storage.local.get(['geminiLimits', 'geminiAccounts']);
+  for (const [k, until] of Object.entries(geminiLimits)) if (until <= Date.now()) delete geminiLimits[k];
+  return { limits: geminiLimits, count: geminiAccounts };
+}
+
 async function run(job) {
-  const port = await openFresh(job.payload.account || '', job.payload.conversationId || '');
+  // A prompt for a named account goes to it alone.
+  if (job.payload.account) return runAs(job, job.payload.account);
+  const { limits, count } = await rotation();
+  const seen = new Set();
+  let last = null;
+  for (let user = 0; user < count; user++) {
+    if (limits[user]) continue;
+    try {
+      return await runAs(job, String(user));
+    } catch (e) {
+      const msg = e.message || String(e);
+      // Past the last signed-in account Google asks for a sign-in, or quietly
+      // opens the first account again: either way the list ends here.
+      const email = (/ as (\S+@\S+)$/.exec(msg) || [])[1] || '';
+      if ((user > 0 && msg.startsWith('NOT_SIGNED_IN')) || (email && seen.has(email))) {
+        await chrome.storage.local.set({ geminiAccounts: Math.max(1, user) });
+        break;
+      }
+      if (!msg.startsWith('LIMIT')) throw e;
+      if (email) seen.add(email);
+      limits[user] = resetsAt(msg);
+      await chrome.storage.local.set({ geminiLimits: limits });
+      last = e;
+    }
+  }
+  const next = Object.values(limits).sort((a, b) => a - b)[0];
+  throw new Error(`LIMIT: every Google account's Gemini limit is reached${next ? `; the first comes back at ${new Date(next).toTimeString().slice(0, 5)}` : ''}. Add another account in the Gemini window on the Browser page for more.${last ? ` (${last.message})` : ''}`);
+}
+
+async function runAs(job, account) {
+  const port = await openFresh(account, job.payload.conversationId || '');
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => finish(new Error('TIMEOUT: the Gemini page stopped answering')), (job.payload.timeoutMs || 240_000) + 30_000);
     function finish(err, result) {

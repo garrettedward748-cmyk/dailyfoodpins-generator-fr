@@ -324,7 +324,7 @@
     send.click();
 
     await waitFor(() => responses().length > before && isNew(), 60_000,
-      () => fail(limitShown() ? 'LIMIT' : 'TIMEOUT', limitShown() ? `Gemini's usage limit is reached (${limitShown()})` : 'Gemini did not start answering'));
+      () => fail(limitShown() ? 'LIMIT' : 'TIMEOUT', limitShown() ? `Gemini's usage limit is reached (${limitShown()}) as ${email || 'this account'}` : 'Gemini did not start answering'));
     // Done when the reply's action row (copy, redo) is shown and no Stop button is left, for 1.5 s.
     let stableSince = 0;
     const end = Date.now() + timeoutMs;
@@ -337,7 +337,7 @@
         stableSince = 0;
       }
       if (Date.now() > end) {
-        if (limitShown()) fail('LIMIT', `Gemini's usage limit is reached (${limitShown()})`);
+        if (limitShown()) fail('LIMIT', `Gemini's usage limit is reached (${limitShown()}) as ${email || 'this account'}`);
         fail('TIMEOUT', 'Gemini was still answering when the time ran out');
       }
       await sleep(400);
