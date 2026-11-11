@@ -167,7 +167,18 @@ async function run(job) {
 }
 
 async function runAs(job, account) {
-  const port = await openFresh(account, job.payload.conversationId || '');
+  const first = await runOnce(job, account, job.payload.conversationId || '');
+  if (!first.reopen) return first.result;
+  // The reply hung on the page: the chat is opened again and the prompt run
+  // there once more, where an answer Gemini made meanwhile is taken as it is.
+  const again = { ...job, payload: { ...job.payload, conversationId: first.reopen, reopened: true, timeoutMs: first.timeoutMs } };
+  const second = await runOnce(again, account, first.reopen);
+  if (second.reopen) throw new Error('TIMEOUT: Gemini hung on its reply twice');
+  return second.result;
+}
+
+async function runOnce(job, account, conversationId) {
+  const port = await openFresh(account, conversationId);
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => finish(new Error('TIMEOUT: the Gemini page stopped answering')), (job.payload.timeoutMs || 240_000) + 30_000);
     function finish(err, result) {
@@ -179,7 +190,8 @@ async function runAs(job, account) {
     }
     function onMessage(msg) {
       if (msg.id !== job.id) return;
-      if (msg.ok) finish(null, msg.result);
+      if (msg.reopen) finish(null, { reopen: msg.reopen, timeoutMs: msg.timeoutMs });
+      else if (msg.ok) finish(null, { result: msg.result });
       else finish(new Error(msg.error));
     }
     function onGone() {

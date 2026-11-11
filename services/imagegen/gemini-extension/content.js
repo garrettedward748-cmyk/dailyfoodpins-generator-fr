@@ -12,7 +12,7 @@
   const fail = (code, message) => { throw new Error(`${code}: ${message}`); };
 
   // No first words this long after Send, Stop still shown: Gemini is stuck.
-  const STUCK_MS = 120_000;
+  const STUCK_MS = 75_000;
 
   async function waitFor(fn, timeoutMs, onTimeout, every = 250) {
     const end = Date.now() + timeoutMs;
@@ -302,7 +302,7 @@
   }
 
   // ── the job ────────────────────────────────────────────────────────────────
-  async function chat({ prompt = '', files = [], account = '', temporary = true, conversationId: wanted = '', images = true, timeoutMs = 240_000, excluded = [] }) {
+  async function chat({ prompt = '', files = [], account = '', temporary = true, conversationId: wanted = '', images = true, timeoutMs = 240_000, excluded = [], reopened = false }) {
     // A page that is not visible may not draw the reply as it streams in.
     // The service worker restores a minimized window before each prompt; give
     // it a moment, then go on regardless -- Chrome here runs with background
@@ -318,13 +318,18 @@
     // Carrying on a chat is never temporary; a new chat is temporary only when asked.
     const temp = continued ? false : await setTemporaryChat(Boolean(temporary && !wanted));
     await waitFor(editor, 15_000, () => fail('NO_PROMPT_BOX', 'the Gemini page did not show its prompt box'));
+    // A prompt sent the instant the box shows, before the page has finished
+    // setting itself up, is one that can hang on its dots: a moment first.
+    await sleep(2500);
     await closeNotices();
 
     // Asked again (the platform retrying, the page reloaded) after Gemini had
     // in fact answered: that answer is the last thing in this chat, under this
     // same prompt. Taken as it is, not asked a third time.
-    if (continued && !files.length && !stopButton()) {
+    if (continued && !files.length) {
       const flat = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+      // Reopened because the reply hung: Gemini may still be finishing it.
+      if (reopened) await waitFor(() => !stopButton(), 60_000, () => {});
       const asked = $$('user-query').at(-1);
       const reply = responses().at(-1);
       const want = flat(prompt);
@@ -333,7 +338,7 @@
       const after = asked && reply && (asked.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING);
       // Only an answer never handed over: one already handed over and asked
       // again was not good enough (not JSON, say), and is asked anew.
-      if (same && after && $('message-actions', reply) && flat(reply.innerText) && !handedOver(reply)) {
+      if (same && after && !stopButton() && flat(($('.markdown', reply) || reply).innerText) && !handedOver(reply)) {
         const result = await extract(reply, images);
         noteHandedOver(reply);
         return { ...result, account: email, temporary: temp, continued, reused: true };
@@ -381,6 +386,14 @@
       }
       // Thinking out loud first (a thinking model) is working, not stuck.
       const thinking = r && ($('model-thoughts', r)?.innerText || '').trim();
+      // First, the chat opened again: the reply hanging here is often already
+      // made (the chat even gets its title) and only the page did not show
+      // it. The service worker reloads the chat and runs this prompt there,
+      // where the answer is taken if it is there and asked again if not.
+      if (!reopened && !thinking && waited > STUCK_MS && conversationId() && Date.now() + 90_000 < deadline && current) {
+        current.port.postMessage({ id: current.id, reopen: conversationId(), timeoutMs: deadline - Date.now() });
+        await new Promise(() => {}); // the page is about to be reloaded
+      }
       if (!resent && !thinking && waited > STUCK_MS && Date.now() + 60_000 < deadline) {
         resent = true;
         stopButton()?.click();
@@ -458,12 +471,17 @@
     return around.slice(0, 80);
   }
 
+  // The job this page is running and the port it came on, for chat() to ask
+  // the service worker to reopen the chat.
+  let current = null;
+
   window.__geminiChat = { chat, setPrompt, toMarkdown, plainText };
 
   if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
     const port = chrome.runtime.connect({ name: 'gemini-chat' });
     port.onMessage.addListener(async (msg) => {
       if (msg.cmd !== 'run') return;
+      current = { port, id: msg.job.id };
       try {
         port.postMessage({ id: msg.job.id, ok: true, result: await chat(msg.job.payload) });
       } catch (e) {
