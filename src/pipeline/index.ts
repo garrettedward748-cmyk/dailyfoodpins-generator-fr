@@ -138,8 +138,11 @@ export async function executePipeline(ctx: PipelineContext): Promise<PipelineOut
           writtenShots = await runStep(ctx, generateExtraStepPrompts, { seo, recipe, prompts: imagePrompts });
         } catch (err) {
           const cause = err instanceof StepFailedError ? err.cause : err;
-          log.warn(`run ${ctx.runId}: extra method shots skipped — ${errorMessage(cause)}`);
-          writtenShots = [];
+          // Not given up on: asked once more when the pictures are made,
+          // so a Gemini that hung while writing does not cost the article
+          // its further method photographs.
+          log.warn(`run ${ctx.runId}: extra method shots' prompts failed, asked again with the pictures — ${errorMessage(cause)}`);
+          writtenShots = null;
         }
       }
       if (!social) {
