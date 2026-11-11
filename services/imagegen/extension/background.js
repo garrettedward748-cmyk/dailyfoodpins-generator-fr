@@ -586,10 +586,13 @@ function connectToAgent() {
       } else if (msg.method === 'ui_page_images') {
         sendToAgent({ id: msg.id, result: await uiPageImages() });
       } else if (msg.method === 'ui_job_tiles') {
+        touchFlowTab();
         sendToAgent({ id: msg.id, result: await uiJobTiles(msg.params || {}) });
       } else if (msg.method === 'ui_tile_image') {
+        touchFlowTab();
         sendToAgent({ id: msg.id, result: await uiTileImage(msg.params || {}) });
       } else if (msg.method === 'ui_tile_video') {
+        touchFlowTab();
         sendToAgent({ id: msg.id, result: await uiTileVideo(msg.params || {}) });
       } else if (msg.method === 'ui_page_errors') {
         sendToAgent({ id: msg.id, result: await uiPageErrors(msg.params || {}) });
@@ -1140,6 +1143,16 @@ let _flowTabIdleSince = null;
 function holdFlowTab() {
   _flowTabUsers++;
   _flowTabIdleSince = null;
+}
+
+/**
+ * A prompt's picture is still being watched on the tab: not idle. The submit
+ * holds the tab only while it types, and a picture that took more than the
+ * two idle minutes to come had its tab closed under it (the browser left on
+ * about:blank, the picture lost, 2026-11-11).
+ */
+function touchFlowTab() {
+  if (_flowTabUsers === 0) _flowTabIdleSince = Date.now();
 }
 
 /** Give it back. The close happens on the idle alarm, not here. */
