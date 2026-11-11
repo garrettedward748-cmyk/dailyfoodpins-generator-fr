@@ -320,6 +320,26 @@
     await waitFor(editor, 15_000, () => fail('NO_PROMPT_BOX', 'the Gemini page did not show its prompt box'));
     await closeNotices();
 
+    // Asked again (the platform retrying, the page reloaded) after Gemini had
+    // in fact answered: that answer is the last thing in this chat, under this
+    // same prompt. Taken as it is, not asked a third time.
+    if (continued && !files.length && !stopButton()) {
+      const flat = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+      const asked = $$('user-query').at(-1);
+      const reply = responses().at(-1);
+      const want = flat(prompt);
+      const got = flat(asked?.innerText).replace(/^you said\s*/i, '');
+      const same = want.length > 40 && got.includes(want.slice(0, 120)) && got.includes(want.slice(-80));
+      const after = asked && reply && (asked.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING);
+      // Only an answer never handed over: one already handed over and asked
+      // again was not good enough (not JSON, say), and is asked anew.
+      if (same && after && $('message-actions', reply) && flat(reply.innerText) && !handedOver(reply)) {
+        const result = await extract(reply, images);
+        noteHandedOver(reply);
+        return { ...result, account: email, temporary: temp, continued, reused: true };
+      }
+    }
+
     // The answer is the response that was not on the page before Send, at the end of the chat.
     let old = new Set(responses());
     const isNew = () => { const last = responses().at(-1); return last && !old.has(last) ? last : null; };
@@ -375,23 +395,56 @@
       await sleep(400);
     }
     // Done when the reply's action row (copy, redo) is shown and no Stop button is left, for 1.5 s.
+    // Or, when Gemini's markup has no action row where it is looked for, when
+    // the Stop button is gone and the reply has not changed for 4 s: the
+    // answer was on the page and the prompt was asked again for want of it.
     let stableSince = 0;
+    let quietSince = 0;
+    let lastText = '';
     const end = deadline;
     for (;;) {
       const last = responses().at(-1);
+      const text = last ? (last.innerText || '') : '';
       if (last && $('message-actions', last) && !stopButton()) {
         stableSince ||= Date.now();
         if (Date.now() - stableSince > 1500) break;
       } else {
         stableSince = 0;
       }
+      if (last && text.trim() && text === lastText && !stopButton()) {
+        quietSince ||= Date.now();
+        if (Date.now() - quietSince > 4000) break;
+      } else {
+        quietSince = 0;
+      }
+      lastText = text;
       if (Date.now() > end) {
         if (limitShown()) fail('LIMIT', `Gemini's usage limit is reached (${limitShown()}) as ${email || 'this account'}`);
         fail('TIMEOUT', 'Gemini was still answering when the time ran out');
       }
       await sleep(400);
     }
-    return { ...(await extract(responses().at(-1), images)), account: email, temporary: temp, continued };
+    const result = await extract(responses().at(-1), images);
+    noteHandedOver(responses().at(-1));
+    return { ...result, account: email, temporary: temp, continued };
+  }
+
+  // Replies already handed to the agent, by a short fingerprint, for this tab.
+  function fingerprint(el) {
+    const t = String(el?.innerText || '').replace(/\s+/g, ' ').trim();
+    let h = 0;
+    for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0;
+    return `${t.length}:${h}`;
+  }
+  function handedOver(el) {
+    try { return JSON.parse(sessionStorage.getItem('geminiHanded') || '[]').includes(fingerprint(el)); } catch { return false; }
+  }
+  function noteHandedOver(el) {
+    try {
+      const list = JSON.parse(sessionStorage.getItem('geminiHanded') || '[]');
+      list.push(fingerprint(el));
+      sessionStorage.setItem('geminiHanded', JSON.stringify(list.slice(-50)));
+    } catch { /* storage refused: worst case a reply is asked again */ }
   }
 
   // The free plan's banner over the prompt box: "Limit reached · Resets at
