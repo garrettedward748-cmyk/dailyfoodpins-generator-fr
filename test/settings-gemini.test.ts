@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import formbody from '@fastify/formbody';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { closeDatabase, openDatabase } from '../src/db/index.js';
+import { all, closeDatabase, openDatabase } from '../src/db/index.js';
 import { setModelOverride } from '../src/db/repos.js';
 import { GEMINI_LAST_ERROR, GEMINI_LAST_OK, GEMINI_MODEL } from '../src/llm/gemini.js';
 import { invalidatePromptCache, modelFor, PROMPT_MODELS } from '../src/pipeline/prompts.js';
@@ -30,6 +30,7 @@ describe('Setup -> Gemini', () => {
   let calls: { path: string; body?: Record<string, unknown> }[];
   let job: Record<string, unknown>;
   let serviceUp: boolean;
+  let browser: { enabled: boolean; running: boolean; accounts: { email: string; state: string }[]; login: { state: string; message: string }; login_running: boolean };
 
   const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
     const path = String(url).replace(BASE, '');
@@ -38,6 +39,12 @@ describe('Setup -> Gemini', () => {
     if (path === '/v1/gemini/jobs') return json({ id: 'job-9', status: 'queued', result: null, error: null }, 202);
     if (path === '/v1/gemini/jobs/job-9') return json(job);
     if (path === '/v1/gemini/status') return json({ extension_connected: false, queued: 0, running: 0, last_success_at: null, last_error: null });
+    if (path.startsWith('/v1/gemini/browser') || path.startsWith('/v1/gemini/accounts')) {
+      const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+      if (path === '/v1/gemini/browser' && 'enabled' in body) browser.enabled = Boolean(body.enabled);
+      if (path === '/v1/gemini/accounts/login') browser.accounts.push({ email: String(body.email), state: 'signed_in' });
+      return json(browser);
+    }
     return json({}, 404);
   }) as unknown as typeof fetch;
 
@@ -62,6 +69,7 @@ describe('Setup -> Gemini', () => {
     process.env.IMAGE_API_KEY = 'test-key';
     calls = [];
     serviceUp = true;
+    browser = { enabled: false, running: false, accounts: [], login: { state: 'idle', message: '' }, login_running: false };
     job = { id: 'job-9', status: 'running', result: null, error: null };
   });
 
@@ -163,6 +171,26 @@ describe('Setup -> Gemini', () => {
     expect(out.status).toBe('failed');
     expect(out.error).toMatch(/Open the Browser page/);
     expect(settings.get(GEMINI_LAST_ERROR)).toMatch(/NOT_SIGNED_IN/);
+  });
+
+  it("switches Gemini's own browser on and signs an account in, without keeping the password", async () => {
+    const a = await app();
+    const off = await a.inject({ url: '/settings/gemini' });
+    expect(off.body).toContain("Gemini's own browser");
+    expect(off.body).toContain('Switch on');
+
+    const on = await a.inject({ method: 'POST', url: '/settings/gemini/browser', payload: 'enabled=1', headers: FORM });
+    expect(on.statusCode).toBe(303);
+    expect(browser.enabled).toBe(true);
+
+    const signed = await a.inject({ method: 'POST', url: '/settings/gemini/accounts/login', payload: 'email=w%40gmail.com&password=Pw-7f3k2Zq', headers: FORM });
+    expect(signed.statusCode).toBe(303);
+    expect(calls.find((c) => c.path === '/v1/gemini/accounts/login')!.body).toEqual({ email: 'w@gmail.com', password: 'Pw-7f3k2Zq' });
+    expect(JSON.stringify(all('SELECT * FROM settings'))).not.toContain('Pw-7f3k2Zq');
+
+    const page = await a.inject({ url: '/settings/gemini' });
+    expect(page.body).toContain('w@gmail.com');
+    expect(page.body).toContain('Sign in to Google from here');
   });
 
   it('refuses an empty message and says when the image service is down', async () => {

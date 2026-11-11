@@ -1,3 +1,10 @@
+// Gemini's own browser (started with --lang=en-GB, see docker/supervisord.conf)
+// runs with this extension installed by the same policy. It has no Flow work
+// and must not connect to the agent as a second Flow Kit: stop here.
+if (/^en-GB$/i.test(self.navigator?.language || '')) {
+  throw new Error("Flow Kit is off in Gemini's own browser");
+}
+
 /**
  * Flow Kit — Chrome Extension Background Service Worker
  *

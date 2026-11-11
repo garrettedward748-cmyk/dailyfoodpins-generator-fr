@@ -105,13 +105,15 @@ async def lifespan(app: FastAPI):
     worker_task = asyncio.create_task(controller.start())
     watchdog_task = asyncio.create_task(watchdog.run(controller))
     gemini_task = asyncio.create_task(gemini.run_sweeper())
+    from agent import gemini_browser
+    gemini_browser_task = asyncio.create_task(gemini_browser.run_idle_stop(gemini.get_queue().busy))
     logger.info("imagegen ready on %s:%d", API_HOST, API_PORT)
 
     yield
 
     controller.request_shutdown()
     await controller.drain()
-    for task in (ws_task, worker_task, watchdog_task, gemini_task):
+    for task in (ws_task, worker_task, watchdog_task, gemini_task, gemini_browser_task):
         task.cancel()
     await close_db()
     logger.info("imagegen stopped")

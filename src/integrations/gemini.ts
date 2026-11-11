@@ -57,6 +57,14 @@ export interface GeminiJob {
   error: string | null;
 }
 
+export interface GeminiBrowserState {
+  enabled: boolean;
+  running: boolean;
+  accounts: { email: string; state?: string; added_at?: string; signed_in_at?: string }[];
+  login: { state: string; message: string; email?: string };
+  login_running: boolean;
+}
+
 export interface GeminiStatus {
   extension_connected: boolean;
   queued: number;
@@ -123,6 +131,28 @@ export class GeminiClient {
       throw new GeminiError(`The image service answered HTTP ${response.status}${detail ? `: ${detail}` : ''}`, code);
     }
     return (await response.json()) as T;
+  }
+
+  /** Gemini's own browser: whether it is on, its accounts, the sign-in in progress. */
+  browser(): Promise<GeminiBrowserState> {
+    return this.call<GeminiBrowserState>('/v1/gemini/browser', {}, 15_000);
+  }
+
+  setBrowser(enabled: boolean): Promise<GeminiBrowserState> {
+    return this.call<GeminiBrowserState>('/v1/gemini/browser', { method: 'POST', body: JSON.stringify({ enabled }) });
+  }
+
+  /** Sign a Google account in to Gemini's own browser; the password is not kept anywhere. */
+  signIn(email: string, password: string): Promise<GeminiBrowserState> {
+    return this.call<GeminiBrowserState>('/v1/gemini/accounts/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+  }
+
+  signInCode(code: string): Promise<GeminiBrowserState> {
+    return this.call<GeminiBrowserState>('/v1/gemini/accounts/login/code', { method: 'POST', body: JSON.stringify({ code }) });
+  }
+
+  forgetAccount(email: string): Promise<GeminiBrowserState> {
+    return this.call<GeminiBrowserState>('/v1/gemini/accounts/remove', { method: 'POST', body: JSON.stringify({ email }) });
   }
 
   /** Queue a prompt; returns its id. */

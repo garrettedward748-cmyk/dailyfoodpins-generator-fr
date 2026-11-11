@@ -20,7 +20,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from agent import chrome
+from agent import chrome, gemini_browser
 from agent.auth import require_api_key
 from agent.gemini import POLL_WAIT_S, get_queue
 
@@ -80,7 +80,10 @@ async def ask(body: AskRequest) -> dict:
         timeout_s=body.timeout_s,
     )
     # Started now rather than on the worker's next pass, which can be seconds away.
-    asyncio.create_task(chrome.ensure_running("a Gemini prompt"))
+    if gemini_browser.enabled():
+        asyncio.create_task(gemini_browser.ensure_running("a Gemini prompt"))
+    else:
+        asyncio.create_task(chrome.ensure_running("a Gemini prompt"))
     return job.public()
 
 
@@ -118,11 +121,97 @@ class Result(BaseModel):
 
 
 @extension.get("/poll")
-async def poll():
-    job = await get_queue().next_job(POLL_WAIT_S)
-    if not job:
+async def poll(browser: str = "flow"):
+    """The next prompt, or a sign-in step, for the Gemini Chat extension in `browser`.
+
+    Two Chromes carry the extension: Flow's ("flow") and Gemini's own ("gemini",
+    see agent/gemini_browser.py). Prompts go to Gemini's own while it is
+    switched on and to Flow's otherwise; the other is kept waiting so its loop
+    does not spin.
+    """
+    own = gemini_browser.enabled()
+    if (browser == "gemini") != own:
+        await asyncio.sleep(POLL_WAIT_S)
         return Response(status_code=204)
-    return {"job": {"id": job.id, "payload": job.payload}}
+    queue = get_queue()
+    gemini_browser.set_wakeup(queue._wakeup)
+    end = asyncio.get_running_loop().time() + POLL_WAIT_S
+    while True:
+        if own:
+            step = gemini_browser.next_command()
+            if step:
+                return {"command": step}
+        left = end - asyncio.get_running_loop().time()
+        job = await queue.next_job(min(3.0, max(0.0, left)) if own else max(0.0, left))
+        if job:
+            if own:
+                gemini_browser.touch()
+            return {"job": {"id": job.id, "payload": job.payload}}
+        if asyncio.get_running_loop().time() >= end:
+            return Response(status_code=204)
+
+
+class CommandResult(BaseModel):
+    id: str = Field(..., max_length=64)
+    result: dict = Field(default_factory=dict)
+
+
+@extension.post("/command")
+async def command_done(body: CommandResult) -> dict:
+    return {"ok": gemini_browser.command_result(body.id, body.result)}
+
+
+# -- Gemini's own browser, from the platform (Setup -> Gemini) ----------------
+
+class BrowserSwitch(BaseModel):
+    enabled: bool
+
+
+class GeminiLogin(BaseModel):
+    email: str = Field(..., min_length=3, max_length=320)
+    password: str = Field(..., min_length=1, max_length=500)
+
+
+class GeminiCode(BaseModel):
+    code: str = Field(..., min_length=1, max_length=20)
+
+
+class GeminiAccount(BaseModel):
+    email: str = Field(..., min_length=3, max_length=320)
+
+
+@platform.get("/browser")
+async def browser_state() -> dict:
+    await gemini_browser.running()
+    return gemini_browser.state()
+
+
+@platform.post("/browser")
+async def browser_switch(body: BrowserSwitch) -> dict:
+    gemini_browser.set_enabled(body.enabled)
+    if not body.enabled:
+        await gemini_browser.stop("switched off")
+    return gemini_browser.state()
+
+
+@platform.post("/accounts/login")
+async def accounts_login(body: GeminiLogin) -> dict:
+    if not gemini_browser.enabled():
+        raise HTTPException(409, "Switch Gemini's own browser on first.")
+    gemini_browser.start_login(body.email, body.password)
+    return gemini_browser.state()
+
+
+@platform.post("/accounts/login/code")
+async def accounts_code(body: GeminiCode) -> dict:
+    gemini_browser.give_code(body.code)
+    return gemini_browser.state()
+
+
+@platform.post("/accounts/remove")
+async def accounts_remove(body: GeminiAccount) -> dict:
+    gemini_browser.remove_account(body.email)
+    return gemini_browser.state()
 
 
 @extension.post("/beat")

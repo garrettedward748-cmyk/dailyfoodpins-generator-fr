@@ -187,7 +187,51 @@ export function registerGeminiRoutes(app: FastifyInstance, deps: GeminiRouteDeps
 
   app.get('/settings/gemini', async (request, reply) => {
     const state = await geminiState(settings, deps.fetchImpl);
-    return deps.render(reply, geminiPage(state, GEMINI_STAGES, geminiStages()), deps.readFlash(request.query));
+    const browser = await client()?.browser().catch(() => null) ?? null;
+    return deps.render(reply, geminiPage(state, GEMINI_STAGES, geminiStages(), browser), deps.readFlash(request.query));
+  });
+
+  // -- Gemini's own browser ------------------------------------------------
+  const back = (reply: FastifyReply, kind: 'ok' | 'error', message: string) =>
+    reply.redirect(`/settings/gemini?${kind}=${encodeURIComponent(message)}`, 303);
+  const field = (request: FastifyRequest, name: string): string => {
+    const value = (request.body as Record<string, unknown> | undefined)?.[name];
+    return typeof value === 'string' ? value.trim() : '';
+  };
+  const viaService = async (reply: FastifyReply, done: string, act: (g: NonNullable<ReturnType<typeof client>>) => Promise<unknown>) => {
+    const gemini = client();
+    if (!gemini) return back(reply, 'error', geminiProblem('SETUP', 'it has no address or key in this deployment.'));
+    try {
+      await act(gemini);
+      return back(reply, 'ok', done);
+    } catch (err) {
+      return back(reply, 'error', err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  app.post('/settings/gemini/browser', async (request, reply) => {
+    const on = field(request, 'enabled') === '1';
+    return viaService(reply, on ? "Gemini's own browser is on. Sign its accounts in below." : "Gemini's own browser is off: Gemini runs in Flow's browser again.",
+      (g) => g.setBrowser(on));
+  });
+
+  app.post('/settings/gemini/accounts/login', async (request, reply) => {
+    const email = field(request, 'email');
+    const password = (request.body as Record<string, unknown> | undefined)?.password;
+    if (!email || typeof password !== 'string' || !password) return back(reply, 'error', 'Give the Gmail address and the password.');
+    return viaService(reply, `Signing ${email} in…`, (g) => g.signIn(email, password));
+  });
+
+  app.post('/settings/gemini/accounts/code', async (request, reply) => {
+    const code = field(request, 'code');
+    if (!code) return back(reply, 'error', 'Type the code first.');
+    return viaService(reply, 'Code sent to Google.', (g) => g.signInCode(code));
+  });
+
+  app.post('/settings/gemini/accounts/remove', async (request, reply) => {
+    const email = field(request, 'email');
+    if (!email) return back(reply, 'error', 'No account given.');
+    return viaService(reply, `${email} removed from the list.`, (g) => g.forgetAccount(email));
   });
 
   app.post('/settings/gemini/steps', async (request: FastifyRequest, reply) => {

@@ -78,8 +78,13 @@ class GeminiQueue:
     def submit(self, payload: dict, timeout_s: float) -> GeminiJob:
         job = GeminiJob(id=str(uuid.uuid4()), payload=payload, deadline=time.monotonic() + timeout_s)
         # Claimed before anything can await, so the idle stop cannot land in between.
-        chrome.hold()
-        job.holds_chrome = True
+        # With Gemini's own browser on, Flow's browser has nothing to do with it.
+        from agent import gemini_browser
+        if gemini_browser.enabled():
+            gemini_browser.touch()
+        else:
+            chrome.hold()
+            job.holds_chrome = True
         self.jobs[job.id] = job
         self._order.append(job.id)
         self._wakeup.set()
@@ -100,7 +105,11 @@ class GeminiQueue:
             "last_success_at": self.last_success_at,
             "last_error": self.last_error,
             "chrome": chrome.state(),
+            "own_browser": _own_browser(),
         }
+
+    def busy(self) -> bool:
+        return any(j.status in (QUEUED, RUNNING) for j in self.jobs.values())
 
     # -- the extension's side -----------------------------------------------
 
@@ -190,6 +199,11 @@ def get_queue() -> GeminiQueue:
     if _queue is None:
         _queue = GeminiQueue()
     return _queue
+
+
+def _own_browser() -> dict:
+    from agent import gemini_browser
+    return gemini_browser.state()
 
 
 async def run_sweeper(every_s: float = 5) -> None:

@@ -8,8 +8,18 @@
 set -u
 
 DATA_DIR="${FLOW_AGENT_DIR:-/data}"
-PROFILE="$(cat "$DATA_DIR/active-profile-dir" 2>/dev/null || true)"
-[[ -n "$PROFILE" ]] || PROFILE="${CHROME_PROFILE_DIR:-/data/chrome-profile}"
+# --gemini: Gemini's own browser, beside Flow's. Its own profile, with only the
+# Google accounts that write for the platform; Flow's account switches never
+# touch it. See agent/gemini_browser.py.
+GEMINI=0
+if [[ "${1:-}" == "--gemini" ]]; then
+    GEMINI=1
+    shift
+    PROFILE="$DATA_DIR/gemini-profile"
+else
+    PROFILE="$(cat "$DATA_DIR/active-profile-dir" 2>/dev/null || true)"
+    [[ -n "$PROFILE" ]] || PROFILE="${CHROME_PROFILE_DIR:-/data/chrome-profile}"
+fi
 mkdir -p "$PROFILE"
 
 # Same clean-up the entrypoint does for the first profile: a Chrome killed
@@ -36,7 +46,9 @@ fi
 # browser as needing a human.
 CACHE_LIMIT_MB="${CHROME_CACHE_LIMIT_MB:-300}"
 CACHE_DIRS=()
-for P in "$DATA_DIR"/chrome-profile "$DATA_DIR"/chrome-profiles/*; do
+# Each browser clears only its own profiles: the other one may be running.
+if (( GEMINI )); then SCAN=("$PROFILE"); else SCAN=("$DATA_DIR"/chrome-profile "$DATA_DIR"/chrome-profiles/*); fi
+for P in "${SCAN[@]}"; do
     [[ -d "$P" ]] || continue
     for C in Cache "Code Cache" GPUCache GrShaderCache ShaderCache GraphiteDawnCache component_crx_cache; do
         for D in "$P/$C" "$P"/*/"$C"; do [[ -d "$D" ]] && CACHE_DIRS+=("$D"); done

@@ -1,4 +1,5 @@
 import { html, raw, type Html } from './layout.js';
+import type { GeminiBrowserState } from '../../integrations/gemini.js';
 
 /** Setup -> Gemini. The logic and routes are in src/web/gemini.ts. */
 
@@ -30,7 +31,7 @@ const CSS = `
 .gm-actions { display: flex; gap: 8px; margin-top: 12px; }
 `;
 
-export function geminiPage(state: StateView, stages: StageView[], onStages: string[]): Html {
+export function geminiPage(state: StateView, stages: StageView[], onStages: string[], browser: GeminiBrowserState | null = null): Html {
   const badge = state.kind === 'ok' ? 'ok' : state.kind === 'bad' ? 'error' : 'muted';
   return html`<style>${raw(CSS)}</style>
     <h1>Gemini <span class="badge ${badge}">${state.label}</span></h1>
@@ -59,6 +60,8 @@ export function geminiPage(state: StateView, stages: StageView[], onStages: stri
       </form>
     </div>
 
+    ${browserCard(browser)}
+
     <div class="card gm-try">
       <h2>Try Gemini</h2>
       <form id="gm-form">
@@ -73,6 +76,72 @@ export function geminiPage(state: StateView, stages: StageView[], onStages: stri
       <div class="gm-reply" id="gm-reply" hidden></div>
     </div>
     ${raw(TRY_SCRIPT)}`;
+}
+
+/** Gemini's own browser: on or off, its Google accounts, and signing one in from here. */
+function browserCard(b: GeminiBrowserState | null): Html {
+  if (!b) {
+    return html`<div class="card"><h2>Gemini's own browser</h2>
+      <p class="small muted">The image service is not answering, so its browsers cannot be shown. Try again in a minute.</p></div>`;
+  }
+  const login = b.login && b.login.state !== 'idle' ? b.login : null;
+  const tone = login?.state === 'failed' ? 'error' : login?.state === 'done' ? 'ok' : 'warn';
+  return html`<div class="card">
+    <h2>Gemini's own browser <span class="badge ${b.enabled ? 'ok' : 'muted'}">${b.enabled ? (b.running ? 'on, running' : 'on, asleep') : 'off'}</span></h2>
+    <p class="small muted">
+      A second Chrome beside Flow's, with only the Google accounts below signed in. Flow's account
+      switches never touch it, so a prompt is no longer cut off when Flow changes account, and
+      Gemini's allowance is no longer spent on Flow's accounts. When one account's Gemini limit is
+      reached, the next one writes. Off: Gemini runs in Flow's browser, as before.
+    </p>
+    <form method="post" action="/settings/gemini/browser" class="row" style="gap:8px">
+      <input type="hidden" name="enabled" value="${b.enabled ? '0' : '1'}">
+      <button class="${b.enabled ? '' : 'primary'}" type="submit">${b.enabled ? 'Switch off' : 'Switch on'}</button>
+    </form>
+
+    ${b.enabled
+      ? html`
+        <h3 style="margin-top:18px">Accounts</h3>
+        ${b.accounts.length
+          ? html`<table class="table"><thead><tr><th>#</th><th>Gmail</th><th>State</th><th></th></tr></thead><tbody>
+              ${b.accounts.map((a, i) => html`<tr>
+                <td>${i + 1}</td>
+                <td>${a.email}</td>
+                <td><span class="badge ${a.state === 'signed_in' ? 'ok' : a.state === 'failed' ? 'error' : 'muted'}">${a.state === 'signed_in' ? 'signed in' : a.state || 'not signed in'}</span></td>
+                <td><form method="post" action="/settings/gemini/accounts/remove" onsubmit="return confirm('Forget this account here? Its Google session stays in Gemini\'s browser until it is signed out there.')">
+                  <input type="hidden" name="email" value="${a.email}"><button class="danger" type="submit">Remove</button></form></td>
+              </tr>`)}
+            </tbody></table>`
+          : html`<p class="small muted">No account yet. Sign the first one in below.</p>`}
+
+        <h3 style="margin-top:18px">Sign in to Google from here</h3>
+        ${login
+          ? html`<div class="flash ${tone}">${login.email ? html`${login.email}: ` : raw('')}${login.message || login.state}</div>
+            ${login.state === 'need_code'
+              ? html`<form method="post" action="/settings/gemini/accounts/code" class="row" style="gap:8px;margin-bottom:12px">
+                  <input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="verification code" required style="width:180px" />
+                  <button type="submit" class="primary">Send code</button>
+                </form>`
+              : raw('')}
+            ${b.login_running ? raw('<script>setTimeout(function () { location.reload(); }, 4000);</script>') : raw('')}`
+          : raw('')}
+        <form method="post" action="/settings/gemini/accounts/login" class="row wrap" style="gap:8px;align-items:flex-end" autocomplete="off">
+          <div class="field" style="margin:0;min-width:220px">
+            <label for="gm-email">Gmail</label>
+            <input id="gm-email" name="email" type="email" required autocomplete="off" />
+          </div>
+          <div class="field" style="margin:0;min-width:200px">
+            <label for="gm-pass">Password</label>
+            <input id="gm-pass" name="password" type="password" required autocomplete="new-password" />
+          </div>
+          <button type="submit" class="primary" ${b.login_running ? raw('disabled') : raw('')}>Sign in</button>
+        </form>
+        <p class="small muted">Typed into Google's own sign-in page in Gemini's browser, then forgotten -- the
+          password is not stored. If Google sends a prompt to your phone, tap Yes; if it asks for a code, a box
+          for it appears here. If Google refuses an automatic sign-in, sign in once on the Browser page, in the
+          Gemini window. Use Google accounts that are not Flow's: each brings its own Gemini allowance.</p>`
+      : raw('')}
+  </div>`;
 }
 
 // The reply is put on the page as text nodes, never as HTML: it is whatever Gemini wrote.

@@ -10,6 +10,9 @@
 // popup keeps the two extensions out of each other's way. Chrome here runs with background
 // throttling off, so the window works whether or not it is in front.
 const AGENT = 'http://127.0.0.1:8100/ext/gemini';
+// Which Chrome this is: Gemini's own (started with --lang=en-GB) or Flow's.
+// The agent hands prompts to one of them; see agent/gemini_browser.py.
+const BROWSER = /^en-GB$/i.test(self.navigator?.language || '') ? 'gemini' : 'flow';
 const APP = 'https://gemini.google.com/app';
 
 const ports = new Map(); // tabId -> content-script port
@@ -32,6 +35,16 @@ async function geminiTab() {
   if (tabId) {
     const tab = await chrome.tabs.get(tabId).catch(() => null);
     if (tab) return tab;
+  }
+  // Gemini's own browser has nothing else in it: its one window is used, so a
+  // sign-in typed on the display lands where the page is.
+  if (BROWSER === 'gemini') {
+    const [first] = await chrome.tabs.query({ windowType: 'normal' });
+    if (first) {
+      await chrome.tabs.update(first.id, { url: APP });
+      await chrome.storage.session.set({ tabId: first.id });
+      return chrome.tabs.get(first.id);
+    }
   }
   const win = await chrome.windows.create({ url: APP, type: 'popup', focused: false, left: 0, top: 0, width: 1280, height: 720 });
   const tab = win.tabs[0];
@@ -170,6 +183,73 @@ async function runAs(job, account) {
   });
 }
 
+// ── signing a Google account in (Gemini's own browser) ───────────────────────
+// The agent drives it (agent/gemini_browser.py): this opens Google's page in the
+// Gemini window, says which step it shows and puts the cursor in a field. The
+// typing is real keystrokes on the display, done by the agent: Google's page
+// tells a script filling a field from a person typing. AddSession signs one
+// more account in beside those already there, so each gets its own ?authuser=.
+const ADD_ACCOUNT_URL = 'https://accounts.google.com/AddSession?hl=en&continue=' + encodeURIComponent(`${APP}?hl=en`);
+
+async function signInStep({ action, selector = '', email = '' } = {}) {
+  const tab = await geminiTab();
+  if (action === 'open') {
+    ports.delete(tab.id);
+    await chrome.tabs.update(tab.id, { url: ADD_ACCOUNT_URL, active: true });
+    return { ok: true };
+  }
+  const now = await chrome.tabs.get(tab.id);
+  const url = now.url || now.pendingUrl || '';
+  if (url.startsWith('https://gemini.google.com/')) return { step: 'done', url };
+  if (/^https:\/\/myaccount\.google\.com\//.test(url)) {
+    await chrome.tabs.update(tab.id, { url: `${APP}?hl=en` });
+    return { step: 'done', url };
+  }
+  if (!url.startsWith('https://accounts.google.com/')) return { step: 'unknown', url };
+  const [injected] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    args: [action, selector, email],
+    func: (act, sel, mail) => {
+      const visible = (el) => {
+        if (!el || el.disabled || el.getAttribute('aria-hidden') === 'true' || el.name === 'hiddenPassword') return false;
+        const r = el.getBoundingClientRect();
+        const st = getComputedStyle(el);
+        return r.width > 2 && r.height > 2 && st.visibility !== 'hidden' && st.display !== 'none';
+      };
+      const q = (s) => [...document.querySelectorAll(s)].find(visible) || null;
+      if (act === 'focus') {
+        const el = q(sel);
+        if (!el) return { ok: false };
+        el.focus();
+        el.select && el.select();
+        return { ok: true };
+      }
+      if (act === 'choose') {
+        const rows = [...document.querySelectorAll('[data-identifier]')];
+        const mine = rows.find((r) => (r.getAttribute('data-identifier') || '').toLowerCase() === mail.toLowerCase());
+        const other = [...document.querySelectorAll('li, div[role="link"]')]
+          .find((el) => /use another account|utiliser un autre compte/i.test(el.textContent || ''));
+        (mine || other)?.click();
+        return { ok: !!(mine || other) };
+      }
+      const text = (document.body?.innerText || '').replace(/\s+/g, ' ');
+      const error = [...document.querySelectorAll('[aria-live="assertive"], [aria-live="polite"]')]
+        .map((e) => (e.innerText || '').trim()).filter(Boolean).join(' ').slice(0, 200);
+      let step = 'unknown';
+      if (/browser or app may not be secure|couldn.t sign you in/i.test(text)) step = 'blocked';
+      else if (q('input[name="ca"], #captchaimg')) step = 'captcha';
+      else if (q('input[type="email"], #identifierId, input[name="identifier"]')) step = 'email';
+      else if (q('input[type="password"], input[name="Passwd"]')) step = 'password';
+      else if (q('input[name="totpPin"], #totpPin, input[name="idvPin"], #idvPin, input[name="Pin"], input[type="tel"]')) step = 'code';
+      else if (/check your phone|google sent a notification|tap yes|open the gmail app/i.test(text)) step = 'phone';
+      else if (document.querySelector('[data-identifier]')) step = 'chooser';
+      else if (/verify it.s you|choose how you want to sign in|try another way/i.test(text)) step = 'verify';
+      return { step, url: location.href, error, text: text.slice(0, 300) };
+    },
+  });
+  return injected?.result || { step: 'unknown' };
+}
+
 // ── talking to the agent ─────────────────────────────────────────────────────
 const post = (path, body) =>
   fetch(`${AGENT}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -190,8 +270,16 @@ async function pollLoop() {
     for (;;) {
       let job = null;
       try {
-        const r = await fetch(`${AGENT}/poll`);
-        if (r.status === 200) job = (await r.json()).job;
+        const r = await fetch(`${AGENT}/poll?browser=${BROWSER}`);
+        if (r.status === 200) {
+          const body = await r.json();
+          if (body.command) {
+            const result = await signInStep(body.command).catch((e) => ({ error: String(e?.message || e) }));
+            await post('/command', { id: body.command.id, result }).catch(() => {});
+            continue;
+          }
+          job = body.job;
+        }
       } catch {
         await sleep(3000); // the agent is not up yet
         continue;
