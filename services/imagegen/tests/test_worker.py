@@ -490,3 +490,55 @@ def test_when_both_ways_fail_the_last_error_is_the_jobs(monkeypatch):
         {"error": "the composer would not take it: Generate stayed disabled"})
     assert tried == ["flowkit", "page"]
     assert "Generate stayed disabled" in (stored["error_message"] or stored.get("last_error") or "")
+
+
+# --- Reloading the Flow page after unusual activity -------------------------
+# Google's UNUSUAL_ACTIVITY is often cleared by a fresh Flow page on the same
+# account. The reload waits for the pictures in flight, then runs once.
+
+@pytest.mark.asyncio
+async def test_unusual_activity_asks_for_a_reload_and_retries(monkeypatch):
+    monkeypatch.setattr(processor.accounts, "note_unusual_activity", lambda: False)
+    monkeypatch.setattr(processor.accounts, "count", lambda: 1)
+    controller = processor.WorkerController()
+    job = await jobs.create("soup")
+    job["attempts"] = 1
+
+    await controller._handle_failure(job, "PUBLIC_ERROR_UNUSUAL_ACTIVITY")
+
+    assert controller._reload_due_at is not None
+    assert (await jobs.get(job["id"]))["status"] == "PENDING"
+
+
+@pytest.mark.asyncio
+async def test_the_reload_waits_for_pictures_in_flight(monkeypatch):
+    fake = _FakeFlowClient()
+    monkeypatch.setattr(processor, "get_flow_client", lambda: fake)
+    controller = processor.WorkerController()
+    controller.reload_after_unusual_activity()
+    controller._running.add("busy")
+
+    assert await controller._reload_if_due(0) is False
+    assert fake.refresh_calls == []
+    assert controller._reload_due_at is not None
+
+    controller._running.clear()
+    assert await controller._reload_if_due(0) is True
+    assert fake.refresh_calls == [0]
+    assert controller._reload_due_at is None
+
+
+@pytest.mark.asyncio
+async def test_a_clip_in_flight_does_not_hold_the_reload_forever(monkeypatch):
+    fake = _FakeFlowClient()
+    monkeypatch.setattr(processor, "get_flow_client", lambda: fake)
+    monkeypatch.setattr(processor, "RELOAD_WAIT_S", 0)
+    controller = processor.WorkerController()
+    controller.reload_after_unusual_activity()
+    controller._running.add("clip")
+    controller._running_video.add("clip")
+    controller._reload_due_at -= 1
+
+    assert await controller._reload_if_due(1) is False
+    assert fake.refresh_calls == []
+    assert controller._reload_due_at is None

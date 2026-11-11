@@ -109,6 +109,9 @@ MAX_REFERENCE_BYTES = 12 * 1024 * 1024
 #: every 15-second poll -- once a minute is enough for a clip that takes two.
 LISTING_EVERY_N_POLLS = 4
 
+#: How long a due reload waits for a clip still in flight before it is given up.
+RELOAD_WAIT_S = int(os.environ.get("UNUSUAL_RELOAD_WAIT_S", "300"))
+
 RETRYABLE = ("quota", "rate_limit", "exhausted", "resource_exhausted", "429",
              "no_flow_key", "not connected", "timeout", "503",
              "recaptcha", "captcha_timeout",
@@ -151,6 +154,9 @@ class WorkerController:
         self._running: set[str] = set()
         self._running_video: set[str] = set()
         self._paused_reason: str | None = None
+        # Set when Google answered UNUSUAL_ACTIVITY: the Flow tab is reloaded
+        # once, with nothing in flight, before the next picture goes out.
+        self._reload_due_at: float | None = None
 
     def request_shutdown(self) -> None:
         self._shutdown.set()
@@ -242,8 +248,9 @@ class WorkerController:
                 free = MAX_CONCURRENT_REQUESTS - (len(self._running) - videos)
                 # No new claims while a Google-account switch waits: the switch
                 # needs the browser free, and a steady queue would never let it.
+                reloaded = await self._reload_if_due(videos)
                 if (free > 0 or not videos) and not self.paused and get_flow_client().connected \
-                        and not accounts.switch_pending():
+                        and not accounts.switch_pending() and self._reload_due_at is None:
                     # Only claim work the account in use is ticked for (images
                     # vs video, set per account in Setup -> Google accounts).
                     allowed = accounts.active_kinds()
@@ -257,7 +264,7 @@ class WorkerController:
                         await self._align_account_to_queue(allowed)
                     # Skipped while other jobs are still in flight, since
                     # reloading the tab takes their requests down with it.
-                    if claimed and not self._running and self.reload_before(claimed):
+                    if claimed and not reloaded and not self._running and self.reload_before(claimed):
                         await self._ensure_token(len(claimed))
                     for job in claimed:
                         self._running.add(job["id"])
@@ -296,6 +303,43 @@ class WorkerController:
         if not IMAGE_USE_BATCH:
             return True
         return any(int(job.get("attempts") or 0) > 1 for job in claimed)
+
+    def reload_after_unusual_activity(self) -> None:
+        """Ask for the Flow tab to be reloaded before the next picture.
+
+        UNUSUAL_ACTIVITY is a verdict on the page session as much as on the
+        account: the same account often works again once the tab is fresh.
+        The reload used to wait for a job's second attempt *and* an idle
+        worker, and with three or four pictures in flight the worker is
+        rarely idle -- so the retry went out on the same flagged page.
+        """
+        if self._reload_due_at is None:
+            self._reload_due_at = time.monotonic()
+
+    async def _reload_if_due(self, videos: int) -> bool:
+        """Reload the Flow tab once nothing is in flight. True when it did.
+
+        While a reload is due no new work is claimed, so the pictures still
+        running finish and the reload does not cut them off. A clip can take
+        half an hour, so when only a clip is left the reload is given up after
+        RELOAD_WAIT_S rather than holding every picture behind it.
+        """
+        if self._reload_due_at is None:
+            return False
+        pictures = len(self._running) - videos
+        if pictures == 0 and not videos:
+            self._reload_due_at = None
+            try:
+                result = await get_flow_client().ensure_fresh_token(0)
+                logger.warning("reloaded the Flow tab after unusual activity: ok=%s %s",
+                               result.get("ok"), result.get("error") or "")
+            except Exception:
+                logger.exception("Flow tab reload after unusual activity raised")
+            return True
+        if pictures == 0 and time.monotonic() - self._reload_due_at > RELOAD_WAIT_S:
+            logger.warning("a clip is still in flight: skipping the Flow tab reload after unusual activity")
+            self._reload_due_at = None
+        return False
 
     async def _ensure_token(self, job_count: int) -> None:
         """Age out the bearer before a batch goes near it.
@@ -1384,12 +1428,18 @@ class WorkerController:
         # Google flagging this account's activity: retrying on it does not
         # help, so a run of these moves the work to the next account. The
         # first one is retried when there is another account to fall back on.
+        #
+        # Before that, the Flow tab is reloaded: a fresh page often clears it on
+        # the same account, so the retry goes out on a new page session, with
+        # one account as much as with several.
         if accounts.UNUSUAL_MARKER in lower:
+            self.reload_after_unusual_activity()
             if accounts.note_unusual_activity() and accounts.rotate(error, kind=job.get("kind")) is not None:
                 logger.warning("job %s: unusual activity again, switching Google account", job_id[:8])
                 await jobs.requeue(job_id, error)
                 return
-            if accounts.count() > 1 and job["attempts"] < MAX_RETRIES:
+            if job["attempts"] < MAX_RETRIES:
+                logger.warning("job %s: unusual activity, reloading the Flow page and retrying", job_id[:8])
                 await jobs.requeue(job_id, error)
                 return
 
