@@ -12,7 +12,7 @@
   const fail = (code, message) => { throw new Error(`${code}: ${message}`); };
 
   async function waitFor(fn, timeoutMs, onTimeout, every = 250) {
-    const end = Date.now() + timeoutMs;
+    const end = sentAt + timeoutMs;
     for (;;) {
       const v = fn();
       if (v) return v;
@@ -327,8 +327,17 @@
     const send = await waitFor(() => { const b = sendButton(); return !isDisabled(b) && b; }, 15_000,
       () => fail('NO_PROMPT_BOX', `the Send button ${sendButton() ? 'stayed disabled' : 'was not found'} (page language: ${document.documentElement.lang || 'unknown'})`));
     send.click();
+    const sentAt = Date.now();
 
-    await waitFor(() => responses().length > before && isNew(), 60_000,
+    // A minute for the reply to show -- but while Gemini shows its Stop
+    // button it is working on it (the dots before a long prompt's answer
+    // can last minutes when it is busy), so it is waited for, not given up
+    // on and asked again on top of itself.
+    await waitFor(() => {
+      if (responses().length > before && isNew()) return true;
+      return Date.now() - sentAt > 60_000 && !stopButton();
+    }, timeoutMs, () => {});
+    await waitFor(() => responses().length > before && isNew(), 0,
       () => fail(limitShown() ? 'LIMIT' : 'TIMEOUT', limitShown() ? `Gemini's usage limit is reached (${limitShown()}) as ${email || 'this account'}` : 'Gemini did not start answering'));
     // Done when the reply's action row (copy, redo) is shown and no Stop button is left, for 1.5 s.
     let stableSince = 0;
