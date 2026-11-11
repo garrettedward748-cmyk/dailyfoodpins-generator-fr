@@ -3126,8 +3126,33 @@ async function markTilesSeen(tabId, ui) {
     world: 'MAIN',
     args: [ui.tile],
     func: (sel) => {
+      const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+      // Not the project's id (links in every tile carry it) nor any other id
+      // more than one tile shows: only what is a tile's own.
+      const counts = {};
+      const own = (tile) => {
+        const ids = new Set();
+        for (const el of [tile, ...tile.querySelectorAll('*')]) {
+          for (const a of el.attributes) {
+            if (a.name.startsWith('data-vps-')) continue;
+            for (const m of a.value.match(uuidRe) || []) ids.add(m.toLowerCase());
+          }
+        }
+        return [...ids];
+      };
+      const here = (location.href.match(uuidRe) || []).map((m) => m.toLowerCase());
+      for (const t of document.querySelectorAll(sel)) {
+        for (const id of own(t)) counts[id] = (counts[id] || 0) + 1;
+      }
+      const idsOf = (tile) => own(tile).filter((id) => counts[id] === 1 && !here.includes(id));
+      // Marks on the elements go when Flow draws a tile again; the ids the
+      // tile carries do not, so who a tile belongs to is kept by them too.
+      const reg = (window.__vpsTiles = window.__vpsTiles || { seen: {}, owner: {} });
       const tiles = [...document.querySelectorAll(sel)];
-      tiles.forEach((t) => t.setAttribute('data-vps-seen', '1'));
+      tiles.forEach((t) => {
+        t.setAttribute('data-vps-seen', '1');
+        for (const id of idsOf(t)) reg.seen[id] = 1;
+      });
       return tiles.length;
     },
   }).catch(() => [{ result: -1 }]);
@@ -3161,11 +3186,49 @@ async function claimNewTiles(tabId, ui, jobId) {
         && Number((/^\s*(\d{1,3})\s*%\s*$/.exec(d.textContent || '') || [])[1]) > 15);
       const filled = (t) => [...t.querySelectorAll('img, video')].some((m) => (m.currentSrc || m.src)
         && m.getBoundingClientRect().width >= 120);
-      const fresh = [...document.querySelectorAll(sel)].filter((t) => !t.hasAttribute('data-vps-seen')
-        && !late(t) && (working(t) || !filled(t)));
-      fresh.forEach((t) => {
+      const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+      // Not the project's id (links in every tile carry it) nor any other id
+      // more than one tile shows: only what is a tile's own.
+      const counts = {};
+      const own = (tile) => {
+        const ids = new Set();
+        for (const el of [tile, ...tile.querySelectorAll('*')]) {
+          for (const a of el.attributes) {
+            if (a.name.startsWith('data-vps-')) continue;
+            for (const m of a.value.match(uuidRe) || []) ids.add(m.toLowerCase());
+          }
+        }
+        return [...ids];
+      };
+      const here = (location.href.match(uuidRe) || []).map((m) => m.toLowerCase());
+      for (const t of document.querySelectorAll(sel)) {
+        for (const id of own(t)) counts[id] = (counts[id] || 0) + 1;
+      }
+      const idsOf = (tile) => own(tile).filter((id) => counts[id] === 1 && !here.includes(id));
+      // Marks on the elements go when Flow draws a tile again; the ids the
+      // tile carries do not, so who a tile belongs to is kept by them too.
+      const reg = (window.__vpsTiles = window.__vpsTiles || { seen: {}, owner: {} });
+      const fresh = [];
+      for (const t of document.querySelectorAll(sel)) {
+        if (t.hasAttribute('data-vps-seen')) continue;
+        const ids = idsOf(t);
+        // Drawn again, but an earlier prompt's: its own job keeps it.
+        const owner = ids.map((id) => reg.owner[id]).find(Boolean);
+        if (owner) {
+          t.setAttribute('data-vps-seen', '1');
+          t.setAttribute('data-vps-job', owner);
+          continue;
+        }
+        if (ids.some((id) => reg.seen[id])) {
+          t.setAttribute('data-vps-seen', '1');
+          continue;
+        }
+        if (!late(t) && (working(t) || !filled(t))) fresh.push([t, ids]);
+      }
+      fresh.forEach(([t, ids]) => {
         t.setAttribute('data-vps-seen', '1');
         t.setAttribute('data-vps-job', job);
+        for (const id of ids) reg.owner[id] = job;
       });
       return fresh.length;
     },
@@ -3186,6 +3249,41 @@ async function jobTiles(tabId, ui, jobId) {
     func: (sel, videoSel, imageSel, words, job) => {
       const errorRe = new RegExp(words, 'i');
       const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+      // Not the project's id (links in every tile carry it) nor any other id
+      // more than one tile shows: only what is a tile's own.
+      const counts = {};
+      const own = (tile) => {
+        const ids = new Set();
+        for (const el of [tile, ...tile.querySelectorAll('*')]) {
+          for (const a of el.attributes) {
+            if (a.name.startsWith('data-vps-')) continue;
+            for (const m of a.value.match(uuidRe) || []) ids.add(m.toLowerCase());
+          }
+        }
+        return [...ids];
+      };
+      const here = (location.href.match(uuidRe) || []).map((m) => m.toLowerCase());
+      for (const t of document.querySelectorAll(sel)) {
+        for (const id of own(t)) counts[id] = (counts[id] || 0) + 1;
+      }
+      const idsOf = (tile) => own(tile).filter((id) => counts[id] === 1 && !here.includes(id));
+      // Marks on the elements go when Flow draws a tile again; the ids the
+      // tile carries do not, so who a tile belongs to is kept by them too.
+      const reg = (window.__vpsTiles = window.__vpsTiles || { seen: {}, owner: {} });
+      // A tile of this job's that Flow drew again lost its mark: found again
+      // by its ids. And every id one of this job's tiles carries is the job's,
+      // so no later prompt can take the tile when it is drawn again.
+      for (const t of document.querySelectorAll(sel)) {
+        const mark = t.getAttribute('data-vps-job');
+        const ids = idsOf(t);
+        if (!mark && ids.some((id) => reg.owner[id] === job)) {
+          t.setAttribute('data-vps-seen', '1');
+          t.setAttribute('data-vps-job', job);
+        }
+        if (t.getAttribute('data-vps-job') === job) {
+          for (const id of ids) if (!reg.owner[id]) reg.owner[id] = job;
+        }
+      }
       return [...document.querySelectorAll(sel)]
         .filter((t) => t.getAttribute('data-vps-job') === job)
         .map((tile) => {
@@ -3197,7 +3295,7 @@ async function jobTiles(tabId, ui, jobId) {
           const ids = new Set();
           for (const el of [tile, ...tile.querySelectorAll('*')]) {
             for (const a of el.attributes) {
-              if (a.name === 'data-vps-job') continue; // our own mark, not a media id
+              if (a.name.startsWith('data-vps-')) continue; // our own marks, not a media id
               for (const m of a.value.match(uuidRe) || []) ids.add(m.toLowerCase());
             }
           }
