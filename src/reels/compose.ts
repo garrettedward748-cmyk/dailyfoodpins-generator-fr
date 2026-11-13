@@ -143,7 +143,9 @@ export function singleReferenceRoles(settings: Settings): ArticleRole[] {
 
 /** The chosen article photos as absolute urls, in the order given. */
 export function referenceUrls(host: string, images: ArticleImages, roles: readonly ArticleRole[]): string[] {
-  return roles.map((role) => (/^https?:\/\//i.test(images[role]) ? images[role] : `https://${host}${images[role]}`));
+  // A photo that was not made (a social-only run makes only the hero) is left out.
+  const made = roles.filter((role) => images[role]);
+  return made.map((role) => (/^https?:\/\//i.test(images[role]) ? images[role] : `https://${host}${images[role]}`));
 }
 
 /**
@@ -331,12 +333,11 @@ export function sourceUrls(
 ): Partial<Record<SourceRole, string>> {
   // A social-only account's images are full urls on the platform already.
   const abs = (path: string) => (/^https?:\/\//i.test(path) ? path : `https://${host}${path}`);
-  const out: Partial<Record<SourceRole, string>> = {
-    hero: abs(images.hero),
-    stepA: abs(images.stepA),
-    stepB: abs(images.stepB),
-    stepC: abs(images.stepC),
-  };
+  // Only the photos that were made: a social-only run makes the hero alone.
+  const out: Partial<Record<SourceRole, string>> = {};
+  for (const role of ['hero', 'stepA', 'stepB', 'stepC'] as const) {
+    if (images[role]) out[role] = abs(images[role]);
+  }
   if (pin) out.pin = abs(pin);
   return out;
 }

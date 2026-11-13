@@ -49,7 +49,7 @@ import { collagePostStep } from './steps/collage.js';
 import { instagramPostStep } from './steps/instagram-post.js';
 import { recipeToolsStep } from './steps/recipe-tools.js';
 import { researchGoogle } from './steps/research.js';
-import { pageForSite } from '../db/repos.js';
+import { pageForSite, reelPageForRun, reelsCreatedRecently, reelsElsewhere } from '../db/repos.js';
 import { isSocialOnly, sitePostUrl } from '../core/social-only.js';
 import type { Step } from './engine.js';
 import type { SeoData } from './steps/content.js';
@@ -119,10 +119,18 @@ export async function executePipeline(ctx: PipelineContext): Promise<PipelineOut
           categories: await runStep(ctx, fetchCategories, undefined),
           cuisines: await runStep(ctx, fetchCuisines, undefined),
         });
-    ctx.research = await runStep(ctx, researchGoogle, seo);
+    const social = isSocialOnly(ctx.site);
+    // A social-only account's posts carry a short recipe at most: the Google
+    // research behind a full article is not worth its searches (or its wait).
+    ctx.research = social
+      ? { status: 'off', brief: '', questions: [], sources: [] }
+      : await runStep(ctx, researchGoogle, seo);
     const recipe = await runStep(ctx, generateRecipe, seo);
     const imagePrompts = await runStep(ctx, generateImagePrompts, { seo, recipe });
-    const social = isSocialOnly(ctx.site);
+    // Social only: just the photographs a post or reel will actually use --
+    // the hero, and only for Instagram or a reel. The post's own picture is
+    // the pin graphic, made later from its own prompt.
+    const neededSlots = social ? socialImageSlots(ctx) : null;
 
     // Setup -> "Write first, pictures after": the whole article is written
     // now -- its further method shots' prompts and its three parts too -- and
@@ -133,7 +141,7 @@ export async function executePipeline(ctx: PipelineContext): Promise<PipelineOut
     let writtenShots: { step: number; prompt: string }[] | null = null;
     let written: Record<string, unknown> | null = null;
     if (writeFirst) {
-      if (!(ctx.allowResume && getCompletedStep(ctx.runId, generateArticleImages.name))) {
+      if (!social && !(ctx.allowResume && getCompletedStep(ctx.runId, generateArticleImages.name))) {
         try {
           writtenShots = await runStep(ctx, generateExtraStepPrompts, { seo, recipe, prompts: imagePrompts });
         } catch (err) {
@@ -166,6 +174,10 @@ export async function executePipeline(ctx: PipelineContext): Promise<PipelineOut
     const uploads = {} as ArticleImageUploads;
     try {
       for (const step of ARTICLE_IMAGE_STEPS) {
+        if (neededSlots && !neededSlots.has(step.slot)) {
+          uploads[step.slot] = { path: '', absolute: '' };
+          continue;
+        }
         try {
           uploads[step.slot] = await runStep(ctx, step, imagePrompts[step.slot]);
         } catch (err) {
@@ -197,8 +209,9 @@ export async function executePipeline(ctx: PipelineContext): Promise<PipelineOut
     // Never fatal: a failure here costs the article its extra photographs,
     // not the article. Skipped on a resume whose images are already collected,
     // since that checkpoint is what the article will use either way.
+    // None for a social-only account: no article shows them.
     const extras: { step: number; upload: Uploaded | null }[] = [];
-    if (!(ctx.allowResume && getCompletedStep(ctx.runId, generateArticleImages.name))) {
+    if (!social && !(ctx.allowResume && getCompletedStep(ctx.runId, generateArticleImages.name))) {
       try {
         const extraShots = writtenShots
           ?? await runStep(ctx, generateExtraStepPrompts, { seo, recipe, prompts: imagePrompts });
@@ -389,6 +402,24 @@ export async function executePipeline(ctx: PipelineContext): Promise<PipelineOut
 
     return { status: 'failed', error: message, failedStep };
   }
+}
+
+/**
+ * The article photographs a social-only run makes: the hero when Instagram
+ * posts it or a reel will be made (its one reference picture), else none.
+ * Mirrors the reel step's own gate so no photo is made for a reel that is not.
+ */
+export function socialImageSlots(ctx: PipelineContext): Set<string> {
+  const site = ctx.site as Parameters<typeof reelsElsewhere>[0] & { id: number; ig_posts?: number };
+  const dailyMax = Math.floor(ctx.settings.getNumber('reel_daily_max'));
+  const reel =
+    ctx.settings.getBool('fb_enabled') &&
+    !(dailyMax > 0 && reelsCreatedRecently(site.id, 24) >= dailyMax) &&
+    Boolean(
+      reelPageForRun(ctx.runId ?? null, site.id) ||
+        (reelsElsewhere(site) && ctx.settings.get('reel_publisher') === 'buffer'),
+    );
+  return new Set(reel || site.ig_posts ? ['hero'] : []);
 }
 
 /** The article written before its pictures: the parts are written without them and fitted after. */
