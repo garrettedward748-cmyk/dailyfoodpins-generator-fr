@@ -1,5 +1,7 @@
 """The worker's decisions: what counts as a failure, and what is worth retrying."""
 import asyncio
+import hashlib
+import json
 
 import pytest
 
@@ -552,3 +554,36 @@ def test_a_picture_another_job_already_has_is_not_given_twice(monkeypatch):
 
     assert stored["status"] == "PENDING"
     assert "WRONG_PICTURE" in stored["error_message"]
+
+
+# The page's "+" picker does not always show a picture uploaded beside it (the
+# tab is not reloaded while other prompts render). So every uploaded reference
+# carries its bytes too, and the extension uploads it through the page instead
+# of failing with REFERENCES_NOT_ATTACHED: "ref-..." is not in the project's media.
+
+@pytest.mark.asyncio
+async def test_ui_references_always_carry_their_bytes(monkeypatch):
+    class Fake:
+        async def project_titles(self, project_id):
+            return {"titles": {"m-old": "ref-" + hashlib.sha256(b"old").hexdigest()[:12] + ".jpg"}}
+
+        async def upload_image_batch(self, image_base64, project_id, mime_type, file_name):
+            return {"media_id": "m-1"}
+
+    monkeypatch.setattr(processor, "get_flow_client", lambda: Fake())
+    controller = processor.WorkerController()
+
+    async def fetched(url):
+        return {"bytes": url.encode(), "mime": "image/jpeg"}
+
+    async def listed(*a, **k):
+        return True
+
+    monkeypatch.setattr(controller, "_fetch_reference", fetched)
+    monkeypatch.setattr(controller, "_wait_listed", listed)
+    job = {"id": "job-refs-1", "reference_urls": json.dumps(["old", "new"])}
+    refs = await controller._ui_references(job, "P")
+
+    assert [r["uploaded"] for r in refs] == [True, True]
+    assert all(r["dataUrl"].startswith("data:image/jpeg;base64,") for r in refs)
+    assert all(r["mime"] == "image/jpeg" for r in refs)

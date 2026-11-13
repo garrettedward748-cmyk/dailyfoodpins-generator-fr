@@ -627,12 +627,18 @@ class WorkerController:
             # scene starts from, a reference of a job tried again -- goes up
             # once, and is then found under that name.
             name = f"ref-{hashlib.sha256(fetched['bytes']).hexdigest()[:12]}"
+            encoded = base64.b64encode(fetched["bytes"]).decode("ascii")
+            # The bytes ride along every time: when the open page's "+" picker
+            # does not show the upload (the tab was not reloaded while other
+            # prompts rendered), the extension uploads it through the page
+            # instead of failing with "not in the project's media".
+            fallback = {"dataUrl": f"data:{fetched['mime']};base64,{encoded}",
+                        "mime": fetched["mime"]}
             if f"{name}.{ext}" in listed:
                 logger.info("job %s: reference %d is already in the project, as %s.%s",
                             job["id"][:8], i, name, ext)
-                references.append({"name": name, "uploaded": True})
+                references.append({"name": name, "uploaded": True, **fallback})
                 continue
-            encoded = base64.b64encode(fetched["bytes"]).decode("ascii")
             for attempt in range(2):
                 # A tab moving between projects at that moment answers nothing;
                 # a second go a little later finds it settled.
@@ -645,12 +651,10 @@ class WorkerController:
                 await asyncio.sleep(5)
             # `uploaded`: the extension reloads the tab before picking it, since
             # an open page does not list an upload made beside it.
-            reference = {"name": name, "uploaded": not uploaded.get("error")}
+            reference = {"name": name, "uploaded": not uploaded.get("error"), **fallback}
             if uploaded.get("error"):
                 logger.warning("job %s: reference %d did not go up (%s); uploading it through "
                                "the page", job["id"][:8], i, str(uploaded["error"])[:120])
-                reference.update(dataUrl=f"data:{fetched['mime']};base64,{encoded}",
-                                 mime=fetched["mime"])
             references.append(reference)
             listed.add(f"{name}.{ext}")
             if reference["uploaded"]:
