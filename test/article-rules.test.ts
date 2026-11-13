@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ArticleRulesError, bannedList, checkBlogArticle, checkPart, feedbackFor, openingProblems,
+  ArticleRulesError, bannedList, checkBlogArticle, checkPart, fitTitle, feedbackFor, openingProblems,
   proseProblems, ruleContextFor,
 } from '../src/core/article-rules.js';
 import { LLM_REPLIES, RECIPE } from './helpers/pipeline-world.js';
@@ -29,6 +29,20 @@ describe('part 1', () => {
     const title = 'Honey Roasted Butternut Squash Stuffed with Chicken: A Savory Autumn Dinner';
     expect(title.length).toBeGreaterThan(65);
     expect(check({ title })).toContain('limit is 65');
+  });
+
+  it('drops the last clause of a title a few characters too long, instead of failing the run', () => {
+    const title = 'Cranberry Orange Cheesecake: Creamy, Tangy Holiday Dessert and Bright';
+    expect(title.length).toBeGreaterThan(65);
+    const out = checkPart('part-1', { ...parse('part-1'), title }, us);
+    expect(out.data.title).toBe('Cranberry Orange Cheesecake: Creamy, Tangy Holiday Dessert');
+    expect(out.problems.join(' | ')).not.toContain('limit is 65');
+  });
+
+  it('leaves a title alone when no clause can be dropped', () => {
+    expect(fitTitle('Cranberry Orange Cheesecake: Creamy Tangy Bright Festive Holiday Dessert'))
+      .toBe('Cranberry Orange Cheesecake: Creamy Tangy Bright Festive Holiday Dessert');
+    expect(fitTitle('Short: Fine As It Is')).toBe('Short: Fine As It Is');
   });
 
   it('refuses a title with no colon, or that ends with "Recipe"', () => {

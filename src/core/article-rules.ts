@@ -357,6 +357,34 @@ const TITLE_TAG_MAX = 60;
 const META_MIN = 120;
 const META_MAX = 160;
 
+/**
+ * A title a few characters too long, brought under TITLE_MAX by the code.
+ *
+ * Only the description's last clause is dropped -- at a comma, a dash, or a
+ * joining word ("and", "with", "et", "avec"...) -- so what is left still
+ * reads as written. Nothing is cut mid-clause, and the description keeps at
+ * least two words; a title that cannot be fitted that way is left as it is,
+ * for the checks to send back. One character over cost a whole run
+ * (run 3360, 66 characters).
+ */
+export function fitTitle(title: string, max = TITLE_MAX): string {
+  const t = title.replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return title;
+  const colon = t.indexOf(':');
+  if (colon < 0) return title;
+  const dish = t.slice(0, colon + 1);
+  const desc = t.slice(colon + 1);
+  const breaks = /\s*[,;]\s+|\s+[-–—&+]\s+|\s+(?:and|or|with|for|plus|in|on|over|et|ou|avec|pour|sans|sur|au|aux)\s+/gi;
+  const cuts: number[] = [];
+  for (const m of desc.matchAll(breaks)) if (m.index !== undefined) cuts.push(m.index);
+  for (const cut of cuts.reverse()) {
+    const kept = desc.slice(0, cut).trim();
+    const out = `${dish} ${kept}`;
+    if (out.length <= max && kept.split(/\s+/).filter(Boolean).length >= 2) return out;
+  }
+  return title;
+}
+
 function part1Problems(data: Record<string, unknown>, rules: RuleContext): string[] {
   const problems: string[] = [];
   const title = str(data.title).trim();
@@ -471,6 +499,7 @@ export function checkPart(
 ): CheckedPart {
   let fixed = fixText(data, rules.style);
   if (part === 'part-2') fixed = pinTimes(fixed, rules.times);
+  if (part === 'part-1' && typeof fixed.title === 'string') fixed = { ...fixed, title: fitTitle(fixed.title) };
 
   const problems: string[] = [];
 
