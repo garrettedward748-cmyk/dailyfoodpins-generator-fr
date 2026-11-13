@@ -1207,6 +1207,18 @@ class FlowClient:
                 await asyncio.sleep(15)
                 submitted = await self.ui_generate_image(
                     prompt, project_id, model_label, aspect_label, **options)
+            if ("GENERATE_DISABLED" in str(submitted.get("error") or "")
+                    and not options["reloadFirst"] and not self._watching):
+                # No Generate button: the page is often only stale (a menu or
+                # notice left open). Nothing is spent yet, so a fresh page is
+                # tried once before the job is given up on.
+                logger.warning("Flow UI: job %s: no Generate button (%s); reloading the tab "
+                               "and trying once more", job_id[:8],
+                               str(submitted.get("error"))[:200])
+                options["reloadFirst"] = True
+                reload_first = True
+                submitted = await self.ui_generate_image(
+                    prompt, project_id, model_label, aspect_label, **options)
             self._last_ui_submit = time.monotonic()
             if reload_first:
                 self._reload_next = False

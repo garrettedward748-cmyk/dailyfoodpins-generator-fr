@@ -2205,7 +2205,25 @@ async function composerBox(tabId, ui) {
       const editor = (() => { const seen = [...document.querySelectorAll(editorSel)].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }); return seen[seen.length - 1] || document.querySelector(editorSel); })();
       // The visible button, as for the editor: a hidden copy of the composer
       // (the session panel's) carries a disabled one of its own.
-      const button = (() => { const seen = [...document.querySelectorAll(buttonSel)].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }); return seen[seen.length - 1] || document.querySelector(buttonSel); })();
+      const shown = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+      const named = (() => { const seen = [...document.querySelectorAll(buttonSel)].filter(shown); return seen[seen.length - 1] || document.querySelector(buttonSel); })();
+      // Flow renamed it, or shows it in another language: the send button by
+      // its arrow icon or a generate-like name, among the prompt box's own.
+      const button = named || (() => {
+        let area = editor;
+        for (let i = 0; i < 8 && area?.parentElement; i++) {
+          area = area.parentElement;
+          if (area.querySelectorAll('button').length >= 3) break;
+        }
+        if (!area) return null;
+        const skip = /stop|arr[êe]t|clear|effacer|add|ajout|agent|close|fermer|settings|param/i;
+        const go = /generat|g[ée]n[ée]r|lancer|cr[ée]er|create|send|envoyer|submit|soumettre/i;
+        const arrow = /^(arrow_forward|arrow_upward|send|north|east)$/;
+        const all = [...area.querySelectorAll('button')].filter(shown);
+        return all.find((b) => arrow.test((b.textContent || '').trim()) && !skip.test(b.getAttribute('aria-label') || ''))
+          || all.find((b) => go.test(b.getAttribute('aria-label') || '') && !skip.test(b.getAttribute('aria-label') || ''))
+          || null;
+      })();
       const box = (el) => {
         if (!el) return null;
         const r = el.getBoundingClientRect();
@@ -2236,10 +2254,26 @@ async function composerBox(tabId, ui) {
             .filter((e) => !e.children.length && e.getBoundingClientRect().width > 0)
             .map((e) => (e.getAttribute('aria-label') || e.textContent || '').trim())
             .filter((t) => t && t.length < 80);
-          const tips = [...area.querySelectorAll('[aria-label],[title]')]
+          const tips = [...area.querySelectorAll('[aria-label],[title],[data-tooltip],[mattooltip],[aria-describedby]')]
             .filter((e) => e.getBoundingClientRect().width > 0)
-            .map((e) => e.getAttribute('title') || '').filter(Boolean);
-          return [...new Set([...words, ...tips])].slice(0, 30).join(' | ');
+            .flatMap((e) => [
+              e.getAttribute('title') || '',
+              e.getAttribute('data-tooltip') || '',
+              e.getAttribute('mattooltip') || '',
+              // What the (i) and the like point to: often why Generate is gone.
+              ...(e.getAttribute('aria-describedby') || '').split(/\s+/)
+                .map((id) => (id && document.getElementById(id)?.textContent || '').trim()),
+            ]).filter(Boolean);
+          // Longer lines too: a notice ("not enough credits ...") is a sentence.
+          const said = [...area.querySelectorAll('p, span, div')]
+            .filter((e) => !e.children.length && e.getBoundingClientRect().width > 0)
+            .map((e) => (e.textContent || '').trim())
+            .filter((t) => t.length >= 80 && t.length < 300);
+          // And any notice on the page that reads like a limit or a lock.
+          const page = [...document.querySelectorAll('[role="alert"], [role="status"], [role="tooltip"], [aria-live]')]
+            .filter((e) => e.getBoundingClientRect().width > 0)
+            .map((e) => (e.textContent || '').trim()).filter((t) => t && t.length < 300);
+          return [...new Set([...words, ...tips, ...said, ...page])].slice(0, 40).join(' | ');
         })(),
         buttonLabel: button ? `${button.getAttribute('aria-label') || ''}${button.disabled ? ' (disabled)' : ''}` : 'no button',
       };
