@@ -441,11 +441,16 @@ export function runProfile(runId: number | null, siteId: number, platform: Profi
   // The article's account carries the reel too when it takes reels, as every
   // run did before accounts had their own ticks; otherwise the reel gets one
   // of its own, chosen once and kept under "<network>:reels".
+  // A reel goes only to an account that is switched on: one switched off
+  // since the article was posted (or since the reel's own was chosen) used to
+  // be kept, and every reel then waited on "every account is switched off"
+  // while other accounts of the network were on.
+  const live = (p: ChannelProfile | undefined) => Boolean(p && (kind === 'posts' || p.enabled) && takes(p, kind));
   const article = own(platform);
-  if (article && takes(article, kind)) return article;
+  if (article && live(article)) return article;
   const key = kind === 'posts' ? platform : `${platform}:reels`;
   const saved = key === platform ? undefined : own(key);
-  if (saved) return saved;
+  if (saved && (kind === 'posts' || live(saved))) return saved;
   // A keyword from Pinterest ideas pins to the account the idea came from,
   // which counts as that account's turn so the others keep their share.
   const preferred = platform === 'pinterest' ? preferredPinterest(runId, siteId, kind) : undefined;
@@ -3047,6 +3052,27 @@ const CARD_RULE = `(
  * Facebook switched on for reels (on Pinterest and Instagram, an account with
  * Reels ticked). A reel is then made even with no Facebook page taking it.
  */
+/**
+ * Whether a reel made now would go anywhere besides Facebook: a network on
+ * for the site's reels with at least one account switched on that takes
+ * reels. Checked before a reel is made, so no clip is paid for that nothing
+ * would publish.
+ */
+export function reelsElsewhereLive(site: Pick<SiteRow, 'id' | 'pin_reels'> & { ig_reels?: number; yt_reels?: number; tt_reels?: number }): string[] {
+  const nets: [ProfilePlatform, number | undefined][] = [
+    ['pinterest', site.pin_reels], ['instagram', site.ig_reels], ['youtube', site.yt_reels], ['tiktok', site.tt_reels],
+  ];
+  return nets
+    // No account cards at all for the network: the site's own Buffer
+    // settings carry it, as they always did.
+    .filter(([platform, on]) => {
+      if (!on) return false;
+      const cards = listProfiles(site.id, platform);
+      return cards.length === 0 || cards.some((p) => p.enabled && takes(p, 'reels'));
+    })
+    .map(([platform]) => platform);
+}
+
 export function reelsElsewhere(site: Pick<SiteRow, 'pin_reels'> & { ig_reels?: number; yt_reels?: number; tt_reels?: number }): boolean {
   return Boolean(site.pin_reels || site.ig_reels || site.yt_reels || site.tt_reels);
 }

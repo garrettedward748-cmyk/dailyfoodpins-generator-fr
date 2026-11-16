@@ -233,7 +233,7 @@ describe('publishing a reel whose account is off', () => {
     const { reelId } = reelOnAccount(false);
     // The real senders answer null for an account that is off.
     const d = deps({ scheduleReel: vi.fn(async () => null) });
-    await expect(publishReel(getReel(reelId) as ReelView, d)).rejects.toThrow(/Every account this reel goes to is switched off/);
+    await expect(publishReel(getReel(reelId) as ReelView, d)).rejects.toThrow(/No account took this reel/);
     expect(getReel(reelId)).toMatchObject({ status: 'ready', error: null });
   });
 

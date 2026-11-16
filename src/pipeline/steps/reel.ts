@@ -11,7 +11,7 @@ import {
   presenterForPage,
   reelPageForRun,
   reelsCreatedRecently,
-  reelsElsewhere,
+  reelsElsewhereLive,
   setReelStage,
   updateReel,
 } from '../../db/repos.js';
@@ -86,11 +86,13 @@ export const createReelStep: Step<CreateReelInput, CreateReelOutput> = {
     // the photo of the same dish land on the same page (reelPageForRun).
     const page = reelPageForRun(ctx.runId ?? null, ctx.site.id) ?? null;
     if (!page) {
-      const elsewhere = reelsElsewhere(ctx.site as Parameters<typeof reelsElsewhere>[0]);
+      // Only a network with an account switched on that takes reels: a clip
+      // made for accounts that are all off is paid for and never published.
+      const elsewhere = reelsElsewhereLive(ctx.site as Parameters<typeof reelsElsewhereLive>[0]).length > 0;
       const viaBuffer = ctx.settings.get('reel_publisher') === 'buffer';
       if (!elsewhere || !viaBuffer) {
         const skipped = !elsewhere
-          ? `no Facebook page of ${ctx.site.domain} takes reels, and no other network does`
+          ? `no Facebook page of ${ctx.site.domain} takes reels, and no other network has an account switched on with Reels ticked`
           : `no Facebook page of ${ctx.site.domain} takes reels, and the other networks need Publish reels through Buffer`;
         log.info(`run ${ctx.runId}: no reel — ${skipped}`);
         return { reelId: null, skipped };

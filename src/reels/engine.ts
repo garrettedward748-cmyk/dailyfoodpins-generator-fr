@@ -1565,9 +1565,11 @@ async function publishThroughBuffer(
     // Nothing failed and nothing went: every account it would use is switched
     // off (or its network is off for the site). Not "published" with nothing
     // on it — left ready, and said so.
+    const tried = [...new Set(names.map((n) => channelOf(n)))].join(', ') || 'none';
     throw new AccountOffError(
-      'Every account this reel goes to is switched off, so nothing was sent. ' +
-        'Switch one on in Channels → Accounts, then publish again.',
+      `No account took this reel (tried: ${tried}). For each of these the site's reels are off, ` +
+        'or no account of it is switched on with Reels ticked, or no Buffer account is connected to it. ' +
+        'Check Channels → Accounts; the reel is sent again on its own once one is on.',
     );
   }
 
