@@ -3119,6 +3119,67 @@ async function armUpload(tabId, ref) {
 }
 
 /**
+ * The picker's upload control: a button whose words, label, title or icon say
+ * upload, in English or French. Flow has shown it as "Upload media", as
+ * "Upload" alone, and as an icon with no words.
+ */
+async function uploadControl(tabId, ui) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [ui.uploadWords],
+    func: (words) => {
+      const re = new RegExp(`${words}|\\bupload|file_upload|cloud_upload|upload_file|add_photo_alternate|drive_folder_upload`, 'i');
+      const all = [...document.querySelectorAll('[role="button"], button, [role="menuitem"], label')];
+      // The open picker's own first: an "Upload" elsewhere on the page is not it.
+      const els = [...all.filter((el) => el.closest('.cdk-overlay-container')),
+        ...all.filter((el) => !el.closest('.cdk-overlay-container'))];
+      for (const el of els) {
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) continue;
+        const t = `${el.innerText || ''} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''} ${el.getAttribute('data-tooltip') || ''}`;
+        if (!re.test(t)) continue;
+        return { left: r.x, top: r.y, w: r.width, h: r.height };
+      }
+      return null;
+    },
+  }).catch(() => [{ result: null }]);
+  return out?.result || null;
+}
+
+/**
+ * Put the picture into the page's own file input and tell the page it
+ * changed, without any button. Answers true, or why not.
+ */
+async function feedFileInput(tabId, ref) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    args: [ref.dataUrl, ref.name, ref.mime || 'image/jpeg'],
+    func: (dataUrl, filename, mimeType) => {
+      const inputs = [...document.querySelectorAll('input[type="file"]')];
+      if (!inputs.length) return 'none on the page';
+      // One that takes pictures, in the open picker if there is one.
+      const takes = (i) => !i.accept || /image|\.(jpe?g|png|webp)/i.test(i.accept);
+      const input = inputs.find((i) => takes(i) && i.closest('.cdk-overlay-container'))
+        || inputs.find(takes) || inputs[0];
+      const bytes = atob(String(dataUrl).split(',').pop());
+      const buffer = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) buffer[i] = bytes.charCodeAt(i);
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([buffer], filename, { type: mimeType }));
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      // The armed click is not needed any more.
+      if (window.__vpsUpload) window.__vpsUpload.file = null;
+      return true;
+    },
+  }).catch((e) => [{ result: String(e?.message || e) }]);
+  return out?.result === true || out?.result || 'could not reach the page';
+}
+
+/**
  * Attach one reference to the prompt box. `ref` is { name } for a picture
  * already in the project, with { dataUrl, mime } when it has to be uploaded
  * here. Answers true, or why not.
@@ -3142,10 +3203,20 @@ async function attachReference(target, tabId, ui, ref) {
   }
   const armed = await armUpload(tabId, ref);
   if (armed !== true) return `could not prepare the upload: ${armed}`;
-  const upload = await boxOf(tabId, '[role="button"], button, [role="menuitem"]', { text: ui.uploadWords });
-  if (!upload) return 'no "Upload media" in the picker';
   const chips = await attachedCount(tabId, ui);
-  await humanClick(target, upload);
+  const upload = await uploadControl(tabId, ui);
+  if (upload) {
+    await humanClick(target, upload);
+  } else {
+    // Flow renamed or hid its "Upload media" button (seen 2026-11-16: every
+    // reel failed on it). The picture is then handed straight to the page's
+    // own file input, as a file dropped in its dialog would be.
+    const fed = await feedFileInput(tabId, ref);
+    if (fed !== true) {
+      await pressKey(target, 'Escape', { keyCode: 27 });
+      return `no "Upload media" in the picker, and no file input on the page (${fed})`;
+    }
+  }
   // Flow attaches a fresh upload itself, or lists it once it has gone up.
   const done = await waitUntil(async () => {
     if ((await attachedCount(tabId, ui)) > chips) return true;

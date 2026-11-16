@@ -227,7 +227,7 @@ export function mergeRecent(runs: RunListRow[], reels: ReelView[], limit = 12): 
       status: r.status,
       kind: 'reel',
       // Where it really went first: the row's name is the page it was meant for.
-      detail: [pagesLine(readChannels(r)), r.error ? r.error.slice(0, 80) : ''].filter(Boolean).join(' — '),
+      detail: [pagesLine(readChannels(r)), r.error ? r.error.slice(0, 240) : ''].filter(Boolean).join(' — '),
     });
   }
 
