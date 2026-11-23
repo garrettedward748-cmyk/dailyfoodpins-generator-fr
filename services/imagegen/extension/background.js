@@ -3088,11 +3088,40 @@ async function uiProbePicker({ projectId = null, search = '', mediaIds = [], dur
  * browser. Installed once per page, in the page's own world, where Flow's
  * file input lives.
  */
+/**
+ * The name the picture goes up under: with its extension, as the agent's own
+ * upload names it ("ref-….jpg"). A file with none can be turned away by the
+ * page, and is not found again under the agent's name.
+ */
+function uploadName(ref) {
+  const ext = { 'image/png': 'png', 'image/webp': 'webp' }[ref.mime] || 'jpg';
+  return /\.(jpe?g|png|webp)$/i.test(ref.name) ? ref.name : `${ref.name}.${ext}`;
+}
+
+/** Whether a picture armed by armUpload is still waiting for a file input. */
+async function armedPending(tabId) {
+  const [out] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    func: () => !!(window.__vpsUpload && window.__vpsUpload.file),
+  }).catch(() => [{ result: false }]);
+  return !!out?.result;
+}
+
+/** Drop an armed picture, so a later click on a file input is not given it. */
+async function disarmUpload(tabId) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    func: () => { if (window.__vpsUpload) window.__vpsUpload.file = null; },
+  }).catch(() => {});
+}
+
 async function armUpload(tabId, ref) {
   const [out] = await chrome.scripting.executeScript({
     target: { tabId },
     world: 'MAIN',
-    args: [ref.dataUrl, ref.name, ref.mime || 'image/jpeg'],
+    args: [ref.dataUrl, uploadName(ref), ref.mime || 'image/jpeg'],
     func: (dataUrl, filename, mimeType) => {
       if (!window.__vpsUpload) {
         const nativeClick = HTMLInputElement.prototype.click;
@@ -3155,7 +3184,7 @@ async function feedFileInput(tabId, ref) {
   const [out] = await chrome.scripting.executeScript({
     target: { tabId },
     world: 'MAIN',
-    args: [ref.dataUrl, ref.name, ref.mime || 'image/jpeg'],
+    args: [ref.dataUrl, uploadName(ref), ref.mime || 'image/jpeg'],
     func: (dataUrl, filename, mimeType) => {
       const inputs = [...document.querySelectorAll('input[type="file"]')];
       if (!inputs.length) return 'none on the page';
@@ -3206,7 +3235,28 @@ async function attachReference(target, tabId, ui, ref) {
   const chips = await attachedCount(tabId, ui);
   const upload = await uploadControl(tabId, ui);
   if (upload) {
-    await humanClick(target, upload);
+    // A control that is a <label> or the file input itself opens the file
+    // dialog without calling click(), so the armed picture never goes in and
+    // the dialog waits for an answer nobody gives (every reel failed on
+    // "did not finish uploading", 2026-11-23). The dialog is held back, and a
+    // picture not taken by then is handed to the file input directly.
+    await chrome.debugger.sendCommand(target, 'Page.setInterceptFileChooserDialog', { enabled: true })
+      .catch(() => {});
+    try {
+      await humanClick(target, upload);
+      const taken = await waitUntil(async () => !(await armedPending(tabId)), 4000, 250);
+      if (!taken) {
+        const fed = await feedFileInput(tabId, ref);
+        if (fed !== true) {
+          await disarmUpload(tabId);
+          await pressKey(target, 'Escape', { keyCode: 27 });
+          return `the "Upload media" button did not take the picture, and no file input on the page (${fed})`;
+        }
+      }
+    } finally {
+      await chrome.debugger.sendCommand(target, 'Page.setInterceptFileChooserDialog', { enabled: false })
+        .catch(() => {});
+    }
   } else {
     // Flow renamed or hid its "Upload media" button (seen 2026-11-16: every
     // reel failed on it). The picture is then handed straight to the page's
@@ -3222,7 +3272,10 @@ async function attachReference(target, tabId, ui, ref) {
     if ((await attachedCount(tabId, ui)) > chips) return true;
     return !!(await boxOf(tabId, ui.assetRow, { text: ref.name, within: ui.assetList }));
   }, 180_000, 1000);
-  if (!done) return `"${ref.name}" did not finish uploading`;
+  if (!done) {
+    await disarmUpload(tabId);
+    return `"${ref.name}" did not finish uploading`;
+  }
   const attached = (await attachedCount(tabId, ui)) > chips
     || (await pickAsset(target, tabId, ui, ref.name, 5000));
   if (await boxOf(tabId, ui.assetSearch)) await pressKey(target, 'Escape', { keyCode: 27 });
