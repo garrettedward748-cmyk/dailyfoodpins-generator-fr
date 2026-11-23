@@ -3481,10 +3481,24 @@ async function jobTiles(tabId, ui, jobId) {
       return [...document.querySelectorAll(sel)]
         .filter((t) => t.getAttribute('data-vps-job') === job)
         .map((tile) => {
-          const video = [...tile.querySelectorAll(videoSel)].find((v) => v.currentSrc || v.src);
+          const srcOf = (v) => v.currentSrc || v.src || v.querySelector('source[src]')?.src || '';
+          // Flow renamed its clip tile before: any <video> of the tile counts.
+          const video = [...tile.querySelectorAll(videoSel)].find(srcOf)
+            || [...tile.querySelectorAll('video')].find(srcOf);
           const image = [...tile.querySelectorAll(imageSel)].find((i) => i.currentSrc || i.src);
+          // Only a percent that shows: a finished tile kept its last "23%"
+          // hidden in the page, and the clip was waited on until it timed out.
+          const shown = (d) => {
+            const r = d.getBoundingClientRect();
+            if (!r.width || !r.height) return false;
+            for (let el = d; el && el !== tile.parentElement; el = el.parentElement) {
+              const st = getComputedStyle(el);
+              if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) === 0) return false;
+            }
+            return true;
+          };
           const pct = [...tile.querySelectorAll('div, span')].find(
-            (d) => !d.childElementCount && /^\s*\d{1,3}\s*%\s*$/.test(d.textContent || ''));
+            (d) => !d.childElementCount && /^\s*\d{1,3}\s*%\s*$/.test(d.textContent || '') && shown(d));
           const text = (tile.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 300);
           const ids = new Set();
           for (const el of [tile, ...tile.querySelectorAll('*')]) {
@@ -3497,12 +3511,18 @@ async function jobTiles(tabId, ui, jobId) {
           // A clip's tile shows a still until its <video> loads; the still
           // says the clip is there, and its media id is in the tile.
           const clip = tile.querySelector('flow-video-tile');
-          const still = clip && [...clip.querySelectorAll('img')].find((i) => i.currentSrc || i.src);
+          let still = clip && [...clip.querySelectorAll('img')].find((i) => i.currentSrc || i.src);
+          // A clip tile under another name: a <video> in it, no percent
+          // showing, and a picture as big as the tile's.
+          if (!still && !clip && !pct && tile.querySelector('video')) {
+            still = [...tile.querySelectorAll('img')].find((i) => (i.currentSrc || i.src)
+              && i.getBoundingClientRect().width >= 120);
+          }
           return {
             percent: pct ? parseInt(pct.textContent, 10) : null,
-            clip: !!clip,
+            clip: !!clip || !!tile.querySelector('video'),
             still: still ? (still.currentSrc || still.src) : null,
-            video: video ? (video.currentSrc || video.src) : null,
+            video: video ? srcOf(video) : null,
             poster: video ? video.poster || null : null,
             image: image ? (image.currentSrc || image.src) : null,
             error: !video && !image && !still && errorRe.test(text) ? text : null,
