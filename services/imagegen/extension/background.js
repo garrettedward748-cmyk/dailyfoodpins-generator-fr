@@ -2220,10 +2220,32 @@ async function composerBox(tabId, ui) {
         const go = /generat|g[ée]n[ée]r|lancer|cr[ée]er|create|send|envoyer|submit|soumettre/i;
         const arrow = /^(arrow_forward|arrow_upward|send|north|east)$/;
         const all = [...area.querySelectorAll('button')].filter(shown);
-        return all.find((b) => arrow.test((b.textContent || '').trim()) && !skip.test(b.getAttribute('aria-label') || ''))
-          || all.find((b) => go.test(b.getAttribute('aria-label') || '') && !skip.test(b.getAttribute('aria-label') || ''))
+        const label = (b) => `${b.getAttribute('aria-label') || ''} ${b.getAttribute('title') || ''}`;
+        return all.find((b) => arrow.test((b.textContent || '').trim()) && !skip.test(label(b)))
+          || all.find((b) => go.test(label(b)) && !skip.test(label(b)))
+          // An arrow by another icon name ("arrow_upward_alt", "send_spark").
+          || all.find((b) => /arrow|send/.test((b.textContent || '').trim()) && !skip.test(label(b)))
           || null;
       })();
+      // Still none: Flow drew it as a bare picture (an <svg>, no words, no
+      // name), seen 2026-11-23 -- "button: no button" with the prompt typed.
+      // The right-most such button on the prompt box's last row is taken, as
+      // a guess: the submit tries Enter before ever clicking it.
+      const guessed = !button && (() => {
+        let area = editor;
+        for (let i = 0; i < 8 && area?.parentElement; i++) {
+          area = area.parentElement;
+          if (area.querySelectorAll('button').length >= 3) break;
+        }
+        if (!area) return null;
+        const bare = [...area.querySelectorAll('button')].filter((b) => shown(b)
+          && !(b.getAttribute('aria-label') || b.getAttribute('title') || '').trim()
+          && !(b.textContent || '').trim() && b.querySelector('svg, img, mat-icon, i'));
+        bare.sort((a, b) => b.getBoundingClientRect().bottom - a.getBoundingClientRect().bottom
+          || b.getBoundingClientRect().right - a.getBoundingClientRect().right);
+        return bare[0] || null;
+      })();
+      const send = button || guessed || null;
       const box = (el) => {
         if (!el) return null;
         const r = el.getBoundingClientRect();
@@ -2236,18 +2258,19 @@ async function composerBox(tabId, ui) {
         && d.getBoundingClientRect().width > 0).length;
       return {
         editor: box(editor),
-        button: box(button),
-        ready: !!button && !button.disabled,
+        button: box(send),
+        guessed: !button && !!guessed,
+        ready: !!send && !send.disabled,
         text: editor ? String(editor.value ?? editor.innerText ?? '').trim() : null,
         stop,
         working,
         // What the composer says around the button: credits, an upload still
         // going, a limit -- the reason it stays disabled.
         notes: (() => {
-          let area = button || editor;
+          let area = send || editor;
           for (let i = 0; i < 6 && area?.parentElement; i++) {
             area = area.parentElement;
-            if (editor && area.contains(editor) && button && area.contains(button)) break;
+            if (editor && area.contains(editor) && send && area.contains(send)) break;
           }
           if (!area) return '';
           const words = [...area.querySelectorAll('*')]
@@ -2275,7 +2298,7 @@ async function composerBox(tabId, ui) {
             .map((e) => (e.textContent || '').trim()).filter((t) => t && t.length < 300);
           return [...new Set([...words, ...tips, ...said, ...page])].slice(0, 40).join(' | ');
         })(),
-        buttonLabel: button ? `${button.getAttribute('aria-label') || ''}${button.disabled ? ' (disabled)' : ''}` : 'no button',
+        buttonLabel: send ? `${send.getAttribute('aria-label') || (button ? '' : 'unnamed icon')}${send.disabled ? ' (disabled)' : ''}` : 'no button',
       };
     },
   });
@@ -3765,11 +3788,16 @@ async function uiGenerateImage({
     // With pictures attached it stays disabled until they have finished
     // going up, which takes seconds, not frames.
     const readyBy = Date.now() + (references.length ? 90000 : 2000);
+    // No button at all is not a disabled one: past a short wait the prompt
+    // is sent with Enter rather than waited on for the whole time.
+    const noButtonBy = Date.now() + (references.length ? 15000 : 2000);
     while (!box?.ready && Date.now() < readyBy) {
+      if (!box?.button && Date.now() > noButtonBy) break;
       await sleep(references.length ? 1000 : 100);
       box = await composerBox(tab.id, ui);
     }
-    if (!box?.ready) {
+    const enterOnly = !box?.button && promptLine(box?.text) === promptLine(prompt);
+    if (!box?.ready && !enterOnly) {
       return { error: `GENERATE_DISABLED: the composer did not accept the prompt; button: ${box?.buttonLabel || 'none'}; the composer shows: ${(box?.notes || '').slice(0, 400)}` };
     }
 
@@ -3791,7 +3819,8 @@ async function uiGenerateImage({
       return false;
     };
     // Enter first most times; if Enter only made a new line, the button.
-    if (Math.random() < 0.8) {
+    // Always Enter first when the button is missing or only guessed at.
+    if (enterOnly || box?.guessed || Math.random() < 0.8) {
       await pressKey(target, 'Enter', { keyCode: 13, text: '\r' });
       if (await cleared(10)) return await sent(picked, submittedAt);
       box = await composerBox(tab.id, ui);
@@ -3800,7 +3829,9 @@ async function uiGenerateImage({
         box = await composerBox(tab.id, ui);
       }
     }
-    if (!box?.button) return { error: 'SUBMIT_NOT_ACCEPTED: no Generate button' };
+    if (!box?.button) {
+      return { error: `SUBMIT_NOT_ACCEPTED: Enter did not send it and there is no Generate button; the composer shows: ${(box?.notes || '').slice(0, 400)}` };
+    }
     await humanClick(target, box.button);
     if (await cleared(30)) return await sent(picked, submittedAt);
     return { error: 'SUBMIT_NOT_ACCEPTED: the prompt is still in the composer' };
