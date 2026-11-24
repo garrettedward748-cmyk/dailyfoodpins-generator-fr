@@ -3232,6 +3232,56 @@ async function feedFileInput(tabId, ref) {
 }
 
 /**
+ * Click `box` and, if it opens the browser's file dialog, answer the dialog
+ * with the picture through the debugger: the dialog is held back and the
+ * picture goes into the very input that opened it -- one the page made and
+ * never put in the document included ("no file input on the page",
+ * 2026-11-24). True when it went in; null when no dialog opened.
+ */
+async function clickAndAnswerChooser(target, tabId, box, ref, ms = 4000) {
+  let opened;
+  const chooser = new Promise((resolve) => { opened = resolve; });
+  const listener = (source, method, params) => {
+    if (source.tabId === tabId && method === 'Page.fileChooserOpened') opened(params);
+  };
+  chrome.debugger.onEvent.addListener(listener);
+  await chrome.debugger.sendCommand(target, 'Page.enable', {}).catch(() => {});
+  await chrome.debugger.sendCommand(target, 'Page.setInterceptFileChooserDialog', { enabled: true }).catch(() => {});
+  try {
+    await humanClick(target, box);
+    const params = await Promise.race([chooser, sleep(ms).then(() => null)]);
+    if (!params?.backendNodeId) return null;
+    const { object } = await chrome.debugger.sendCommand(target, 'DOM.resolveNode',
+      { backendNodeId: params.backendNodeId });
+    if (!object?.objectId) return null;
+    const name = typeof uploadName === 'function' ? uploadName(ref) : ref.name;
+    const res = await chrome.debugger.sendCommand(target, 'Runtime.callFunctionOn', {
+      objectId: object.objectId,
+      returnByValue: true,
+      arguments: [{ value: String(ref.dataUrl).split(',').pop() }, { value: name }, { value: ref.mime || 'image/jpeg' }],
+      functionDeclaration: `function (b64, filename, mimeType) {
+        const bytes = atob(b64);
+        const buffer = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) buffer[i] = bytes.charCodeAt(i);
+        const transfer = new DataTransfer();
+        transfer.items.add(new File([buffer], filename, { type: mimeType }));
+        this.files = transfer.files;
+        this.dispatchEvent(new Event('input', { bubbles: true }));
+        this.dispatchEvent(new Event('change', { bubbles: true }));
+        if (window.__vpsUpload) window.__vpsUpload.file = null;
+        return true;
+      }`,
+    });
+    return res?.result?.value === true;
+  } catch {
+    return null;
+  } finally {
+    chrome.debugger.onEvent.removeListener(listener);
+    await chrome.debugger.sendCommand(target, 'Page.setInterceptFileChooserDialog', { enabled: false }).catch(() => {});
+  }
+}
+
+/**
  * Attach one reference to the prompt box. `ref` is { name } for a picture
  * already in the project, with { dataUrl, mime } when it has to be uploaded
  * here. Answers true, or why not.
@@ -3266,7 +3316,9 @@ async function attachReference(target, tabId, ui, ref) {
     await chrome.debugger.sendCommand(target, 'Page.setInterceptFileChooserDialog', { enabled: true })
       .catch(() => {});
     try {
-      await humanClick(target, upload);
+      // The file dialog it opens is answered with the picture; a control that
+      // calls click() instead has already taken the armed one.
+      await clickAndAnswerChooser(target, tabId, upload, ref);
       const taken = await waitUntil(async () => !(await armedPending(tabId)), 4000, 250);
       if (!taken) {
         const fed = await feedFileInput(tabId, ref);
